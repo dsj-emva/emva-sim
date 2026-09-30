@@ -20,10 +20,23 @@ This repository builds, for testing Emva from the outside:
 4. Follow sections 1 and 3 of `../emva-app/docs/START_HERE.md` (including its skills and helper agents rules),
    and its section for the phase you are in (phase S, then phase 4).
 
-`CONTEXT.md` and `docs/` (START_HERE and the decisions) are the only parts of `emva-app` this repository
-may read; `.claude/settings.json` denies the rest. Never read or ask for Emva's code, and never write a profile
+`CONTEXT.md`, `docs/adr/` and `docs/START_HERE.md` are the only parts of `emva-app` this repository may
+read, and nothing in `emva-app` is ever written. Never read or ask for Emva's code, and never write a profile
 or generator from knowledge of how Emva's model works: the synthetic test must not be written in the model's
 own hand.
+
+## The guard hook
+
+`.claude/hooks/guard_emva_app.py` runs before every Read, Grep, Glob, Edit, Write and Bash call and refuses
+any that reaches into `emva-app` other than those three reads, by absolute or relative path, including shell
+commands that mention the folder. It blocks ordinary and accidental reads, not deliberate workarounds (a script
+that builds the path itself gets past it), so the rule above still binds. If the hook cannot run (no `uv`), it
+refuses every call rather than letting it through. Its tests are in `tests/test_guard_emva_app.py`.
+
+Start sessions with `claude --add-dir ../emva-app`. Without it, Claude Code's own check refuses every shell
+command on a file outside this folder, so `cat ../emva-app/CONTEXT.md` fails even though the hook allows it (the
+Read tool still works). The `additionalDirectories` setting would be the persistent way, but Claude Code
+ignored it in headless runs (tested with relative, `~/` and absolute paths).
 
 ## How this repository talks to Emva
 
@@ -32,7 +45,7 @@ endpoints over HTTP. No imports from, and no shared code with, `emva-app`.
 
 ## Working rules
 
-- Helper agents here never read `emva-app` beyond `CONTEXT.md` and `docs/`.
+- Helper agents here never read `emva-app` beyond `CONTEXT.md`, `docs/adr/` and `docs/START_HERE.md`.
 - Tests first. Small commits, each ending with the co-author line the tooling asks for. The user merges; no
   agent pushes to `main`.
 - Every number from synthetic data is labelled "on simulated data".
