@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "deny": [
+      "Read(~/code/emva/emva-app/.claude/**)",
+      "Read(~/code/emva/emva-app/.env)",
+      "Read(~/code/emva/emva-app/.env.*)",
+      "Read(~/code/emva/emva-app/.git/**)",
+      "Read(~/code/emva/emva-app/.github/**)",
+      "Read(~/code/emva/emva-app/.gitignore)",
+      "Read(~/code/emva/emva-app/CLAUDE.md)",
+      "Read(~/code/emva/emva-app/Makefile)",
+      "Read(~/code/emva/emva-app/apps/**)",
+      "Read(~/code/emva/emva-app/compose.yaml)",
+      "Read(~/code/emva/emva-app/docs/START_HERE.md)",
+      "Read(~/code/emva/emva-app/node_modules/**)",
+      "Read(~/code/emva/emva-app/package.json)",
+      "Read(~/code/emva/emva-app/packages/**)",
+      "Read(~/code/emva/emva-app/pnpm-lock.yaml)",
+      "Read(~/code/emva/emva-app/pnpm-workspace.yaml)",
+      "Read(~/code/emva/emva-app/services/**)"
+    ]
+  }
+}
