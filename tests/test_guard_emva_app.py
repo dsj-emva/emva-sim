@@ -119,3 +119,86 @@ def test_shell_command_naming_emva_app_only_as_a_word_passes(workspace):
 def test_any_tool_run_from_inside_emva_app_is_refused(workspace):
     sim, app = workspace
     assert guard.decide("Bash", {"command": "ls"}, app / "services", app) is not None
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "cd .. && cat emva-app/services/api/main.py",
+        "cd ../emva-app/docs/adr && cat ../../services/api/main.py",
+        "grep -rn def ..",
+        "find .. -name '*.py'",
+        "cat ../EMVA-APP/services/api/main.py",
+    ],
+)
+def test_shell_command_reaching_emva_app_indirectly_is_refused(workspace, command):
+    assert refused(workspace, "Bash", {"command": command})
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "rm ../emva-app/CONTEXT.md",
+        "echo x > ../emva-app/docs/START_HERE.md",
+        "echo x >> ../emva-app/docs/adr/0007-ranges.md",
+        "sed -i '' 's/a/b/' ../emva-app/CONTEXT.md",
+        "cp notes.md ../emva-app/docs/adr/0007-ranges.md",
+    ],
+)
+def test_shell_command_writing_an_allowed_file_is_refused(workspace, command):
+    assert refused(workspace, "Bash", {"command": command})
+
+
+def test_reading_an_allowed_file_into_emva_sim_passes(workspace):
+    assert not refused(workspace, "Bash", {"command": "cat ../emva-app/CONTEXT.md > words.md"})
+
+
+def test_grep_over_the_parent_folder_is_refused(workspace):
+    assert refused(workspace, "Grep", {"pattern": "def", "path": ".."})
+
+
+def test_glob_over_the_parent_folder_is_refused(workspace):
+    assert refused(workspace, "Glob", {"pattern": "../**/*.py"})
+
+
+def test_read_with_different_letter_case_is_refused(workspace):
+    assert refused(workspace, "Read", {"file_path": "../Emva-App/services/api/main.py"})
+
+
+def test_refusal_names_every_readable_file(workspace):
+    sim, app = workspace
+    reason = guard.decide("Read", {"file_path": "../emva-app/services/api/main.py"}, sim, app)
+    for readable in ("CONTEXT.md", "docs/adr/", "docs/START_HERE.md"):
+        assert readable in reason
+
+
+def run_hook(call):
+    import json
+    import subprocess
+    import sys
+
+    return subprocess.run(
+        [sys.executable, str(HOOK)], input=json.dumps(call), capture_output=True, text=True
+    )
+
+
+def test_hook_script_refuses_with_exit_code_2_next_to_the_real_emva_app():
+    sim = HOOK.parents[2]
+    call = {
+        "tool_name": "Read",
+        "tool_input": {"file_path": "../emva-app/services/api/main.py"},
+        "cwd": str(sim),
+    }
+    result = run_hook(call)
+    assert result.returncode == 2
+    assert "CONTEXT.md" in result.stderr
+
+
+def test_hook_script_lets_an_allowed_read_through():
+    sim = HOOK.parents[2]
+    call = {
+        "tool_name": "Read",
+        "tool_input": {"file_path": "../emva-app/CONTEXT.md"},
+        "cwd": str(sim),
+    }
+    assert run_hook(call).returncode == 0
