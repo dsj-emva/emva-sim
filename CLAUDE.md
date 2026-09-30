@@ -27,16 +27,19 @@ own hand.
 
 ## The guard hook
 
-`.claude/hooks/guard_emva_app.py` runs before every Read, Grep, Glob, Edit, Write and Bash call and refuses
-any that reaches into `emva-app` other than those three reads, by absolute or relative path, including shell
-commands that mention the folder. It blocks ordinary and accidental reads, not deliberate workarounds (a script
-that builds the path itself gets past it), so the rule above still binds. If the hook cannot run (no `uv`), it
-refuses every call rather than letting it through. Its tests are in `tests/test_guard_emva_app.py`.
+`.claude/hooks/guard_emva_app.py` runs before every Read, Grep, Glob, Edit, MultiEdit, Write, NotebookEdit
+and Bash call. It refuses any that reaches into `emva-app` other than reading those three, by absolute or
+relative path, in any letter case, after any `cd` in the command; any write into `emva-app` (edits, `rm`, `>`,
+`sed -i`, `cp` onto it); and any search or listing of a folder that contains `emva-app` (`..`, `~`, `/`), so
+`echo $HOME` and `cd ~` are refused too. It blocks ordinary and accidental reads, not deliberate workarounds (a
+script that builds the path itself gets past it), so the rule above still binds. If the hook cannot run (no
+`uv`), it refuses every call rather than letting it through. Its tests are in `tests/test_guard_emva_app.py`.
 
-Start sessions with `claude --add-dir ../emva-app`. Without it, Claude Code's own check refuses every shell
-command on a file outside this folder, so `cat ../emva-app/CONTEXT.md` fails even though the hook allows it (the
-Read tool still works). The `additionalDirectories` setting would be the persistent way, but Claude Code
-ignored it in headless runs (tested with relative, `~/` and absolute paths).
+Start sessions with `claude --add-dir ../emva-app`. Without it, Claude Code's own check stops shell commands on
+files outside this folder (headless runs refused them; interactive sessions may ask instead), so
+`cat ../emva-app/CONTEXT.md` fails even though the hook allows it. The Read tool works either way. The
+`additionalDirectories` setting would be the persistent way, but Claude Code ignored it in headless runs
+(tested with relative, `~/` and absolute paths).
 
 ## How this repository talks to Emva
 
