@@ -1,7 +1,7 @@
 [project]
 name = "emva-sim"
 version = "0.1.0"
-description = "Industry profiles, the data generator and the lead simulator for testing EMVA from outside"
+description = "Industry profiles, the data generator and the lead simulator for testing Emva from outside"
 requires-python = ">=3.12,<3.13"
 dependencies = []
 
