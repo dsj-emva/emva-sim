@@ -1,12 +1,14 @@
 {
   "permissions": {
     "deny": [
+      "Read(~/code/emva/emva-app/.DS_Store)",
       "Read(~/code/emva/emva-app/.claude/**)",
       "Read(~/code/emva/emva-app/.env)",
       "Read(~/code/emva/emva-app/.env.*)",
       "Read(~/code/emva/emva-app/.git/**)",
       "Read(~/code/emva/emva-app/.github/**)",
       "Read(~/code/emva/emva-app/.gitignore)",
+      "Read(~/code/emva/emva-app/.ruff_cache/**)",
       "Read(~/code/emva/emva-app/CLAUDE.md)",
       "Read(~/code/emva/emva-app/Makefile)",
       "Read(~/code/emva/emva-app/apps/**)",
