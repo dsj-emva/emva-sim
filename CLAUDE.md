@@ -1,12 +1,12 @@
 # emva-sim
 
-This repository builds, for testing EMVA from the outside:
+This repository builds, for testing Emva from the outside:
 
 - **Industry profiles**: every industry-specific fact, each uncertain number a range tagged sourced, estimated or
   guessed, with its source.
-- **The generator**: synthetic datasets in the shape a real sales system export would have (not EMVA's
+- **The generator**: synthetic datasets in the shape a real sales system export would have (not Emva's
   standard shape), with realistic mess, generated at the low, middle and high ends of every range.
-- **The lead simulator**: sends leads and plays a realistic sales team on a simulated clock, then grades EMVA's
+- **The lead simulator**: sends leads and plays a realistic sales team on a simulated clock, then grades Emva's
   scores against the hidden truth. The hidden truth and the grading stay here.
 
 ## Every session
@@ -19,12 +19,12 @@ This repository builds, for testing EMVA from the outside:
    decisions in `../emva-app/docs/adr/` the task touches.
 
 Those two are the only parts of `emva-app` this repository may read; `.claude/settings.json` denies the rest.
-Never read or ask for EMVA's code, and never write a profile or generator from knowledge of how EMVA's model
+Never read or ask for Emva's code, and never write a profile or generator from knowledge of how Emva's model
 works: the synthetic test must not be written in the model's own hand.
 
-## How this repository talks to EMVA
+## How this repository talks to Emva
 
-Only as the outside world does: files uploaded to EMVA (CSV exports), and EMVA's intake and CRM-update
+Only as the outside world does: files uploaded to Emva (CSV exports), and Emva's intake and CRM-update
 endpoints over HTTP. No imports from, and no shared code with, `emva-app`.
 
 ## Skills and helper agents
