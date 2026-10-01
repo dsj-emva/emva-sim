@@ -98,6 +98,18 @@ def test_a_manifest_names_its_profile_its_dates_and_that_its_numbers_are_on_simu
     assert m["export_date"] == "2024-03-01"
 
 
+def test_the_index_lists_every_dataset_its_setting_and_its_seed(written):
+    index = json.loads((written / "index.json").read_text())
+    assert index["data_source"] == "on simulated data"
+    assert index["base_seed"] == 1
+    listed = index["datasets"]
+    assert len(listed) == 149
+    assert listed[0] == {"folder": "middle", "setting": "middle", "seed": 0xE95D4948}
+    assert {d["folder"] for d in listed} == {p.name for p in written.iterdir() if p.is_dir()}
+    for d in listed:
+        assert manifest(written, d["setting"])["seed"] == d["seed"]
+
+
 def test_each_manifest_carries_its_setting_and_seed(written):
     for setting in ["middle", "volume.leads_per_month@low", "all-high"]:
         m = manifest(written, setting)

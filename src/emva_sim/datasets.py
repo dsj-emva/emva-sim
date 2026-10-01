@@ -17,6 +17,7 @@ from emva_sim import dataset, profile
 from emva_sim.dataset import DEFAULT_HISTORY, History
 
 BASE_SEED = 1
+DATA_SOURCE = "on simulated data"
 
 
 def settings(raw: dict) -> list[str]:
@@ -37,19 +38,31 @@ def write_all(profile_path: Path, out: Path, history: History = DEFAULT_HISTORY)
     profile_path = Path(profile_path)
     raw = profile.load(profile_path)
     named = {"file": profile_path.name, "sha256": _sha256(profile_path)}
+    listed = []
     for setting in settings(raw):
         folder = Path(out) / folder_name(setting)
         dataset.write(raw, setting, seed(setting), folder, history)
-        m = {
-            "data_source": "on simulated data",
-            "profile": named,
-            "setting": setting,
-            "seed": seed(setting),
-            "history": {"start": history.start.isoformat(), "end": history.end.isoformat()},
-            "export_date": history.export.isoformat(),
-            "ranges": _ranges(raw, setting),
-        }
-        (folder / "manifest.json").write_text(json.dumps(m, indent=2) + "\n", encoding="utf-8")
+        _write_json(
+            folder / "manifest.json",
+            {
+                "data_source": DATA_SOURCE,
+                "profile": named,
+                "setting": setting,
+                "seed": seed(setting),
+                "history": {"start": history.start.isoformat(), "end": history.end.isoformat()},
+                "export_date": history.export.isoformat(),
+                "ranges": _ranges(raw, setting),
+            },
+        )
+        listed.append({"folder": folder.name, "setting": setting, "seed": seed(setting)})
+    _write_json(
+        Path(out) / "index.json",
+        {"data_source": DATA_SOURCE, "profile": named, "base_seed": BASE_SEED, "datasets": listed},
+    )
+
+
+def _write_json(path: Path, content: dict) -> None:
+    path.write_text(json.dumps(content, indent=2) + "\n", encoding="utf-8")
 
 
 def _sha256(path: Path) -> str:
