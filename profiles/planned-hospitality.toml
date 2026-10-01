@@ -10,12 +10,13 @@
 #               "estimated" worked out from cited sources that do not state it
 #               "guessed"   no usable source; a reasoned judgement
 #   source:     the research note it came from (docs/research/planned-hospitality/) and the outside source,
-#               or "none" for a guess.
-# Datasets are generated at the middle, at each range's low and high one at a time, and with every range low
-# together and every range high together. "low" and "high" are the low and high numbers, whatever their effect.
+#               or "none" for a guess. The user's experience counts as a source: "estimated" when it comes
+#               from a client they have worked with, "guessed" when they called it a guess.
+# "low" and "high" are the low and high numbers, whatever their effect. Which ranges are swept is in [sweep].
 #
-# Facts that are not uncertain (column names, stage names, field options) are plain values. Money is USD.
-# Rates are shares between 0 and 1. Every number from data generated from this profile is "on simulated data".
+# Facts that are not uncertain (column names, CRM stage names, field options) are plain values. Thresholds
+# that set the shape of an effect (bands, months, cut-offs) are fixed (user ruling 2026-10-01); only effect
+# sizes are ranges. Rates are shares between 0 and 1. Every number from data generated from this profile is "on simulated data".
 
 name = "planned-hospitality"
 currency = "USD"
@@ -70,11 +71,10 @@ one_at_a_time = [
   "notes.with_typo",
   "loss.blank_reason",
   "loss.recorded_differs_from_truth",
-  "loss.reasons.no_response",
+  "loss.reasons.could_not_reach_them",
   "loss.reasons.price",
   "loss.reasons.timing",
   "loss.reasons.never_a_real_buyer",
-  "effects.budget_floor.floor_luxury_per_night",
   "effects.budget_floor.below_half",
   "effects.budget_floor.half_to_floor",
   "effects.no_budget.odds_ratio",
@@ -109,6 +109,9 @@ held_at_middle = [
   "volume.seasonality.uk_europe.november_december_weight",
   "volume.seasonality.us.november_to_march_weight",
   "form.answers.includes_children",
+  "form.party_mix.couple",
+  "form.party_mix.family",
+  "form.party_mix.friends",
   "form.answers.mentions_occasion",
   "form.answers.mentions_diet_health_or_mobility",
   "form.message.median_words",
@@ -162,7 +165,7 @@ source = "the user, from experience (2026-10-01): the key booking cycle for the 
 # Field labels are what the form shows; the export columns below carry them.
 # ---------------------------------------------------------------------------------------------------------
 
-[form.safari]
+[form]
 fields = [
   { label = "Title", kind = "choice", options = ["Mr", "Mrs", "Ms", "Miss", "Dr", "Mx"], required = true },
   { label = "First name", kind = "text", required = true },
@@ -236,14 +239,27 @@ high = 0.10
 confidence = "guessed"
 source = "none (enquiry-forms.md §3)"
 
-# Party type for safari leads.
-[form.party_mix]
-solo = 0.16
-couple = 0.46
-family = 0.28
-friends = 0.10
-confidence = "sourced"
-source = "cycle-and-deal-size.md §2a: Go2Africa State of Safari 2025"
+# Party type; solo is the rest. Middles are Go2Africa's shares of enquiries (16% solo).
+[form.party_mix.couple]
+low = 0.40
+middle = 0.46
+high = 0.52
+confidence = "estimated"
+source = "cycle-and-deal-size.md §2a: Go2Africa State of Safari 2025 (middle); ends estimated"
+
+[form.party_mix.family]
+low = 0.22
+middle = 0.28
+high = 0.34
+confidence = "estimated"
+source = "cycle-and-deal-size.md §2a: Go2Africa State of Safari 2025 (middle); ends estimated"
+
+[form.party_mix.friends]
+low = 0.06
+middle = 0.10
+high = 0.14
+confidence = "estimated"
+source = "cycle-and-deal-size.md §2a: Go2Africa State of Safari 2025 (middle); ends estimated"
 
 # The message. Lengths in words.
 [form.message.median_words]
@@ -281,7 +297,8 @@ source = "none; follows from facts given in both fields and text (enquiry-forms.
 # ---------------------------------------------------------------------------------------------------------
 
 [prohibited_inputs]
-fields = ["Title", "First name", "Last name", "Ages of children", "Phone (country code)", "Country of residence", "Email (name part)"]
+fields = ["Title", "First name", "Last name", "Ages of children", "Country of residence"]
+parts_of_fields = ["the country code of Phone", "the name part of Email"]
 in_text = ["ages of travellers", "named birthdays (e.g. 60th)", "retirement", "dietary needs tied to religion", "health and mobility needs", "pregnancy", "sexual orientation (e.g. a same-sex partner)", "names of travellers", "the language the enquiry is written in"]
 note = "country of residence, phone country code and enquiry language are national-origin proxies (user ruling 2026-10-01); counts of adults and children are Intent signals, children's ages are not; marital status is not planted"
 source = "enquiry-forms.md §4; what-predicts-a-booking.md §9"
@@ -364,7 +381,7 @@ confidence = "guessed"
 source = "none (cycle-and-deal-size.md open question 2)"
 
 # ---------------------------------------------------------------------------------------------------------
-# The sales process: the business's own steps, mapped onto the Canonical ladder.
+# The sales process: the business's own CRM stages, mapped onto the Canonical ladder.
 # Won is the deposit paid (sales-steps-and-exports.md §2: SafariOffice and Tripleseat count the deposit).
 # ---------------------------------------------------------------------------------------------------------
 
@@ -379,6 +396,7 @@ stages = [
   { name = "Provisional Hold", ladder = "Proposal", milestone = true },
   { name = "Deposit Paid", ladder = "Won", closed = "won" },
   { name = "Travelled", ladder = "Won", after_won = true },
+  { name = "Cancelled", ladder = "Won", after_won = true },
   { name = "Lost", ladder = "Lost", closed = "lost" },
 ]
 source = "sales-steps-and-exports.md §2: Safari Portal, SafariOffice, TripCreator, Zoho travel templates"
@@ -460,7 +478,7 @@ low = 0.0
 middle = 0.01
 high = 0.02
 confidence = "estimated"
-source = "the user, from a client they have worked with (2026-10-01): 2% at worst; general audits find 23-55% (neglect-and-mess.md §1), so this operator is far more attentive"
+source = "the user, from a client they have worked with (2026-10-01): 2% at worst; general audits find 23-55% (neglect-and-mess.md §1), so this operator rarely leaves a lead uncontacted"
 
 # Share of the neglect decision that follows how good the lead looks; the rest is independent of quality.
 [handling.neglect_follows_apparent_quality]
@@ -506,8 +524,10 @@ high = 0.80
 confidence = "estimated"
 source = "neglect-and-mess.md §4: 24-52% with manual add-ins (Weflow, vendor)"
 
-# Every dataset is written twice: once with the calls and notes exports and once without, because many
-# advertisers' exports carry no record of Contact attempts (neglect-and-mess.md §4: guessed 15-70% do).
+# Every dataset is written in both variants, because many advertisers' exports carry no record of Contact
+# attempts (neglect-and-mess.md §4).
+[exports]
+variants = ["with calls and notes", "deals and contacts only"]
 
 # ---------------------------------------------------------------------------------------------------------
 # How the sales team records stages.
@@ -640,23 +660,23 @@ high = 0.60
 confidence = "guessed"
 source = "notes-and-loss-reasons.md §5: HVS on misuse of 'lost to competitor'; Clozd (vendor, unsourced 60%)"
 
-# Shares among lost leads with a reason, by what the Hidden truth says happened. Normalised by the generator.
+# Shares among lost leads with a reason, by what the Hidden truth says happened ("unknown" is the rest).
 [loss.reasons]
-labels = [
-  { recorded = "No response", meaning = "could not reach them" },
+recorded = [
+  { recorded = "No response", meaning = "could_not_reach_them" },
   { recorded = "Too expensive", meaning = "price" },
   { recorded = "Booked with another operator", meaning = "price" },
   { recorded = "Booked direct", meaning = "price" },
   { recorded = "Postponed", meaning = "timing" },
   { recorded = "Dates not available", meaning = "timing" },
-  { recorded = "Just browsing", meaning = "never a real buyer" },
-  { recorded = "Not the right fit", meaning = "never a real buyer" },
+  { recorded = "Just browsing", meaning = "never_a_real_buyer" },
+  { recorded = "Not the right fit", meaning = "never_a_real_buyer" },
   { recorded = "Destination concerns", meaning = "timing" },
   { recorded = "Other", meaning = "unknown" },
 ]
 source = "notes-and-loss-reasons.md §3-4: Event Temple lost reasons, HVS, SafariBookings"
 
-[loss.reasons.no_response]
+[loss.reasons.could_not_reach_them]
 low = 0.20
 middle = 0.35
 high = 0.50
@@ -686,15 +706,17 @@ source = "none (notes-and-loss-reasons.md)"
 
 # ---------------------------------------------------------------------------------------------------------
 # Planted effects. Sizes are odds ratios on winning, against the named reference, unless stated. The base
-# odds are set so the transition rates above hold on average. "visible" says whether a lead carries the
-# signal at submission or only at a later Stage.
+# odds are set so the transition rates above hold on average. "visible" is the Stage from which a lead carries the
+# signal (Submitted: at submission).
 # ---------------------------------------------------------------------------------------------------------
 
 # 1. Budget floor: stated budget per person per night against the floor of the style asked for (threshold).
+# The floor is 0.7 x the style's middle price per night: for luxury about $900, the practitioners' floor of
+# $800-1,000 (what-predicts-a-booking.md §1, search extract only). "Not sure" style uses Comfortable.
 [effects.budget_floor]
 form = "threshold"
-visible = "submission"
-floor_luxury_per_night = { low = 800, middle = 900, high = 1000, confidence = "estimated", source = "what-predicts-a-booking.md §1: practitioner floor for luxury (Travel Market Report, search extract only)" }
+visible = "Submitted"
+floor_share_of_style_price = 0.7
 below_half = { low = 0.03, middle = 0.10, high = 0.25, confidence = "guessed", source = "none" }
 half_to_floor = { low = 0.30, middle = 0.50, high = 0.80, confidence = "guessed", source = "none" }
 note = "reference: at or above the floor; no further lift above 1.5x the floor"
@@ -702,14 +724,14 @@ note = "reference: at or above the floor; no further lift above 1.5x the floor"
 # 2. No budget stated (additive).
 [effects.no_budget]
 form = "additive"
-visible = "submission"
+visible = "Submitted"
 odds_ratio = { low = 0.50, middle = 0.70, high = 0.90, confidence = "guessed", source = "none" }
 note = "reference: a stated budget at or above the floor; missing is not below the floor"
 
 # 3. Lead time x travel season (interaction, inverted U).
 [effects.lead_time_by_season]
 form = "interaction"
-visible = "submission"
+visible = "Submitted"
 peak_months = [7, 8, 9, 10]
 peak_under_4_months = { low = 0.20, middle = 0.40, high = 0.70, confidence = "guessed", source = "none; shape from operator lead-time advice (Rhino Africa, Yellow Zebra)" }
 off_peak_under_4_months = { low = 0.8, middle = 1.0, high = 1.2, confidence = "guessed", source = "none" }
@@ -719,7 +741,7 @@ note = "reference: peak 6-14 months ahead, off-peak 1-8 months ahead"
 # 4. Date specificity (ordered, additive).
 [effects.date_specificity]
 form = "additive"
-visible = "submission"
+visible = "Submitted"
 no_dates = { low = 0.35, middle = 0.55, high = 0.80, confidence = "guessed", source = "none" }
 month_only = { low = 0.75, middle = 0.90, high = 1.0, confidence = "guessed", source = "none" }
 note = "reference: exact dates"
@@ -727,16 +749,16 @@ note = "reference: exact dates"
 # 5. Lead source (additive).
 [effects.lead_source]
 form = "additive"
-visible = "submission"
+visible = "Submitted"
 referral = { low = 2.5, middle = 4.0, high = 6.0, confidence = "guessed", source = "the user's guess from experience (2026-10-01): about 4 times a Google-ad lead" }
 paid_social = { low = 0.4, middle = 0.6, high = 0.9, confidence = "guessed", source = "none" }
 organic = { low = 1.0, middle = 1.4, high = 2.0, confidence = "guessed", source = "none" }
-note = "reference: paid search"
+note = "reference: paid search. The source is HubSpot's Original Traffic Source (Paid Search, Organic Search, Paid Social, Referrals); the form's How did you hear about us? agrees with it only in part"
 
 # 6. Repeat client (additive, and softens the budget-floor penalty: an interaction).
 [effects.repeat_client]
 form = "additive"
-visible = "submission"
+visible = "Submitted"
 odds_ratio = { low = 4.0, middle = 6.0, high = 10.0, confidence = "estimated", source = "the user, from a client they have worked with (2026-10-01): past clients almost always book again" }
 share_of_leads = { low = 0.01, middle = 0.03, high = 0.06, confidence = "estimated", source = "the user, from a client they have worked with (2026-10-01): small, since past clients usually go straight to their existing contact, not the form" }
 floor_penalty_kept = { low = 0.25, middle = 0.50, high = 0.75, confidence = "guessed", source = "none; share of the budget-floor penalty (on the log-odds) a repeat client still feels" }
@@ -744,7 +766,7 @@ floor_penalty_kept = { low = 0.25, middle = 0.50, high = 0.75, confidence = "gue
 # 7. Response speed x lead quality: advertiser behaviour, not a property of the lead (interaction).
 [effects.response_speed_by_quality]
 form = "interaction"
-visible = "contact attempted"
+visible = "Contact attempted"
 high_quality_within_1h = { low = 2.5, middle = 4.0, high = 6.0, confidence = "estimated", source = "the user, from a client they have worked with (2026-10-01): about 4 times; the quicker after the form the better; direction also from HBR, MIT, Telfer" }
 low_quality_within_1h = { low = 1.0, middle = 1.1, high = 1.3, confidence = "guessed", source = "none" }
 note = "reference: first attempt after 24 h; high quality is the top third of hidden quality"
@@ -752,7 +774,7 @@ note = "reference: first attempt after 24 h; high quality is the top third of hi
 # 8. Message length and specificity (inverted U).
 [effects.message_length]
 form = "inverted_u"
-visible = "submission"
+visible = "Submitted"
 under_15_words = { low = 0.40, middle = 0.60, high = 0.85, confidence = "guessed", source = "none" }
 dreamer = { low = 0.55, middle = 0.75, high = 0.95, confidence = "guessed", source = "none" }
 note = "reference: 40-200 specific words; dreamer: over 400 words, no budget, over 3 countries. Read from meaning, never a giveaway keyword"
@@ -760,20 +782,20 @@ note = "reference: 40-200 specific words; dreamer: over 400 words, no budget, ov
 # 9. Party size (threshold: large private groups rarely book together).
 [effects.party_size]
 form = "threshold"
-visible = "submission"
+visible = "Submitted"
 over_6 = { low = 0.50, middle = 0.70, high = 0.90, confidence = "guessed", source = "what-predicts-a-booking.md §6: direction from Runggaldier et al. 2023" }
 note = "reference: a party of 2"
 
 # 10. Phone given (additive; a signal only because phone is optional on this form).
 [effects.phone_given]
 form = "additive"
-visible = "submission"
+visible = "Submitted"
 odds_ratio_when_optional = { low = 1.2, middle = 1.5, high = 2.0, confidence = "guessed", source = "what-predicts-a-booking.md: form-field case studies (Vital Design, Disruptive Advertising)" }
 
 # 11. A dated price rise x budget (changes over time).
 [effects.price_rise]
 form = "time_varying"
-visible = "submission"
+visible = "Submitted"
 at_month_of_history = 14
 floor_rise = { low = 0.05, middle = 0.10, high = 0.20, confidence = "guessed", source = "what-predicts-a-booking.md §8: Maasai Mara fee rise to $200 (July 2024)" }
 near_floor_after = { low = 0.55, middle = 0.75, high = 0.90, confidence = "guessed", source = "none" }
@@ -782,7 +804,7 @@ note = "after the rise, leads within 1.0-1.3x of the old floor; leads above 1.5x
 # 12. Planted in text: meaning carries the signal, never a keyword (issue #6).
 [effects.text_commitment]
 form = "text"
-visible = "submission"
+visible = "Submitted"
 odds_ratio = { low = 1.5, middle = 2.5, high = 4.0, confidence = "guessed", source = "none; notes-and-loss-reasons.md §2 on meaning over keywords" }
 share_of_leads = { low = 0.10, middle = 0.20, high = 0.30, confidence = "guessed", source = "none" }
 note = "the enquiry shows a decision already made (leave booked, flights held, partner agreed) in varied words"
@@ -790,13 +812,13 @@ note = "the enquiry shows a decision already made (leave booked, flights held, p
 # 13. Planted in Sales notes after contact: a real buyer vs one who is not.
 [effects.notes_real_buyer]
 form = "text"
-visible = "engaged"
+visible = "Engaged"
 odds_ratio = { low = 2.0, middle = 3.5, high = 6.0, confidence = "guessed", source = "none (notes-and-loss-reasons.md illustrative notes)" }
 
 # T. Proxy trap: country-of-residence group shifts budget and lead time, and has no effect of its own.
 [effects.proxy_trap_country]
 form = "confounded"
-visible = "submission"
+visible = "Submitted"
 group_a_share = { low = 0.30, middle = 0.50, high = 0.70, confidence = "guessed", source = "none" }
 budget_multiplier = { low = 1.3, middle = 1.6, high = 2.0, confidence = "guessed", source = "what-predicts-a-booking.md §9: origin predicts strongly (Runggaldier et al. 2023); Go2Africa spend by country" }
 lead_time_multiplier = { low = 1.2, middle = 1.5, high = 2.0, confidence = "guessed", source = "none" }
