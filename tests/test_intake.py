@@ -71,23 +71,58 @@ def test_the_profiles_volume_counts_genuine_leads_only(middle):
     assert len(rows(middle / DEALS)) == len(rows(middle / TRUTH))
 
 
-def test_a_duplicate_is_the_same_person_again_later_as_a_second_contact(middle):
+def same_contact(folder):
+    """The duplicates HubSpot put on their Lead's contact, and those that made a second one."""
+    contact_of = {r["deal_record_id"]: r["contact_record_id"] for r in rows(folder / TRUTH)}
+    same, second = [], []
+    for row in kinds(folder, RowKind.DUPLICATE):
+        reused = row["contact_record_id"] == contact_of[row["duplicate_of_deal_record_id"]]
+        (same if reused else second).append(row)
+    return same, second
+
+
+@pytest.mark.parametrize("setting", ends("mess.duplicate_same_email"))
+def test_the_profiles_share_of_duplicates_reuse_the_email_and_so_the_contact(generated, setting):
+    same, second = same_contact(generated(setting))
+    assert_rate(len(same), len(same) + len(second), number(setting, "mess.duplicate_same_email"))
+
+
+def test_a_duplicate_with_the_same_email_is_a_second_deal_on_the_same_contact(middle):
+    deals = {d["Record ID"]: d for d in rows(middle / DEALS)}
+    contacts = contact_of_deal(middle)
+    conversion = raw()["exports"]["form_conversion"]
+    same, _ = same_contact(middle)
+    assert same
+    for row in same:
+        original, again = row["duplicate_of_deal_record_id"], row["deal_record_id"]
+        contact = contacts[again]
+        assert contacts[original] is contact
+        assert contact["Associated Deal IDs"].split(";") == [original, again]
+        assert contact["Number of Form Submissions"] == "2"
+        assert contact["Recent Conversion"] == conversion
+        assert contact["Recent Conversion Date"] == deals[again]["Create Date"]
+        assert contact["Create Date"] == deals[original]["Create Date"]
+        assert deals[again]["Associated Contact IDs"] == contact["Record ID"]
+
+
+def test_a_duplicate_with_another_email_is_the_same_person_again_as_a_second_contact(middle):
     contacts = contact_of_deal(middle)
     deals = {d["Record ID"]: d for d in rows(middle / DEALS)}
     genuine = {r["deal_record_id"]: r for r in kinds(middle, RowKind.LEAD)}
-    duplicates = kinds(middle, RowKind.DUPLICATE)
-    assert duplicates
-    for row in duplicates:
+    _, second = same_contact(middle)
+    assert second
+    for row in second:
         original = row["duplicate_of_deal_record_id"]
         assert original in genuine
         again, first = contacts[row["deal_record_id"]], contacts[original]
         assert again["Record ID"] != first["Record ID"]
         assert again["Email"] != first["Email"]
+        assert again["Number of Form Submissions"] == "1"
         for label in ("First name", "Last name"):
             if label not in altered(genuine[original]):
                 assert again[column(label)].lower() == first[column(label)].lower()
         assert deals[row["deal_record_id"]]["Create Date"] >= deals[original]["Create Date"]
-    assert any(contacts[r["deal_record_id"]]["First Name"].islower() for r in duplicates)
+    assert any(contacts[r["deal_record_id"]]["First Name"].islower() for r in second)
 
 
 def test_duplicates_have_no_outcome_of_their_own_so_grading_can_leave_them_out(middle):

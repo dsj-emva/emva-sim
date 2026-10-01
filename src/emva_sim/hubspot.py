@@ -86,7 +86,7 @@ class Export:
 
     def write(self, folder: Path, rng: Random) -> None:
         deals = (self._deals_header(), [self._deal_row(r) for r in self.records])
-        contacts = (self._contacts_header(), [self._contact_row(r) for r in self.records])
+        contacts = (self._contacts_header(), self._contact_rows())
         calls = (self._calls_header(), self._call_rows(rng))
         for variant in self.p["exports"]["variants"]:
             target = folder / slug(variant["name"])
@@ -187,25 +187,42 @@ class Export:
             "Contact owner",
             "Create Date",
             "Original Traffic Source",
+            "Number of Form Submissions",
+            "Recent Conversion",
+            "Recent Conversion Date",
             *(f["label"] for f in self.fields if f["label"] not in standard),
             "Associated Deal",
             "Associated Deal IDs",
         ]
 
-    def _contact_row(self, r: Record) -> list[str]:
-        s = r.submission
-        standard = self.p["exports"]["contact_properties"]
+    def _contact_rows(self) -> list[list[str]]:
+        """One row per contact, with every deal its form submissions made.
 
+        The contact keeps what its first submission gave; a later one with the same email adds a
+        deal and updates its count of submissions and its Recent Conversion.
+        """
+        deals_of: dict[int, list[Record]] = {}
+        for r in self.records:
+            deals_of.setdefault(r.contact_id, []).append(r)
+        return [self._contact_row(deals) for deals in deals_of.values()]
+
+    def _contact_row(self, deals: list[Record]) -> list[str]:
+        first, s = deals[0], deals[0].submission
+        standard = self.p["exports"]["contact_properties"]
+        won = any(self.won in self.stage_times(r) for r in deals)
         return [
-            str(r.contact_id),
+            str(first.contact_id),
             *(self._answer(s, f) for f in self.fields if f["label"] in standard),
-            "Customer" if self.won in self.stage_times(r) else "Opportunity",
-            r.owner,
+            "Customer" if won else "Opportunity",
+            first.owner,
             stamp(s.submitted_at),
             self.p["volume"]["traffic_source"]["labels"][s.traffic_source],
+            str(len(deals)),
+            self.p["exports"]["form_conversion"],
+            stamp(deals[-1].submission.submitted_at),
             *(self._answer(s, f) for f in self.fields if f["label"] not in standard),
-            self._deal_name(s),
-            str(r.deal_id),
+            ";".join(self._deal_name(r.submission) for r in deals),
+            ";".join(str(r.deal_id) for r in deals),
         ]
 
     def _calls_header(self) -> list[str]:

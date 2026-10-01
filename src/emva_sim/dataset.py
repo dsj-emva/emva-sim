@@ -47,11 +47,15 @@ def generate(
     after_end = datetime.combine(history.end + timedelta(days=1), datetime.min.time())
     received = intake.submissions(rng, p, drawn, start, after_end)
     deal_ids = hubspot.record_ids(rng, len(received), hubspot.DEAL_RECORD_IDS_FROM)
-    contact_ids = hubspot.record_ids(rng, len(received), hubspot.CONTACT_RECORD_IDS_FROM)
+    new_contacts = sum(s.new_contact for s in received)
+    contact_ids = iter(hubspot.record_ids(rng, new_contacts, hubspot.CONTACT_RECORD_IDS_FROM))
+    contact_of_lead = {}
     recording = Recording(p, rng)
     records = []
-    for deal_id, contact_id, s in zip(deal_ids, contact_ids, received, strict=True):
+    for deal_id, s in zip(deal_ids, received, strict=True):
+        contact_id = next(contact_ids) if s.new_contact else contact_of_lead[s.index]
         if s.kind == RowKind.LEAD:
+            contact_of_lead[s.index] = contact_id
             owner, recorded = paths[s.index].owner, recording.lead(paths[s.index])
         else:
             owner, recorded = rng.choice(p["team"]["owners"]), recording.not_a_lead(s.submitted_at)

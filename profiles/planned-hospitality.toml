@@ -144,6 +144,7 @@ held_at_middle = [
   "mess.bot_made_up_name",
   "mess.bot_throwaway_email",
   "mess.bot_impossible_party",
+  "mess.duplicate_same_email",
 ]
 
 # ---------------------------------------------------------------------------------------------------------
@@ -895,6 +896,9 @@ variants = [{ name = "with calls and notes", calls = true }, { name = "deals and
 # HubSpot's own contact property for a form field, where it has one; every other field is a custom contact
 # property under its form label (sales-steps-and-exports.md §3).
 contact_properties = { "First name" = "First Name", "Last name" = "Last Name", "Email" = "Email", "Phone" = "Phone Number", "Country of residence" = "Country/Region", "Tell us about your dream trip" = "Message" }
+# The contact's Recent Conversion, as "Page title: Form name" (sales-steps-and-exports.md §3); the
+# names are guessed. Added for the generator (issue #8), awaiting the user's review.
+form_conversion = "Plan your safari: Safari enquiry form"
 # Form fields a workflow copies onto the deal as custom deal properties (sales-steps-and-exports.md §3).
 deal_properties = ["Where would you like to go?", "When would you like to travel?", "Are your dates flexible?", "Number of nights", "Number of adults", "Number of children", "Accommodation style", "Budget per person (excluding international flights)", "Have you travelled with us before?", "How did you hear about us?"]
 
@@ -989,6 +993,16 @@ source = "neglect-and-mess.md §5: CRM-wide 10-30% (Landbase, vendor) covers all
 low = 0.5
 middle = 3
 high = 14
+confidence = "guessed"
+source = "none; added for the generator (issue #8), awaiting the user's review"
+
+# Share of duplicates that give the same email again: HubSpot keeps one contact, so they become a
+# second deal on it (Number of Form Submissions and Recent Conversion updated); the rest give another
+# address and become a second contact. Added for the generator (issue #8), awaiting the user's review.
+[mess.duplicate_same_email]
+low = 0.3
+middle = 0.5
+high = 0.7
 confidence = "guessed"
 source = "none; added for the generator (issue #8), awaiting the user's review"
 

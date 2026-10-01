@@ -32,7 +32,7 @@ class Submission:
 
     lead is the Lead it is or repeats, or the made-up one a bot plays; index is that Lead's place
     among the drawn Leads (None for a bot). traffic_source is the contact's, which a duplicate
-    from a second channel does not share with its Lead.
+    on a second contact does not share with its Lead.
     """
 
     kind: RowKind
@@ -44,6 +44,7 @@ class Submission:
     invalid_email: bool = False
     invalid_phone: bool = False
     missing_or_wrong: tuple[str, ...] = ()  # labels of the key fields held blank or wrong
+    new_contact: bool = True  # False for a duplicate HubSpot puts on its Lead's contact
 
 
 def submissions(
@@ -59,9 +60,10 @@ def submissions(
     genuine_share = 1 - mess["duplicate_leads"] - mess["bot_or_spam"]
     received = []
     for i, lead in enumerate(drawn):
-        received.append(_genuine(rng, p, i, lead))
+        held = _genuine(rng, p, i, lead)
+        received.append(held)
         if rng.random() < mess["duplicate_leads"] / genuine_share:
-            again = _duplicate(rng, p, i, lead)
+            again = _duplicate(rng, p, held)
             if again.submitted_at < until:
                 received.append(again)
         if rng.random() < mess["bot_or_spam"] / genuine_share:
@@ -150,24 +152,29 @@ def _broken_phone(rng: Random, phone: str) -> str:
     )
 
 
-def _duplicate(rng: Random, p: dict, i: int, lead: Lead) -> Submission:
+def _duplicate(rng: Random, p: dict, held: Submission) -> Submission:
     """The same person submitting again some days later, perhaps through another channel.
 
-    HubSpot merges contacts by email, so a duplicate that becomes a second contact has another
-    address: an alias, another domain or a slip. Its name may be typed in another case.
+    HubSpot merges contacts by email: a duplicate giving the address the contact holds becomes a
+    second deal on that contact; one giving another address (an alias, another domain or a slip)
+    becomes a second contact, with a traffic source of its own. Its name may be typed in another
+    case.
     """
-    later = lead.submitted_at + timedelta(
-        days=draws.exponential(rng, p["mess"]["duplicate_days_later"])
-    )
+    mess, lead = p["mess"], held.lead
+    later = lead.submitted_at + timedelta(days=draws.exponential(rng, mess["duplicate_days_later"]))
     answers = dict(lead.answers)
     email = form.field(p, "email")["label"]
-    answers[email] = _other_address(rng, answers[email])
+    same_email = rng.random() < mess["duplicate_same_email"]
+    answers[email] = held.answers[email] if same_email else _other_address(rng, answers[email])
     if rng.random() < 0.5:
         case = rng.choice([str.lower, str.upper])
         for role in ("first_name", "last_name"):
             label = form.field(p, role)["label"]
             answers[label] = case(answers[label])
-    return Submission(RowKind.DUPLICATE, lead, i, later, answers, leads.traffic_source(rng, p))
+    source = held.traffic_source if same_email else leads.traffic_source(rng, p)
+    return Submission(
+        RowKind.DUPLICATE, lead, held.index, later, answers, source, new_contact=not same_email
+    )
 
 
 def _bot(rng: Random, p: dict, at: datetime) -> Submission:

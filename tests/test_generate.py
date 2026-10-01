@@ -250,8 +250,9 @@ def test_contacts_use_hubspot_labels_and_point_at_their_deals(middle):
     ]:
         assert column in header
     for contact in contacts:
-        deal = deals[contact["Associated Deal IDs"]]
-        assert deal["Associated Contact IDs"] == contact["Record ID"]
+        # A contact who submitted the form twice with one email has two deals.
+        for deal_id in contact["Associated Deal IDs"].split(";"):
+            assert deals[deal_id]["Associated Contact IDs"] == contact["Record ID"]
         # Only names reserved for examples (RFC 2606), however mistyped the address is.
         assert "example" in contact["Email"].rsplit("@")[-1], contact["Email"]
 
