@@ -52,7 +52,7 @@ def generate(
     records = []
     for deal_id, contact_id, s in zip(deal_ids, contact_ids, received, strict=True):
         if s.kind == RowKind.LEAD:
-            owner, recorded = paths[s.lead].owner, recording.lead(paths[s.lead])
+            owner, recorded = paths[s.index].owner, recording.lead(paths[s.index])
         else:
             owner, recorded = rng.choice(p["team"]["owners"]), recording.not_a_lead(s.submitted_at)
         records.append(Record(deal_id, contact_id, owner, s, recorded))
@@ -60,5 +60,5 @@ def generate(
     folder = Path(out) / name(p, setting, seed)
     shutil.rmtree(folder, ignore_errors=True)
     hubspot.Export(p, records, history.export).write(folder / "export", rng)
-    hidden_truth.write(folder / "hidden-truth", records, drawn, paths)
+    hidden_truth.write(folder / "hidden-truth", records, paths)
     return folder

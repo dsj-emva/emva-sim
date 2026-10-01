@@ -118,7 +118,7 @@ class Export:
         place = (
             "" if destination in ("", form.unsure(self.p, "destinations")) else f" {destination}"
         )
-        return f"{form.answer(self.p, s.answers, 'last_name')} –{place} {s.travel_month}"
+        return f"{form.answer(self.p, s.answers, 'last_name')} –{place} {s.lead.travel_at:%b}"
 
     def _contact_name(self, s: Submission) -> str:
         first = form.answer(self.p, s.answers, "first_name")
@@ -168,7 +168,7 @@ class Export:
             stamp(close),
             stamp(created),
             r.owner,
-            "Existing Business" if s.repeat_client else "New Business",
+            "Existing Business" if s.lead.repeat_client else "New Business",
             r.recorded.closed_lost_reason if current == self.lost else "",
             self.p["volume"]["traffic_source"]["labels"][s.traffic_source],
             "Forms",

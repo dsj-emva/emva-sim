@@ -141,6 +141,9 @@ held_at_middle = [
   "mess.duplicate_days_later",
   "mess.duplicate_or_bot_moved_to_lost",
   "loss.reasons.unknown",
+  "mess.bot_made_up_name",
+  "mess.bot_throwaway_email",
+  "mess.bot_impossible_party",
 ]
 
 # ---------------------------------------------------------------------------------------------------------
@@ -966,6 +969,11 @@ source = "none"
 # ---------------------------------------------------------------------------------------------------------
 
 [mess]
+impossible_party = [
+  { adults = { min = 0, max = 0 }, children = { min = 0, max = 0 } },
+  { adults = { min = 25, max = 99 }, children = { min = 0, max = 0 } },
+  { adults = { min = 1, max = 2 }, children = { min = 13, max = 40 } },
+]
 key_fields = ["first_name", "last_name", "country", "destinations", "travel_date", "nights", "adults", "children", "style", "budget_per_person"]
 
 [mess.duplicate_leads]
@@ -990,6 +998,33 @@ source = "none; added for the generator (issue #8), awaiting the user's review"
 low = 0.2
 middle = 0.5
 high = 0.8
+confidence = "guessed"
+source = "none; added for the generator (issue #8), awaiting the user's review"
+
+# A bot or spam submission answers the form as a genuine Lead would, by the profile's answer mix,
+# except that a share of bots give a made-up name, a throwaway address, or a party no real enquiry
+# gives (one of impossible_party, adults and children each from min to max; ages are given for the
+# children). Its message is blank as often as a genuine Lead's (until issue #6 writes messages). So no
+# single column tells bots apart (the user's ruling on PR #15). Added for the generator (issue #8),
+# awaiting the user's review.
+[mess.bot_made_up_name]
+low = 0.3
+middle = 0.5
+high = 0.7
+confidence = "guessed"
+source = "none; added for the generator (issue #8), awaiting the user's review"
+
+[mess.bot_throwaway_email]
+low = 0.3
+middle = 0.5
+high = 0.7
+confidence = "guessed"
+source = "none; added for the generator (issue #8), awaiting the user's review"
+
+[mess.bot_impossible_party]
+low = 0.1
+middle = 0.3
+high = 0.5
 confidence = "guessed"
 source = "none; added for the generator (issue #8), awaiting the user's review"
 

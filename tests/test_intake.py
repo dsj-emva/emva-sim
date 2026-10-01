@@ -5,6 +5,7 @@ high ends, within three standard errors at the size measured.
 """
 
 import re
+from collections import defaultdict
 from datetime import date
 
 import pytest
@@ -13,7 +14,7 @@ from conftest import PROFILE, TRUTH, assert_rate, ends, kinds, number, raw, reso
 from emva_sim import dataset, form, leads
 from emva_sim.hidden_truth import TRUE_PATH_COLUMNS
 from emva_sim.intake import RowKind
-from emva_sim.people import FIRST_NAMES
+from emva_sim.people import FIRST_NAMES, LAST_NAMES, THROWAWAY_DOMAINS
 
 HISTORY = dataset.History(start=date(2024, 1, 1), end=date(2024, 6, 30), export=date(2024, 7, 5))
 MONTHS = 6
@@ -103,40 +104,84 @@ def test_the_profiles_share_of_rows_are_bot_or_spam(generated, setting):
     assert_rate(bots, len(rows(folder / DEALS)), number(setting, "mess.bot_or_spam"))
 
 
-def junk_signs(contact):
-    """The patterns of a bot or spam submission this contact shows."""
-    adults = float(contact["Number of adults"] or 1)
-    children = float(contact["Number of children"] or 0)
-    signs = {
-        "made-up name": contact["First Name"].capitalize() not in sum(FIRST_NAMES.values(), []),
-        "disposable email": contact["Email"].endswith(".example"),
-        "links in the message": "http" in contact["Message"],
-        "empty message": not contact["Message"],
-        "impossible party": adults == 0 or adults > 20 or children > 12,
-    }
-    return {sign for sign, shown in signs.items() if shown}
+def made_up_name(contact):
+    first, last = contact["First Name"].capitalize(), contact["Last Name"].capitalize()
+    return first not in sum(FIRST_NAMES.values(), []) and last not in LAST_NAMES
 
 
-def test_bots_look_like_junk_and_genuine_leads_held_rightly_do_not(middle):
-    bots = with_contacts(middle, RowKind.BOT)
-    assert bots
-    seen = set()
-    for bot, _ in bots:
-        signs = junk_signs(bot)
-        assert signs - {"empty message"}, bot
-        seen |= signs
-    assert seen == {
-        "made-up name",
-        "disposable email",
-        "links in the message",
-        "empty message",
-        "impossible party",
-    }
-    for contact, row in with_contacts(middle, RowKind.LEAD) + with_contacts(
-        middle, RowKind.DUPLICATE
-    ):
+def throwaway_email(contact):
+    return contact["Email"].rsplit("@")[-1] in THROWAWAY_DOMAINS
+
+
+def impossible_party(contact):
+    adults = int(float(contact["Number of adults"] or 1))
+    children = int(float(contact["Number of children"] or 0))
+    return any(
+        party["adults"]["min"] <= adults <= party["adults"]["max"]
+        and party["children"]["min"] <= children <= party["children"]["max"]
+        for party in raw()["mess"]["impossible_party"]
+    )
+
+
+SIGNS = {
+    "mess.bot_made_up_name": made_up_name,
+    "mess.bot_throwaway_email": throwaway_email,
+    "mess.bot_impossible_party": impossible_party,
+}
+
+
+@pytest.mark.parametrize(("share", "sign"), SIGNS.items())
+def test_only_the_profiles_share_of_bots_show_each_sign_of_junk(generated, share, sign):
+    for setting in ends(share):
+        bots = [c for c, _ in with_contacts(generated(setting), RowKind.BOT)]
+        assert_rate(sum(map(sign, bots)), len(bots), number(setting, share))
+
+
+@pytest.mark.parametrize("sign", SIGNS.values())
+def test_genuine_leads_held_rightly_show_no_sign_of_junk(middle, sign):
+    for contact, row in with_contacts(middle, RowKind.LEAD):
         if not altered(row):
-            assert not junk_signs(contact) - {"empty message"}
+            assert not sign(contact), contact
+
+
+def test_bots_give_the_ages_of_the_children_they_give(middle):
+    for bot, _ in with_contacts(middle, RowKind.BOT):
+        children = int(float(bot["Number of children"] or 0))
+        ages = bot["Ages of children"]
+        assert len(ages.split(", ") if ages else []) == children, bot
+
+
+def separating_rules(folder):
+    """The one-column rules that tell bots from genuine Leads with precision and recall over 0.8.
+
+    A rule is a column holding one value, or being blank, or not; the email's domain counts as a
+    column too.
+    """
+    deals = {d["Record ID"]: d for d in rows(folder / DEALS)}
+    labelled = []
+    for kind in (RowKind.LEAD, RowKind.BOT):
+        for contact, row in with_contacts(folder, kind):
+            record = {f"deal {k}": v for k, v in deals[row["deal_record_id"]].items()}
+            record |= {f"contact {k}": v for k, v in contact.items()}
+            record["email domain"] = contact["Email"].rsplit("@")[-1]
+            labelled.append((record, kind == RowKind.BOT))
+    bots = sum(is_bot for _, is_bot in labelled)
+    found = []
+    for name in labelled[0][0]:
+        rules = defaultdict(lambda: [0, 0])  # rule: [bots it picks, Leads it picks]
+        for record, is_bot in labelled:
+            value = record[name]
+            for rule in (("is", value), ("filled" if value else "blank", "")):
+                rules[rule][0 if is_bot else 1] += 1
+        for rule, (caught, wrong) in rules.items():
+            if caught / (caught + wrong) > 0.8 and caught / bots > 0.8:
+                found.append((name, rule))
+    return found
+
+
+@pytest.mark.parametrize("setting", ["middle", "mess.bot_or_spam@high"])
+def test_no_single_column_tells_bots_from_genuine_leads(generated, setting):
+    assert separating_rules(generated(setting)) == []
 
 
 def test_bots_have_no_outcome_so_grading_can_leave_them_out(middle):

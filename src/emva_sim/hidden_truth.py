@@ -42,8 +42,8 @@ COLUMNS = [
 STAGE_HISTORY_COLUMNS = ["deal_record_id", "crm_stage", "true_entered_at", "recorded_entered_at"]
 
 
-def write(folder: Path, records: list[Record], drawn: list[Lead], paths: list[TruePath]) -> None:
-    _write(folder / "hidden-truth.csv", COLUMNS, _rows(records, drawn, paths))
+def write(folder: Path, records: list[Record], paths: list[TruePath]) -> None:
+    _write(folder / "hidden-truth.csv", COLUMNS, _rows(records, paths))
     _write(folder / "stage-history.csv", STAGE_HISTORY_COLUMNS, _stage_history(records))
 
 
@@ -71,23 +71,21 @@ def _true_path(lead: Lead, path: TruePath) -> list[str]:
     ]
 
 
-def _rows(records: list[Record], drawn: list[Lead], paths: list[TruePath]) -> Iterator[list[str]]:
+def _rows(records: list[Record], paths: list[TruePath]) -> Iterator[list[str]]:
     deal_of_lead = {
-        r.submission.lead: r.deal_id for r in records if r.submission.kind == RowKind.LEAD
+        r.submission.index: r.deal_id for r in records if r.submission.kind == RowKind.LEAD
     }
     for r in records:
         s = r.submission
         genuine = s.kind == RowKind.LEAD
-        true_path = (
-            _true_path(drawn[s.lead], paths[s.lead]) if genuine else [""] * len(TRUE_PATH_COLUMNS)
-        )
+        true_path = _true_path(s.lead, paths[s.index]) if genuine else [""] * len(TRUE_PATH_COLUMNS)
         yield [
             str(r.deal_id),
             str(r.contact_id),
             *true_path,
             r.recorded.true_loss_reason,
             s.kind,
-            str(deal_of_lead[s.lead]) if s.kind == RowKind.DUPLICATE else "",
+            str(deal_of_lead[s.index]) if s.kind == RowKind.DUPLICATE else "",
             *((_yes_no(s.invalid_email), _yes_no(s.invalid_phone)) if genuine else ("", "")),
             ";".join(s.missing_or_wrong),
         ]

@@ -89,6 +89,8 @@ LAST_NAMES = [
     "Young",
 ]
 EMAIL_DOMAINS = ["example.com", "example.org", "example.net"]
+# Throwaway addresses as bots give them, under the TLD reserved for examples, so none is real.
+THROWAWAY_DOMAINS = ["tempinbox.example", "throwmail.example", "10minutemail.example"]
 
 
 @dataclass(frozen=True)
