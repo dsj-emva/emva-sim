@@ -603,8 +603,10 @@ high = 0.25
 confidence = "guessed"
 source = "none (neglect-and-mess.md open question 1)"
 
-# Hours to the first Contact attempt are lognormal, fitted to this median and to the share after
-# late_after_hours. The two must agree: a median below late_after_hours needs a share after it below one half.
+# Hours to the first Contact attempt: below late_after_hours, the lognormal fitted to the median and to the
+# share after late_after_hours; a late first attempt is log-uniform between late_after_hours and the lead's
+# days to Won. The two must agree: a median below late_after_hours needs a share after it below one half
+# (issue #5; at the median's high end of 24 h they do not, awaiting the user's ruling).
 [handling]
 late_after_hours = 24
 

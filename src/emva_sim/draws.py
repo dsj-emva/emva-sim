@@ -21,14 +21,10 @@ def lognormal(rng: Random, median: float, sigma: float) -> float:
 
 
 def lognormal_between(rng: Random, median: float, sigma: float, low: float, high: float) -> float:
-    """A lognormal draw conditioned on falling between low and high (high may be math.inf)."""
+    """A lognormal draw conditioned on falling between low (0 or more) and high."""
 
     def cdf(x):
-        if x <= 0:
-            return 0.0
-        if math.isinf(x):
-            return 1.0
-        return _NORMAL.cdf(math.log(x / median) / sigma)
+        return _NORMAL.cdf(math.log(x / median) / sigma) if x > 0 else 0.0
 
     u = cdf(low) + (cdf(high) - cdf(low)) * rng.random()
     return median * math.exp(sigma * _NORMAL.inv_cdf(min(max(u, _EDGE), 1 - _EDGE)))

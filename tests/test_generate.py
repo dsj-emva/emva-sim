@@ -52,6 +52,26 @@ def test_the_same_seed_gives_byte_identical_files(tmp_path):
     assert len(files(first)) == 6
 
 
+@pytest.mark.parametrize(
+    "setting",
+    [
+        "all-low",
+        "handling.first_attempt_delay_median_hours@low",
+        "handling.first_attempt_after_24h@low",
+        "handling.first_attempt_after_24h@high",
+    ],
+)
+def test_wide_first_attempt_delays_still_generate(tmp_path, setting):
+    folder = dataset.generate(PROFILE, setting, seed=1, out=tmp_path, history=SHORT)
+    assert rows(folder / TRUTH)
+
+
+@pytest.mark.parametrize("setting", ["all-high", "handling.first_attempt_delay_median_hours@high"])
+def test_a_median_delay_that_contradicts_the_late_share_is_refused(tmp_path, setting):
+    with pytest.raises(ValueError, match="a median of 24"):
+        dataset.generate(PROFILE, setting, seed=1, out=tmp_path, history=SHORT)
+
+
 def test_a_different_seed_gives_different_files(tmp_path):
     first = dataset.generate(PROFILE, "middle", seed=7, out=tmp_path, history=SHORT)
     second = dataset.generate(PROFILE, "middle", seed=8, out=tmp_path, history=SHORT)

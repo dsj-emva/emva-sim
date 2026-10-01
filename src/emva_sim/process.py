@@ -69,10 +69,12 @@ class Process:
         self.transitions = [p["process"]["transition"][stage] for stage in LADDER_AFTER_CONTACT]
         self.base_log_odds = _logit(math.prod(self.transitions))
         self.attempt_median_days = handling["first_attempt_delay_median_hours"] / 24
+        self.late_days = handling["late_after_hours"] / 24
+        self.late_share = handling["first_attempt_after_24h"]
         self.attempt_sigma = draws.sigma_from_share_above(
             handling["first_attempt_delay_median_hours"],
             handling["late_after_hours"],
-            handling["first_attempt_after_24h"],
+            self.late_share,
         )
         reach, failing = 1.0, []
         for rate in self.transitions:
@@ -83,7 +85,15 @@ class Process:
     def _effects(self, lead: Lead) -> dict[str, float]:
         return {}
 
-    def _attempt_days(self, rng: Random, below: float = math.inf) -> float:
+    def _first_attempt_days(self, rng: Random, cycle_days: float) -> float:
+        """Days to the first Contact attempt, always before the lead's cycle would end.
+
+        Below late_after_hours it is the lognormal fitted to the median and the late share, so both
+        hold; a late attempt is log-uniform between late_after_hours and the end of the cycle.
+        """
+        if rng.random() < self.late_share and cycle_days > self.late_days:
+            return self.late_days * (cycle_days / self.late_days) ** rng.random()
+        below = min(self.late_days, cycle_days)
         return draws.lognormal_between(rng, self.attempt_median_days, self.attempt_sigma, 0, below)
 
     def path(self, rng: Random, lead: Lead) -> TruePath:
@@ -96,24 +106,10 @@ class Process:
         if rng.random() < p["handling"]["neglected_share"]:
             return TruePath(owner, propensity, effects, False, "Submitted", False, times)
 
+        cycle = lead.cycle_days
+        first_attempt = self._first_attempt_days(rng, cycle)
         won = rng.random() < propensity
-        if won:
-            cycle = lead.cycle_days
-            first_attempt = self._attempt_days(rng, below=cycle)
-            stops_before = None
-        else:
-            first_attempt = self._attempt_days(rng)
-            cycle = lead.cycle_days
-            if cycle <= first_attempt:
-                process = p["process"]
-                cycle = draws.lognormal_between(
-                    rng,
-                    process["days_to_won_median"],
-                    process["days_to_won_sigma"],
-                    first_attempt,
-                    math.inf,
-                )
-            stops_before = rng.choices(LADDER_AFTER_CONTACT, self.failing_shares)[0]
+        stops_before = None if won else rng.choices(LADDER_AFTER_CONTACT, self.failing_shares)[0]
 
         at = {"Contact attempted": start + timedelta(days=first_attempt)}
         middle = draws.sorted_uniforms(rng, 3, first_attempt, cycle)
