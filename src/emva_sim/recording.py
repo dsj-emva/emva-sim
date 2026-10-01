@@ -42,6 +42,7 @@ class Recording:
         self.reviews: dict[date, datetime] = {}
         self.stages = p["pipeline"]["stages"]
         self.order = {s["name"]: i for i, s in enumerate(self.stages)}
+        self.lost = next(s["name"] for s in self.stages if s.get("closed") == "lost")
 
     def true_events(self, path: TruePath) -> list[tuple[str, datetime]]:
         """Each CRM stage the deal truly entered and when, in the order it entered them."""
@@ -61,11 +62,17 @@ class Recording:
 
     def lead(self, lead: Lead, path: TruePath) -> Recorded:
         events = self.true_events(path)
+        left_out = set()
+        if events[-1][0] == self.lost and self.rng.random() < self.p["recording"]["dead_left_open"]:
+            left_out.add(len(events) - 1)
         first_stage, created = events[0]
-        changes = [Change(first_stage, created, created)]
-        for stage, at in events[1:]:
-            entered = max(self._entered(at), changes[-1].recorded_at + MINUTE)
-            changes.append(Change(stage, at, entered))
+        changes, last = [Change(first_stage, created, created)], created
+        for i, (stage, at) in enumerate(events[1:], start=1):
+            if i in left_out:
+                changes.append(Change(stage, at, None))
+                continue
+            last = max(self._entered(at), last + MINUTE)
+            changes.append(Change(stage, at, last))
         return Recorded(changes)
 
     def _entered(self, at: datetime) -> datetime:

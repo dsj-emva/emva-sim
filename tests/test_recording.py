@@ -149,6 +149,27 @@ def test_bulk_updates_happen_in_the_weekly_pipeline_review(middle):
         assert at.strftime("%A") == "Friday" and time(16) <= at.time() <= time(18, 5), at
 
 
+@pytest.mark.parametrize(
+    ("setting", "share"),
+    [
+        ("middle", 0.30),
+        ("recording.dead_left_open@low", 0.10),
+        ("recording.dead_left_open@high", 0.60),
+    ],
+)
+def test_the_profiles_share_of_lost_leads_are_left_open_at_their_last_stage(
+    generated, setting, share
+):
+    folder = generated(setting)
+    lost = [c for c in rows(folder / STAGES) if c["crm_stage"] == "Lost" and c["true_entered_at"]]
+    left_open = [c for c in lost if not c["recorded_entered_at"]]
+    assert len(left_open) / len(lost) == pytest.approx(share, abs=0.03)
+    deals = {d["Record ID"]: d for d in rows(folder / DEALS)}
+    for change in left_open:
+        deal = deals[change["deal_record_id"]]
+        assert deal["Deal Stage"] != "Lost" and not deal["Closed Lost Reason"]
+
+
 def test_close_date_follows_the_recorded_close_not_the_true_one(middle):
     by_deal = history_by_deal(middle)
     closed = [d for d in rows(middle / DEALS) if d["Deal Stage"] in {"Deposit Paid", "Lost"}]
