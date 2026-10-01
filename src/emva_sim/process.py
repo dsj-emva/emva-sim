@@ -74,6 +74,16 @@ def _base_log_odds(terms: list[float], target: float) -> float:
     raise ArithmeticError("the base log-odds did not converge")
 
 
+def _mid_ranks(values: list[float]) -> list[float]:
+    """Each value's place among them from 0 (lowest) to 1 (highest), ties sharing the middle."""
+    counted = Counter(values)
+    below, place = 0, {}
+    for value in sorted(counted):
+        place[value] = (below + counted[value] / 2) / len(values)
+        below += counted[value]
+    return [place[v] for v in values]
+
+
 def _top(values: list[float], share: float) -> list[bool]:
     """Whether each value is among the top share of them, ties at the edge included."""
     ordered = sorted(values, reverse=True)
@@ -132,7 +142,8 @@ class Process:
         terms = [self.effects.of_lead(lead) for lead in leads]
         speed = self.p["effects"][RESPONSE_SPEED]
         high = _top([sum(t.values()) for t in terms], speed["high_quality_top_share"])
-        starts = [self._start(rng, lead) for lead in leads]
+        looks = _mid_ranks([self.effects.apparent(t) for t in terms])
+        starts = [self._start(rng, lead, place) for lead, place in zip(leads, looks, strict=True)]
         for t, start, quality in zip(terms, starts, high, strict=True):
             days = start.first_attempt_days
             t[RESPONSE_SPEED] = (
@@ -144,11 +155,21 @@ class Process:
         base = _base_log_odds(contacted, self.win_rate) if contacted else _logit(self.win_rate)
         return [self._path(rng, *row, base) for row in zip(leads, starts, terms, high, strict=True)]
 
-    def _start(self, rng: Random, lead: Lead) -> _Start:
-        """Owner, neglect and the first Contact attempt: the advertiser's handling of the lead."""
+    def _start(self, rng: Random, lead: Lead, looks: float) -> _Start:
+        """Owner, neglect and the first Contact attempt: the advertiser's handling of the lead.
+
+        A share of the neglect decision (neglect_follows_apparent_quality) neglects a lead with a
+        chance falling linearly from twice neglected_share for the worst-looking lead to zero for
+        the best (looks is its place among the leads, from 0 to 1, by the terms visible at
+        submission); the rest neglects any lead at neglected_share. A neglected lead keeps its
+        propensity.
+        """
         handling = self.p["handling"]
         owner = rng.choice(self.p["team"]["owners"])
-        if rng.random() < handling["neglected_share"]:
+        share = handling["neglected_share"]
+        if rng.random() < handling["neglect_follows_apparent_quality"]:
+            share = min(1.0, 2 * share * (1 - looks))
+        if rng.random() < share:
             return _Start(owner, True, None)
         return _Start(owner, False, self._first_attempt_days(rng, lead.cycle_days))
 

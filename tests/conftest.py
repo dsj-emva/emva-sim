@@ -1,14 +1,16 @@
-"""Helpers shared by the tests of the mess: datasets by setting, the profile's numbers, and rates
-checked within three standard errors of the profile's number at the size actually measured."""
+"""Helpers shared by the tests: datasets by setting, the profile's numbers, rates checked within
+three standard errors of the profile's number at the size actually measured, and large fixed-seed
+samples of genuine Leads, generated once per session, for tests that measure rates and odds."""
 
 import csv
 import math
 from functools import cache
 from pathlib import Path
+from random import Random
 
 import pytest
 
-from emva_sim import dataset, profile
+from emva_sim import dataset, hidden_truth, profile
 from emva_sim.intake import RowKind
 
 PROFILE = Path(__file__).parent.parent / "profiles" / "planned-hospitality.toml"
@@ -86,3 +88,32 @@ def generate(tmp_path_factory):
         return made[setting, history]
 
     return at
+
+
+def large_sample(setting: str, leads_per_month: int, seed: int = 1, **overrides) -> list[dict]:
+    """The true paths of a two-year history of genuine Leads at this volume, as the hidden truth
+    writes them, with the lead and its true path attached to each row.
+
+    overrides replace numbers of the resolved profile, as "section.name": value.
+    """
+    p = profile.resolve(raw(), setting)
+    p["volume"]["leads_per_month"] = leads_per_month
+    for name, value in overrides.items():
+        *path, last = name.split(".")
+        node = p
+        for key in path:
+            node = node[key]
+        node[last] = value
+    drawn, paths = dataset.leads_and_paths(p, Random(seed))
+    rows = []
+    for lead, path in zip(drawn, paths, strict=True):
+        row = hidden_truth.true_path(lead, path)
+        row["lead"] = lead
+        rows.append(row)
+    return rows
+
+
+@pytest.fixture(scope="session")
+def middle_sample():
+    """150,000 leads at the middle."""
+    return large_sample("middle", 6250)
