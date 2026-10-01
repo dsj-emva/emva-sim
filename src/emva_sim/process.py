@@ -1,10 +1,9 @@
 """The Hidden truth of each lead and its true path through the sales process.
 
-A lead's win propensity is its chance of a won Outcome if it is handled normally: base log-odds
-plus named effect terms (none planted yet). The base is set so the profile's transition rates hold
-on average. The Outcome is drawn from the propensity; a lead that does not win stops at a Stage
-drawn from the profile's transition rates, and is moved to Lost when it would have reached the
-next one.
+A lead's win propensity is its chance of a won Outcome if it is handled normally. With no
+planted effects yet it is the base, set so the profile's transition rates hold on average. The
+Outcome is drawn from the propensity; a lead that does not win stops at a Stage drawn from the
+profile's transition rates, and is moved to Lost when it would have reached the next one.
 """
 
 import math
@@ -30,7 +29,6 @@ class ContactAttempt:
 class TruePath:
     owner: str
     win_propensity: float
-    effects: dict[str, float]
     neglected_lead: bool
     reached_stage: str
     won: bool
@@ -77,9 +75,6 @@ class Process:
             reach *= rate
         self.failing_shares = [share / sum(failing) for share in failing]
 
-    def _effects(self, lead: Lead) -> dict[str, float]:
-        return {}
-
     def _first_attempt_days(self, rng: Random, cycle_days: float) -> float:
         """Days to the first Contact attempt, always before the lead's cycle would end.
 
@@ -94,15 +89,13 @@ class Process:
     def path(self, rng: Random, lead: Lead) -> TruePath:
         p = self.p
         owner = rng.choice(p["team"]["owners"])
-        effects = self._effects(lead)
-        propensity = _sigmoid(self.base_log_odds + sum(effects.values()))
+        propensity = _sigmoid(self.base_log_odds)
         start = lead.submitted_at
         times = {"Submitted": start}
         if rng.random() < p["handling"]["neglected_share"]:
             return TruePath(
                 owner=owner,
                 win_propensity=propensity,
-                effects=effects,
                 neglected_lead=True,
                 reached_stage="Submitted",
                 won=False,
@@ -147,7 +140,6 @@ class Process:
         return TruePath(
             owner=owner,
             win_propensity=propensity,
-            effects=effects,
             neglected_lead=False,
             reached_stage=reached,
             won=won,

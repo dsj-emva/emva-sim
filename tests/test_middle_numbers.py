@@ -66,6 +66,11 @@ def test_each_transition_holds_at_the_profiles_middle(leads, stage, previous, ra
     assert reached(leads, stage) / reached(leads, previous) == pytest.approx(rate, abs=tolerance)
 
 
+def test_with_no_planted_effects_every_lead_has_the_base_propensity(leads):
+    base = 0.45 * 0.95 * 0.97 * 0.25
+    assert {r["win_propensity"] for r in leads} == {f"{base:.6f}"}
+
+
 def test_about_ten_in_a_hundred_leads_win(leads):
     won = sum(r["outcome"] == "won" for r in leads) / len(leads)
     assert won == pytest.approx(0.10, abs=0.02)
