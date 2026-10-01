@@ -6,6 +6,7 @@ the seed: no system clock, no global random state.
 """
 
 import csv
+import shutil
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
@@ -74,7 +75,7 @@ def name(p: dict, setting: str, seed: int) -> str:
 def generate(
     profile_path: Path, setting: str, seed: int, out: Path, history: History = DEFAULT_HISTORY
 ) -> Path:
-    """Write one dataset and return its folder."""
+    """Write one dataset, replacing any earlier copy of it, and return its folder."""
     p = profile.resolve(profile.load(profile_path), setting)
     rng = Random(seed)
     drawn = leads.draw_leads(rng, p, history.start, history.end)
@@ -85,6 +86,7 @@ def generate(
     records = [Record(*row) for row in zip(deal_ids, contact_ids, drawn, paths, strict=True)]
 
     folder = Path(out) / name(p, setting, seed)
+    shutil.rmtree(folder, ignore_errors=True)
     hubspot.Export(p, records, history.export).write(folder / "export", rng)
     truth = folder / "hidden-truth" / "hidden-truth.csv"
     truth.parent.mkdir(parents=True, exist_ok=True)

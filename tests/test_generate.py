@@ -72,6 +72,14 @@ def test_a_median_delay_that_contradicts_the_late_share_is_refused(tmp_path, set
         dataset.generate(PROFILE, setting, seed=1, out=tmp_path, history=SHORT)
 
 
+def test_generating_again_replaces_the_previous_dataset(tmp_path):
+    dataset.generate(PROFILE, "middle", seed=7, out=tmp_path, history=SHORT)
+    later = dataset.History(start=SHORT.start, end=SHORT.end, export=date(2024, 4, 1))
+    folder = dataset.generate(PROFILE, "middle", seed=7, out=tmp_path, history=later)
+    assert len(files(folder)) == 6
+    assert all("2024-04-01" in str(p) for p in files(folder) if "export" in str(p))
+
+
 def test_a_different_seed_gives_different_files(tmp_path):
     first = dataset.generate(PROFILE, "middle", seed=7, out=tmp_path, history=SHORT)
     second = dataset.generate(PROFILE, "middle", seed=8, out=tmp_path, history=SHORT)
