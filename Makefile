@@ -1,4 +1,4 @@
-.PHONY: install test lint generate datasets
+.PHONY: install test lint generate datasets vary-phrases
 
 install:
 	uv sync --locked
@@ -15,3 +15,8 @@ generate:
 
 datasets:
 	uv run emva-sim datasets --profile profiles/planned-hospitality.toml --out out/datasets
+
+# Sends each phrase of the bank missing from the cache to Claude Haiku 4.5 once (needs
+# ANTHROPIC_API_KEY in the environment or .env); commit the cache it writes.
+vary-phrases:
+	uv run emva-sim vary-phrases --profile profiles/planned-hospitality.toml

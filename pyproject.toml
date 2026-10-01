@@ -3,7 +3,9 @@ name = "emva-sim"
 version = "0.1.0"
 description = "Industry profiles, the data generator and the lead simulator for testing Emva from outside"
 requires-python = ">=3.12,<3.13"
-dependencies = []
+dependencies = [
+    "anthropic>=1.11.0",
+]
 
 [project.scripts]
 emva-sim = "emva_sim.cli:main"
