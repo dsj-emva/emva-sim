@@ -11,7 +11,12 @@ from functools import cache
 import pytest
 import separability
 from conftest import REAL_PROFILE, raw
-from test_text import HISTORY, engaged_notes, written_messages
+from test_text import (
+    SEPARABILITY_SETTINGS,
+    engaged_notes,
+    separability_history,
+    written_messages,
+)
 
 from emva_sim import dataset, form, messages, phrases
 
@@ -121,22 +126,19 @@ def test_every_note_phrase_holds_an_expression_the_team_abbreviates_or_is_shorth
             assert found, (group, text)
 
 
-@pytest.mark.parametrize("group", ["notes.discovery", "notes.follow_up"])
-def test_real_and_not_real_buyer_notes_share_their_words(group):
-    # Written in pairs: no word or pair of words is in more than two phrases more on one side.
-    sides = {side: groups(f"{group}.")[side] for side in ("real_buyer", "not_real_buyer")}
-    counts = {}
-    for side, texts in sides.items():
-        counts[side] = {}
-        for text in texts:
-            for gram in separability.ngrams(text, 2):
-                counts[side][gram] = counts[side].get(gram, 0) + 1
-    grams = set(counts["real_buyer"]) | set(counts["not_real_buyer"])
-    uneven = {
-        " ".join(g): counts["real_buyer"].get(g, 0) - counts["not_real_buyer"].get(g, 0)
-        for g in grams
-    }
-    assert {g: d for g, d in uneven.items() if abs(d) > 2} == {}
+def test_every_lead_finds_a_twin_for_its_decision_in_the_shortest_written_message():
+    # A Lead with a decision made writes a commitment phrase, every other Lead an undecided one;
+    # each list has a phrase of two words or fewer that every Lead fits.
+    for language in LANGUAGES:
+        for group in ("commitment", "undecided"):
+            short = [
+                p
+                for p in phrases.bank_phrases(bank())
+                if p.group == f"message.{language}.{group}"
+                and not p.requires
+                and phrases.words(p.text) <= 2
+            ]
+            assert short, (language, group)
 
 
 def committed():
@@ -169,9 +171,8 @@ def test_every_group_carrying_a_signal_says_what_it_carries():
     meanings = bank()["meaning"]
     for language in LANGUAGES:
         assert {f"message.{language}.commitment", f"message.{language}.undecided"} <= set(meanings)
-    for note in ("discovery", "follow_up"):
-        for side in ("real_buyer", "not_real_buyer"):
-            assert f"notes.{note}.{side}" in meanings
+    for side in ("real_buyer", "not_real_buyer"):
+        assert f"notes.discovery.{side}" in meanings
 
 
 needs_cache = pytest.mark.skipif(
@@ -186,8 +187,10 @@ def test_the_committed_cache_covers_every_phrase_of_the_bank():
 
 
 @needs_cache
-def test_with_the_models_variations_no_short_phrase_tells_a_signal_apart(tmp_path):
-    folder = dataset.generate(REAL_PROFILE, "middle", seed=1, out=tmp_path, history=HISTORY)
+@pytest.mark.parametrize("setting", SEPARABILITY_SETTINGS)
+def test_with_the_models_variations_no_short_phrase_tells_a_signal_apart(tmp_path, setting):
+    history = separability_history(setting)
+    folder = dataset.generate(REAL_PROFILE, setting, seed=1, out=tmp_path, history=history)
     found = written_messages(folder)
     commitment = [(text, row["text_commitment"] == "yes") for text, row, _ in found]
     for found in (commitment, engaged_notes(folder)):

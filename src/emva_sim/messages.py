@@ -5,7 +5,8 @@ the Lead's hidden number of words: blank, a token, or sentences chosen to fill i
 which facts it gives (enquiry-forms.md §2): vague, partly or very specific, or a dreamer's. A
 phrase is used only where the Lead's facts fit what it requires (facts below), so the text never
 contradicts the fields but where a share of messages state a fact differently on purpose. A Lead
-with text_commitment writes a decision already made, in one of many wordings; the prohibited
+with text_commitment writes a decision already made, and every other Lead a decision not made,
+in twin wordings that share their words; the prohibited
 inputs are planted at their shares; a share of the Leads from France write in French, and a share
 of those writing English from outside the UK and the US write it imperfectly; a share of messages
 are typed all in lower case.
@@ -25,7 +26,7 @@ ENGLISH, FRENCH = "en", "fr"
 # A bot's spam: a sales pitch with a link, a run of links (phrases), or gibberish (drawn letters).
 GIBBERISH, SPAM_SHAPE = "gibberish", "spam"
 SPAM = ["pitch", "links", GIBBERISH]
-COMMITMENT = "commitment"
+COMMITMENT, UNDECIDED = "commitment", "undecided"
 
 # Slots a mention fills: allowed in a message of any shape.
 MENTION_SLOTS = {"age", "age2", "child_ages", "companion", "first_name"}
@@ -296,8 +297,7 @@ class Writer:
         built = _Message(rng, self.phrases, base, lead.message_words, values, allowed, known)
         planted = self._required(rng, built, lead)
         self._facts(built, lead, shape)
-        fillers = FILLERS[shape] + ([] if lead.text_commitment else ["undecided"])
-        built.fill(fillers + (["imperfect"] if imperfect else []))
+        built.fill(FILLERS[shape] + (["imperfect"] if imperfect else []))
         built.close()
         disagree = self._disagree(rng, built, lead, language)
         return self._text(built, language, shape, planted, disagree, lower)
@@ -305,7 +305,8 @@ class Writer:
     def _text(self, built, language, shape, planted, disagree, lower: bool) -> Text:
         parts = built.ordered()
         cased = (lambda t: t.lower()) if lower else (lambda t: t)
-        signal = next((cased(p.text) for p in parts if p.rank == ORDER.index(COMMITMENT)), "")
+        decided = [p for p in parts if p.rank == ORDER.index(COMMITMENT)]
+        signal = cased(decided[0].text) if decided and COMMITMENT in decided[0].phrase.id else ""
         return Text(
             cased(" ".join(p.text for p in parts)),
             tuple(p.phrase.id for p in built.parts),
@@ -326,9 +327,11 @@ class Writer:
         return PARTLY if rng.random() < partly / (1 + partly) else VERY
 
     def _required(self, rng: Random, built: _Message, lead: Lead) -> tuple[str, ...]:
-        """The decision already made, then each prohibited mention drawn at its share."""
-        if lead.text_commitment and not built.take(COMMITMENT, [COMMITMENT]):
-            raise ValueError(f"no commitment phrase fits {lead.message_words} words")
+        """The decision already made, or the decision not made, then each prohibited mention
+        drawn at its share."""
+        said = COMMITMENT if lead.text_commitment else UNDECIDED
+        if not built.take(COMMITMENT, [said]):
+            raise ValueError(f"no {said} phrase fits {lead.message_words} words")
         planted = []
         for mention in MENTIONS:
             drawn = rng.random() < self.settings["mentions"][mention]

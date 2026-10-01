@@ -2,8 +2,9 @@
 
 A Lead with a Contact attempt has notes at notes.attempted_with_any_note: one at its first Contact
 attempt, one at Engaged (what the first conversation found, and what it showed about the Lead),
-one per itinerary version sent, and a note on each call the team logged. The notes at Engaged and
-on the first itinerary say by their content, never by a keyword, whether the Lead is a real buyer
+one per itinerary version sent, and a note on each call the team logged (a quick recap on the call
+that connects). The note at Engaged says by its content, never by a keyword, whether the Lead is a
+real buyer
 (effects.notes_real_buyer). Notes carry the team's abbreviations and typos at their shares
 (notes-and-loss-reasons.md §2). A Lost deal's recorded reason is written as the team types it.
 Only what was written before the export date is kept.
@@ -27,7 +28,7 @@ CONNECTED = "Connected"
 # HubSpot's default outcomes of a call that did not connect, each with its note group.
 UNCONNECTED = {"No answer": "no_answer", "Left voicemail": "left_voicemail", "Busy": "busy"}
 NOTE_RECORD_IDS_FROM = 40_000_000_000
-# The note on each itinerary version after the first: logistics only, saying nothing of the Lead.
+# The note on each itinerary version: logistics only, saying nothing of the Lead.
 REVISED = "revised"
 
 
@@ -122,10 +123,9 @@ class Notes:
         outcome = CONNECTED if attempt.connected else self.rng.choice(sorted(UNCONNECTED))
         note = None
         if writes:
-            if attempt.connected:
-                note = self._discovery(lead)
-            else:
-                note = self._note([f"notes.call.{UNCONNECTED[outcome]}"], lead)
+            # The call that connects gets a quick recap; what it showed is in the note at Engaged.
+            group = "notes.recap" if attempt.connected else f"notes.call.{UNCONNECTED[outcome]}"
+            note = self._note([group], lead)
         return Call(attempt.at, deal_id, outcome, note)
 
     def _notes(self, path: TruePath, lead: "_Noted") -> list[tuple[datetime, Text]]:
@@ -134,12 +134,8 @@ class Notes:
         engaged = path.stage_times.get(ladder.ENGAGED)
         if engaged:
             written.append((engaged, self._discovery(lead)))
-        for version, (at, _) in enumerate(path.quotes):
-            if version == 0:
-                note = self._note([f"notes.follow_up.{_buyer(lead.lead)}"], lead, signal=0)
-            else:
-                note = self._note([f"notes.follow_up.{REVISED}"], lead)
-            written.append((at, note))
+        for at, _ in path.quotes:
+            written.append((at, self._note([f"notes.follow_up.{REVISED}"], lead)))
         return written
 
     def _discovery(self, lead: "_Noted") -> Text:

@@ -4,6 +4,7 @@ Reasons and bots' spam, written from the phrase bank and the echoed test cache (
 One fixed seed, six months of leads, exported long after the last one so their notes are in.
 """
 
+import math
 import re
 import shutil
 from collections import defaultdict
@@ -208,7 +209,7 @@ def test_a_logged_call_has_notes_only_on_a_lead_with_notes_and_says_what_happene
         if call["Call notes"]:
             said = groups(truth[call["Record ID"]])
             if call["Call outcome"] == "Connected":
-                assert any(".discovery." in g for g in said)
+                assert said == {"notes.recap"}
             else:
                 assert said == {f"notes.call.{call['Call outcome'].lower().replace(' ', '_')}"}
 
@@ -256,16 +257,35 @@ def test_every_lead_with_a_decision_made_and_no_other_writes_one_in_its_message(
 
 
 # The signal's share at both ends, and every range at each end together.
-COMMITMENT_SETTINGS = [*ends("effects.text_commitment.share_of_leads"), "all-low", "all-high"]
-REAL_BUYER_SETTINGS = [*ends("notes.real_buyer_share"), "all-low", "all-high"]
+# The middle, each text effect's ends one at a time, and every range at each end together.
+TEXT_EFFECTS = [
+    "effects.text_commitment.share_of_leads",
+    "effects.text_commitment.odds_ratio",
+    "effects.notes_real_buyer.odds_ratio",
+    "notes.real_buyer_share",
+]
+SEPARABILITY_SETTINGS = [
+    "middle",
+    *(f"{name}@{end}" for name in TEXT_EFFECTS for end in ("low", "high")),
+    "all-low",
+    "all-high",
+]
+# Enough Leads at every volume that one phrase picked by chance is not mistaken for a rule.
+SEPARABILITY_LEADS = 4800
 
 
-@pytest.mark.parametrize("setting", COMMITMENT_SETTINGS)
-def test_no_word_or_short_phrase_tells_a_decision_made_from_none(generated, setting):
-    found = [
-        (text, row["text_commitment"] == "yes")
-        for text, row, _ in written_messages(generated(setting))
-    ]
+def separability_history(setting):
+    """A history ending where HISTORY does, long enough for SEPARABILITY_LEADS Leads."""
+    months = max(6, math.ceil(SEPARABILITY_LEADS / number(setting, "volume.leads_per_month")))
+    first = 2024 * 12 + 6 - months
+    start = date(first // 12, first % 12 + 1, 1)
+    return dataset.History(start=start, end=HISTORY.end, export=HISTORY.export)
+
+
+@pytest.mark.parametrize("setting", SEPARABILITY_SETTINGS)
+def test_no_word_or_short_phrase_tells_a_decision_made_from_none(generate, setting):
+    folder = generate(setting, separability_history(setting))
+    found = [(text, row["text_commitment"] == "yes") for text, row, _ in written_messages(folder)]
     assert separability.separating(found) == [], separability.strongest(found)
 
 
@@ -286,10 +306,10 @@ def engaged_notes(folder):
     ]
 
 
-@pytest.mark.parametrize("setting", REAL_BUYER_SETTINGS)
-def test_no_word_or_short_phrase_in_the_notes_tells_a_real_buyer_from_the_rest(generated, setting):
-    found = engaged_notes(generated(setting))
-    assert sum(flag for _, flag in found) >= 20
+@pytest.mark.parametrize("setting", SEPARABILITY_SETTINGS)
+def test_no_word_or_short_phrase_in_the_notes_tells_a_real_buyer_from_the_rest(generate, setting):
+    found = engaged_notes(generate(setting, separability_history(setting)))
+    assert sum(flag for _, flag in found) >= 200
     assert separability.separating(found) == [], separability.strongest(found)
 
 
