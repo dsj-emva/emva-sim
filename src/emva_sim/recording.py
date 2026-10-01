@@ -42,6 +42,7 @@ class Recording:
         self.reviews: dict[date, datetime] = {}
         self.stages = p["pipeline"]["stages"]
         self.order = {s["name"]: i for i, s in enumerate(self.stages)}
+        self.open = {s["name"] for s in self.stages if "closed" not in s and "after_won" not in s}
         self.lost = next(s["name"] for s in self.stages if s.get("closed") == "lost")
 
     def true_events(self, path: TruePath) -> list[tuple[str, datetime]]:
@@ -65,6 +66,12 @@ class Recording:
         left_out = set()
         if events[-1][0] == self.lost and self.rng.random() < self.p["recording"]["dead_left_open"]:
             left_out.add(len(events) - 1)
+        kept = [i for i in range(len(events)) if i not in left_out]
+        passed = [i for i in kept[1:-1] if events[i][0] in self.open]
+        if passed and self.rng.random() < self.p["recording"]["skips_a_stage"]:
+            start = self.rng.randrange(len(passed))
+            end = self.rng.randrange(start, len(passed))
+            left_out.update(passed[start : end + 1])
         first_stage, created = events[0]
         changes, last = [Change(first_stage, created, created)], created
         for i, (stage, at) in enumerate(events[1:], start=1):

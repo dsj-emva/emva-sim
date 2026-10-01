@@ -266,14 +266,18 @@ def test_calls_are_logged_contact_attempts_on_known_deals(middle):
         assert first_attempt <= call["Activity date"]
 
 
-def test_stages_are_recorded_in_ladder_order_without_skips(middle, raw):
+def test_the_true_path_enters_stages_in_ladder_order_without_skips(middle, raw):
     ladder = [
         s["name"]
         for s in raw["pipeline"]["stages"]
         if not s.get("milestone") and not s.get("after_won") and s.get("closed") != "lost"
     ]
+    true_times = {}
+    for change in rows(middle / STAGE_HISTORY):
+        if change["true_entered_at"]:
+            true_times[change["deal_record_id"], change["crm_stage"]] = change["true_entered_at"]
     for deal in rows(middle / DEALS):
-        entered = [deal[f'Date entered "{s} (Safari Enquiries)"'] for s in ladder]
+        entered = [true_times.get((deal["Record ID"], s), "") for s in ladder]
         reached = [t for t in entered if t]
         assert entered[: len(reached)] == reached, deal["Record ID"]
         assert reached == sorted(reached), deal["Record ID"]

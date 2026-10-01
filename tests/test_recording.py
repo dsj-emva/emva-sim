@@ -170,6 +170,43 @@ def test_the_profiles_share_of_lost_leads_are_left_open_at_their_last_stage(
         assert deal["Deal Stage"] != "Lost" and not deal["Closed Lost Reason"]
 
 
+OPEN_AFTER_CREATION = {
+    "Attempting Contact",
+    "In Discussion",
+    "Planning",
+    "Itinerary Sent",
+    "Provisional Hold",
+}
+CLOSED = {"Deposit Paid", "Lost"}
+
+
+def skippable(changes):
+    """The open stages a deal truly entered that its record passes on its way to a later one.
+
+    A record that ends at an open stage (a dead lead left open) cannot skip that last one.
+    """
+    true = sorted(
+        (c for c in changes if c["true_entered_at"] and c["crm_stage"] in OPEN_AFTER_CREATION),
+        key=lambda c: c["true_entered_at"],
+    )
+    closed = any(c["crm_stage"] in CLOSED and c["recorded_entered_at"] for c in changes)
+    return true if closed else true[:-1]
+
+
+@pytest.mark.parametrize(
+    ("setting", "share"),
+    [
+        ("middle", 0.50),
+        ("recording.skips_a_stage@low", 0.35),
+        ("recording.skips_a_stage@high", 0.65),
+    ],
+)
+def test_the_profiles_share_of_records_skip_a_stage(generated, setting, share):
+    passing = [s for s in map(skippable, history_by_deal(generated(setting)).values()) if s]
+    skipping = [s for s in passing if any(not c["recorded_entered_at"] for c in s)]
+    assert len(skipping) / len(passing) == pytest.approx(share, abs=0.04)
+
+
 def test_close_date_follows_the_recorded_close_not_the_true_one(middle):
     by_deal = history_by_deal(middle)
     closed = [d for d in rows(middle / DEALS) if d["Deal Stage"] in {"Deposit Paid", "Lost"}]
