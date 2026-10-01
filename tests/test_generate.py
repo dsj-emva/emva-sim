@@ -76,6 +76,16 @@ def test_the_hidden_truth_gives_a_deal_value_only_to_quoted_or_won_deals(middle)
     assert any(row["deal_value"] for row in truth)
 
 
+def test_a_lead_won_after_the_export_date_is_not_closed_won_in_the_export(middle):
+    deals = {d["Record ID"]: d for d in rows(middle / DEALS)}
+    won_later = [r for r in rows(middle / TRUTH) if r["won_at"] >= "2024-07-05"]
+    assert won_later
+    for row in won_later:
+        deal = deals[row["deal_record_id"]]
+        assert deal["Deal Stage"] != "Deposit Paid"
+        assert deal['Date entered "Deposit Paid (Safari Enquiries)"'] == ""
+
+
 LONG_AFTER = dataset.History(
     start=date(2024, 1, 1), end=date(2024, 3, 31), export=date(2025, 12, 31)
 )
