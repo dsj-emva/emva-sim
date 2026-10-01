@@ -1,31 +1,32 @@
 import hashlib
 import json
+import shutil
 import tomllib
 from datetime import date
 from pathlib import Path
 
 import pytest
+from conftest import REAL_PROFILE
 
 from emva_sim import dataset, datasets, profile
 
-PROFILE = Path(__file__).parent.parent / "profiles" / "planned-hospitality.toml"
 TINY = dataset.History(start=date(2024, 1, 1), end=date(2024, 1, 2), export=date(2024, 3, 1))
 
 
 @pytest.fixture(scope="module")
-def written(tmp_path_factory):
+def written(tmp_path_factory, test_profile):
     out = tmp_path_factory.mktemp("out") / "datasets"
-    datasets.write_all(PROFILE, out, history=TINY)
+    datasets.write_all(test_profile, out, history=TINY)
     return out
 
 
 def sweep_size():
     """The middle, each one-at-a-time range at its low and its high, and the two extremes."""
-    return 1 + 2 * len(profile.load(PROFILE)["sweep"]["one_at_a_time"]) + 2
+    return 1 + 2 * len(profile.load(REAL_PROFILE)["sweep"]["one_at_a_time"]) + 2
 
 
 def test_the_planned_hospitality_sweep_is_149_datasets_as_the_user_ruled():
-    assert len(datasets.settings(profile.load(PROFILE))) == sweep_size() == 149
+    assert len(datasets.settings(profile.load(REAL_PROFILE))) == sweep_size() == 149
 
 
 def test_every_dataset_of_the_sweep_is_written_with_its_exports_hidden_truth_and_manifest(written):
@@ -70,7 +71,7 @@ def test_each_seed_is_the_sha256_of_the_base_seed_and_the_setting_so_others_neve
 def test_a_one_at_a_time_manifest_differs_from_the_middles_only_in_its_one_range(written):
     middle = manifest(written, "middle")["ranges"]
     assert {r["end"] for r in middle.values()} == {"middle"}
-    raw = profile.load(PROFILE)
+    raw = profile.load(REAL_PROFILE)
     for name in raw["sweep"]["one_at_a_time"]:
         for end in ("low", "high"):
             ranges = manifest(written, f"{name}@{end}")["ranges"]
@@ -81,7 +82,7 @@ def test_a_one_at_a_time_manifest_differs_from_the_middles_only_in_its_one_range
 
 
 def test_the_extremes_put_every_range_swept_or_held_at_its_end(written):
-    raw = profile.load(PROFILE)
+    raw = profile.load(REAL_PROFILE)
     swept, held = raw["sweep"]["one_at_a_time"], raw["sweep"]["held_at_middle"]
     for end in ("low", "high"):
         ranges = manifest(written, f"all-{end}")["ranges"]
@@ -98,15 +99,29 @@ def test_a_manifest_carries_each_ranges_resolved_number(written):
 
 def test_a_manifest_names_its_profile_its_dates_and_that_its_numbers_are_on_simulated_data(
     written,
+    test_profile,
 ):
     m = manifest(written, "middle")
     assert (m["data_source"], m["label"]) == ("simulated data", "on simulated data")
     assert m["profile"] == {
         "file": "planned-hospitality.toml",
-        "sha256": hashlib.sha256(PROFILE.read_bytes()).hexdigest(),
+        "sha256": hashlib.sha256(test_profile.read_bytes()).hexdigest(),
     }
     assert m["history"] == {"start": "2024-01-01", "end": "2024-01-02"}
     assert m["export_date"] == "2024-03-01"
+
+
+def test_a_manifest_names_the_phrase_bank_and_the_cached_variations_its_text_came_from(
+    written, test_profile
+):
+    folder = test_profile.parent
+    assert manifest(written, "middle")["phrases"] == {
+        name: {"file": file, "sha256": hashlib.sha256((folder / file).read_bytes()).hexdigest()}
+        for name, file in [
+            ("bank", "planned-hospitality.phrases.toml"),
+            ("variations", "planned-hospitality.variations.json"),
+        ]
+    }
 
 
 def test_a_manifest_names_the_generator_that_wrote_it_by_version_and_code_hash(written):
@@ -137,53 +152,55 @@ def files(folder):
     return {p.relative_to(folder): p.read_bytes() for p in sorted(folder.rglob("*")) if p.is_file()}
 
 
-def test_writing_twice_gives_byte_identical_output(written, tmp_path):
-    datasets.write_all(PROFILE, tmp_path, history=TINY)
+def test_writing_twice_gives_byte_identical_output(written, tmp_path, test_profile):
+    datasets.write_all(test_profile, tmp_path, history=TINY)
     assert files(tmp_path) == files(written)
 
 
-def test_a_dataset_is_the_one_its_seed_generates_alone(written, tmp_path):
+def test_a_dataset_is_the_one_its_seed_generates_alone(written, tmp_path, test_profile):
     setting = "volume.leads_per_month@high"
-    alone = dataset.generate(PROFILE, setting, datasets.seed(setting), tmp_path, history=TINY)
+    alone = dataset.generate(test_profile, setting, datasets.seed(setting), tmp_path, history=TINY)
     swept = files(written / dataset.folder_name(setting))
     del swept[Path("manifest.json")]
     assert swept == files(alone)
 
 
 def test_a_run_leaves_exactly_the_current_sweep_removing_folders_of_earlier_settings(
-    written, tmp_path
+    written, tmp_path, test_profile
 ):
     out = tmp_path / "datasets"
-    datasets.write_all(PROFILE, out, history=TINY)
+    datasets.write_all(test_profile, out, history=TINY)
     (out / "dropped.range.low").mkdir()
     (out / "dropped.range.low" / "manifest.json").write_text("{}")
-    datasets.write_all(PROFILE, out, history=TINY)
+    datasets.write_all(test_profile, out, history=TINY)
     assert files(out) == files(written)
     assert sorted(p.name for p in tmp_path.iterdir()) == ["datasets"]
 
 
-def test_a_non_empty_folder_without_an_index_is_refused_and_left_untouched(tmp_path):
+def test_a_non_empty_folder_without_an_index_is_refused_and_left_untouched(tmp_path, test_profile):
     out = tmp_path / "home"
     out.mkdir()
     (out / "precious.txt").write_text("keep me")
     with pytest.raises(datasets.NotAnEarlierOutput):
-        datasets.write_all(PROFILE, out, history=TINY)
+        datasets.write_all(test_profile, out, history=TINY)
     assert files(out) == {Path("precious.txt"): b"keep me"}
     assert sorted(p.name for p in tmp_path.iterdir()) == ["home"]
 
 
-def test_a_crash_mid_run_leaves_the_earlier_output_intact(written, tmp_path):
+def test_a_crash_mid_run_leaves_the_earlier_output_intact(written, tmp_path, test_profile):
     out = tmp_path / "datasets"
-    datasets.write_all(PROFILE, out, history=TINY)
-    broken = tmp_path / "broken.toml"
-    text = PROFILE.read_text()
+    datasets.write_all(test_profile, out, history=TINY)
+    # A copy of the profile, beside its phrase bank and cache, with a range made unreadable.
+    shutil.copytree(test_profile.parent, tmp_path / "broken")
+    broken = tmp_path / "broken" / test_profile.name
+    text = test_profile.read_text()
     leads_per_month = "[volume.leads_per_month]\nlow = 100\nmiddle = 400\nhigh = 1000\n"
     assert leads_per_month in text
     broken.write_text(text.replace(leads_per_month, leads_per_month.replace("1000", '"boom"')))
     with pytest.raises(TypeError):
         datasets.write_all(broken, out, history=TINY)
     assert files(out) == files(written)
-    assert sorted(p.name for p in tmp_path.iterdir()) == ["broken.toml", "datasets"]
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["broken", "datasets"]
 
 
 def test_each_manifest_carries_its_setting_and_seed(written):

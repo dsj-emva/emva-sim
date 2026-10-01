@@ -17,8 +17,9 @@ from functools import partial
 from importlib.metadata import version
 from pathlib import Path
 
-from emva_sim import dataset, profile
+from emva_sim import dataset, phrases, profile
 from emva_sim.dataset import DEFAULT_HISTORY, History
+from emva_sim.phrases import Phrases
 
 BASE_SEED = 1
 # The Data source, and the label every number from it carries.
@@ -51,7 +52,13 @@ def write_all(profile_path: Path, out: Path, history: History = DEFAULT_HISTORY)
         _check_replaceable(folder)
     profile_path = Path(profile_path)
     raw = profile.load(profile_path)
+    loaded = Phrases.load(profile_path, raw)
     named = {"file": profile_path.name, "sha256": _sha256(profile_path)}
+    bank, variations = phrases.paths(profile_path, raw)
+    named_phrases = {
+        "bank": {"file": bank.name, "sha256": _sha256(bank)},
+        "variations": {"file": variations.name, "sha256": _sha256(variations)},
+    }
     named_generator = {"version": version("emva-sim"), "sha256": _generator_sha256()}
     listed = [
         {"folder": dataset.folder_name(s), "setting": s, "seed": seed(s)} for s in settings(raw)
@@ -65,7 +72,9 @@ def write_all(profile_path: Path, out: Path, history: History = DEFAULT_HISTORY)
             {**DATA_SOURCE, "profile": named, "base_seed": BASE_SEED, "datasets": listed},
         )
         with ProcessPoolExecutor() as pool:
-            write_one = partial(_write_one, raw, named, named_generator, staging, history)
+            write_one = partial(
+                _write_one, raw, loaded, named, named_phrases, named_generator, staging, history
+            )
             list(pool.map(write_one, listed))
     except BaseException:
         shutil.rmtree(staging)
@@ -81,17 +90,25 @@ def _check_replaceable(folder: Path) -> None:
 
 
 def _write_one(
-    raw: dict, named: dict, generator: dict, out: Path, history: History, listed: dict
+    raw: dict,
+    loaded: Phrases,
+    named: dict,
+    named_phrases: dict,
+    generator: dict,
+    out: Path,
+    history: History,
+    listed: dict,
 ) -> None:
     """One dataset and its manifest, from its index entry; each depends only on its setting and
     seed, so they run in parallel."""
     folder = out / listed["folder"]
-    dataset.write(raw, listed["setting"], listed["seed"], folder, history)
+    dataset.write(raw, loaded, listed["setting"], listed["seed"], folder, history)
     _write_json(
         folder / "manifest.json",
         {
             **DATA_SOURCE,
             "profile": named,
+            "phrases": named_phrases,
             "generator": generator,
             "setting": listed["setting"],
             "seed": listed["seed"],

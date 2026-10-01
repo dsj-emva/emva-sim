@@ -57,6 +57,11 @@ class Lead:
         return self.price_per_person_per_night * self.nights * self.party_size
 
     @property
+    def budget_per_person(self) -> float:
+        """What the Lead can spend per person on the whole trip."""
+        return self.budget_per_person_per_night * self.nights
+
+    @property
     def party_size(self) -> int:
         return self.adults + self.children
 
@@ -154,6 +159,28 @@ def _message_words(rng: Random, p: dict, dreamer: bool) -> int:
         over = shape["dreamer_over_words"]
         return math.floor(draws.lognormal_between(rng, median, sigma, over, math.inf)) + 1
     return max(token + 1, round(draws.lognormal(rng, median, sigma)))
+
+
+def _commits(rng: Random, p: dict, message_words: int) -> bool:
+    """Whether the Lead shows a decision already made (effects.text_commitment).
+
+    Only a written message can show it, so the flag falls on Leads whose message is not blank or a
+    token, at the share that keeps the profile's share of all Leads.
+    """
+    message = p["form"]["message"]
+    share = p["effects"]["text_commitment"]["share_of_leads"]
+    chosen = rng.random() < _share_outside(share, message["blank_or_token"])
+    return chosen and message_words > message["shape"]["token_words_at_most"]
+
+
+def dreamer(p: dict, lead: "Lead") -> bool:
+    """A dreamer's message (effects.message_length): long, many countries, no budget stated."""
+    shape = p["form"]["message"]["shape"]
+    return (
+        lead.message_words > shape["dreamer_over_words"]
+        and len(lead.destinations) > shape["dreamer_over_countries"]
+        and not lead.states_budget
+    )
 
 
 def _heard_about(rng: Random, p: dict, lead: Lead) -> str:
@@ -328,7 +355,7 @@ def draw_lead(
         dates_given=_dates_given(rng, p),
         destinations=_destinations(rng, p, dreamer),
         message_words=message_words,
-        text_commitment=rng.random() < p["effects"]["text_commitment"]["share_of_leads"],
+        text_commitment=_commits(rng, p, message_words),
         real_buyer=rng.random() < p["notes"]["real_buyer_share"],
     )
     person = people.draw(rng, p["people"]["titles"], country["phones"])

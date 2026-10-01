@@ -12,10 +12,11 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 from random import Random
 
-from emva_sim import hidden_truth, hubspot, intake, leads, profile
+from emva_sim import hidden_truth, hubspot, intake, leads, messages, notes, profile
 from emva_sim.hubspot import Record
 from emva_sim.intake import RowKind
 from emva_sim.leads import Lead
+from emva_sim.phrases import Phrases
 from emva_sim.process import Process, TruePath
 from emva_sim.recording import Recording
 
@@ -49,34 +50,47 @@ def generate(
 ) -> Path:
     """Write one dataset to the folder of out named for it, and return that folder."""
     folder = Path(out) / folder_name(setting)
-    write(profile.load(profile_path), setting, seed, folder, history)
+    raw = profile.load(profile_path)
+    write(raw, Phrases.load(profile_path, raw), setting, seed, folder, history)
     return folder
 
 
-def write(raw: dict, setting: str, seed: int, folder: Path, history: History) -> None:
-    """Write one dataset into folder, replacing any earlier copy of it."""
+def write(
+    raw: dict, phrases: Phrases, setting: str, seed: int, folder: Path, history: History
+) -> None:
+    """Write one dataset into folder, replacing any earlier copy of it.
+
+    The text is written after the true paths, from the profile's phrases and their cached
+    variations, so it never changes them either.
+    """
     p = profile.resolve(raw, setting)
     rng = Random(seed)
     drawn, paths = leads_and_paths(p, rng, history)
+    writer = messages.Writer(p, phrases)
+    written = [writer.message(rng, lead) for lead in drawn]
+    drawn = [writer.written(lead, text) for lead, text in zip(drawn, written, strict=True)]
 
     start = datetime.combine(history.start, datetime.min.time())
     after_end = datetime.combine(history.end + timedelta(days=1), datetime.min.time())
-    received = intake.submissions(rng, p, drawn, start, after_end)
+    received = intake.submissions(rng, p, drawn, written, writer, start, after_end)
     deal_ids = hubspot.record_ids(rng, len(received), hubspot.DEAL_RECORD_IDS_FROM)
     new_contacts = sum(s.new_contact for s in received)
     contact_ids = iter(hubspot.record_ids(rng, new_contacts, hubspot.CONTACT_RECORD_IDS_FROM))
     contact_of_lead = {}
-    recording = Recording(p, rng)
+    recording = Recording(p, rng, drawn, paths)
     records = []
     for deal_id, s in zip(deal_ids, received, strict=True):
         contact_id = next(contact_ids) if s.new_contact else contact_of_lead[s.index]
         if s.kind == RowKind.LEAD:
             contact_of_lead[s.index] = contact_id
-            owner, recorded = paths[s.index].owner, recording.lead(paths[s.index])
+            path = paths[s.index]
+            owner, recorded = path.owner, recording.lead(s.lead, path)
         else:
             owner, recorded = rng.choice(p["team"]["owners"]), recording.not_a_lead(s.submitted_at)
         records.append(Record(deal_id, contact_id, owner, s, recorded))
 
+    export_at = datetime.combine(history.export, datetime.min.time())
+    activities = notes.Notes(p, phrases, writer, rng).write(records, paths, export_at)
     shutil.rmtree(folder, ignore_errors=True)
-    hubspot.Export(p, records, history.export).write(folder / "export", rng)
-    hidden_truth.write(folder / "hidden-truth", p, records, paths)
+    hubspot.Export(p, records, activities, history.export).write(folder / "export")
+    hidden_truth.write(folder / "hidden-truth", p, records, paths, activities)

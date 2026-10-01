@@ -153,6 +153,20 @@ held_at_middle = [
   "form.message.words_sigma",
   "form.message.dreamer_share",
   "notes.real_buyer_share",
+  "form.message.written_in_french",
+  "form.message.mentions.ages_of_travellers",
+  "form.message.mentions.named_birthday",
+  "form.message.mentions.retirement",
+  "form.message.mentions.religious_diet",
+  "form.message.mentions.health_or_mobility",
+  "form.message.mentions.pregnancy",
+  "form.message.mentions.sexual_orientation",
+  "form.message.mentions.names_of_travellers",
+  "mess.bot_spam_message",
+  "form.message.shape.partly_to_very_specific",
+  "form.message.imperfect_english",
+  "form.message.casual_casing",
+  "notes.long_discovery_share",
 ]
 
 # ---------------------------------------------------------------------------------------------------------
@@ -530,6 +544,11 @@ high = 0.60
 confidence = "guessed"
 source = "none; added for the generator (issue #5), awaiting the user's review"
 
+# Of the messages that are not blank or a token, those that mention an occasion that is an Intent
+# signal (a honeymoon, an anniversary, a celebration), and those that mention a limit that is not a
+# prohibited input (a diet not tied to religion, a fear of small planes, malaria worries). The
+# prohibited occasions and needs (a named birthday, retirement, a religious diet, health and
+# mobility) have ranges of their own in form.message.mentions (issue #6).
 [form.answers.mentions_occasion]
 low = 0.10
 middle = 0.17
@@ -626,7 +645,12 @@ source = "none (enquiry-forms.md §2)"
 # The shape of a message: a token is at most this many words; a dreamer (effects.message_length) writes
 # over dreamer_over_words, names over dreamer_over_countries countries and states no budget. Fixed
 # thresholds, from effects.message_length's note (issue #7).
+# Messages that are neither blank, a token nor a dreamer's are vague (form.message.vague_share of all
+# messages), else partly and very specific in the ratio partly_to_very_specific (enquiry-forms.md §2):
+# vague gives a region and a rough year; partly specific a country or season, the party and a must-do
+# or two; very specific the dates, a named park, the nights and the budget (issue #6).
 [form.message.shape]
+partly_to_very_specific = { low = 1.2, middle = 2.0, high = 3.5, confidence = "guessed", source = "none; enquiry-forms.md §2: partly specific 35-55% and very specific 15-30% of messages, so about 1.2 to 3.7 to 1; added for the text (issue #6), awaiting the user's review" }
 token_words_at_most = 3
 dreamer_over_words = 400
 dreamer_over_countries = 3
@@ -664,12 +688,102 @@ high = 0.40
 confidence = "guessed"
 source = "none (enquiry-forms.md §2); the rest split partly specific and very specific about 2 to 1"
 
+# Of the messages that state a fact the form's fields also hold (the party, the dates, the nights, the
+# budget), those where the text states one of them differently from the field (issue #6).
 [form.message.facts_disagree_with_fields]
 low = 0.02
 middle = 0.08
 high = 0.15
 confidence = "guessed"
 source = "none; follows from facts given in both fields and text (enquiry-forms.md §2)"
+
+# Of the Leads from [text].french_from, those who write their message in French; every other Lead
+# writes in English, the language of the site (enquiry-forms.md §2). Enquiry language is a prohibited
+# input. Added for the text (issue #6), awaiting the user's review.
+[form.message.written_in_french]
+low = 0.10
+middle = 0.25
+high = 0.40
+confidence = "guessed"
+source = "none; leads write in the language of the site, often imperfectly (enquiry-forms.md §2); added for the text (issue #6), awaiting the user's review"
+
+# Of the Leads of [text].imperfect_english_from writing in English, those whose English is imperfect
+# ("Leads write in the language of the site, often in imperfect English for non-UK/US residents",
+# enquiry-forms.md §2). Added for the text (issue #6), awaiting the user's review.
+[form.message.imperfect_english]
+low = 0.2
+middle = 0.4
+high = 0.6
+confidence = "guessed"
+source = "none; described in enquiry-forms.md §2, no number found; added for the text (issue #6), awaiting the user's review"
+
+# Messages typed all in lower case. Added for the text (issue #6), awaiting the user's review.
+[form.message.casual_casing]
+low = 0.03
+middle = 0.08
+high = 0.15
+confidence = "guessed"
+source = "none; added for the text (issue #6), awaiting the user's review"
+
+# Prohibited inputs planted in the text ([prohibited_inputs].in_text): of the messages that are not
+# blank or a token and whose Lead fits the mention (a same-sex partner needs a couple, a pregnancy a
+# woman by Title or a partner), those that mention each. Added for the text (issue #6), awaiting the
+# user's review.
+[form.message.mentions.ages_of_travellers]
+low = 0.05
+middle = 0.1
+high = 0.2
+confidence = "guessed"
+source = "none; ages are written in text as well as asked by forms (enquiry-forms.md §2, §4); added for the text (issue #6), awaiting the user's review"
+
+[form.message.mentions.named_birthday]
+low = 0.02
+middle = 0.04
+high = 0.08
+confidence = "guessed"
+source = "none; a big birthday is among the occasions written (enquiry-forms.md §2); added for the text (issue #6), awaiting the user's review"
+
+[form.message.mentions.retirement]
+low = 0.01
+middle = 0.02
+high = 0.05
+confidence = "guessed"
+source = "none; retirement is an occasion on one form's dropdown (enquiry-forms.md §4); added for the text (issue #6), awaiting the user's review"
+
+[form.message.mentions.religious_diet]
+low = 0.005
+middle = 0.01
+high = 0.03
+confidence = "guessed"
+source = "none; dietary, medical or mobility needs at enquiry 2-10% in all (enquiry-forms.md §3); the religious share guessed; added for the text (issue #6), awaiting the user's review"
+
+[form.message.mentions.health_or_mobility]
+low = 0.01
+middle = 0.03
+high = 0.06
+confidence = "guessed"
+source = "none; dietary, medical or mobility needs at enquiry 2-10% in all (enquiry-forms.md §3); added for the text (issue #6), awaiting the user's review"
+
+[form.message.mentions.pregnancy]
+low = 0.002
+middle = 0.005
+high = 0.01
+confidence = "guessed"
+source = "none; mentioned in text (enquiry-forms.md §4), no number found; added for the text (issue #6), awaiting the user's review"
+
+[form.message.mentions.sexual_orientation]
+low = 0.005
+middle = 0.01
+high = 0.03
+confidence = "guessed"
+source = "none; a same-sex partner mentioned in text (enquiry-forms.md §4), no number found; added for the text (issue #6), awaiting the user's review"
+
+[form.message.mentions.names_of_travellers]
+low = 0.05
+middle = 0.1
+high = 0.2
+confidence = "guessed"
+source = "none; names in the text and its sign-off, no number found; added for the text (issue #6), awaiting the user's review"
 
 # ---------------------------------------------------------------------------------------------------------
 # Prohibited inputs and Intent signals (decision 0008). The generator plants prohibited inputs in fields and
@@ -1104,7 +1218,7 @@ source = "none; added for the generator (issue #8), awaiting the user's review"
 # A bot or spam submission answers the form as a genuine Lead would, by the profile's answer mix,
 # except that a share of bots give a made-up name, a throwaway address, or a party no real enquiry
 # gives (one of impossible_party, adults and children each from min to max; ages are given for the
-# children). Its message is blank as often as a genuine Lead's (until issue #6 writes messages). So no
+# children). Its message is spam at mess.bot_spam_message, else written as a genuine Lead's is. So no
 # single column tells bots apart (the user's ruling on PR #15). Added for the generator (issue #8),
 # awaiting the user's review.
 [mess.bot_made_up_name]
@@ -1127,6 +1241,16 @@ middle = 0.3
 high = 0.5
 confidence = "guessed"
 source = "none; added for the generator (issue #8), awaiting the user's review"
+
+# Share of bots whose message is spam (a sales pitch with a link, a run of links, or gibberish); the
+# rest write as the made-up Lead they play would. Added for the text (issue #6), awaiting the user's
+# review.
+[mess.bot_spam_message]
+low = 0.3
+middle = 0.5
+high = 0.7
+confidence = "guessed"
+source = "none; added for the text (issue #6), awaiting the user's review"
 
 [mess.bot_or_spam]
 low = 0.005
@@ -1157,7 +1281,98 @@ confidence = "estimated"
 source = "neglect-and-mess.md §5: 32% by sales professionals' own estimate (Firmable, B2B)"
 
 # ---------------------------------------------------------------------------------------------------------
-# Sales notes and Loss reasons. Phrase banks are added with issue #6.
+# Text: the enquiry message, Sales notes and Closed Lost Reasons (issue #6). The phrases are in the
+# phrase bank. `make vary-phrases` has Claude Haiku 4.5 rewrite each once into natural variations, kept
+# in the committed cache; until it has been run with a key the cache is empty and generation stops.
+# Generation reads only the cache, never the model, and fails if a phrase has no valid cached
+# variations. Plain values; the shares are ranges in [form.message], [notes] and [mess].
+# ---------------------------------------------------------------------------------------------------------
+
+[text]
+phrase_bank = "planned-hospitality.phrases.toml"
+variations = "planned-hospitality.variations.json"
+variations_per_phrase = 4
+model = "claude-haiku-4-5-20251001"
+# The Leads of this country who may write in French (form.message.written_in_french).
+french_from = "France"
+# The Leads of these countries who, writing in English, may write it imperfectly
+# (form.message.imperfect_english): residents outside the UK and the US (enquiry-forms.md §2).
+imperfect_english_from = ["France"]
+# Ages the text gives adult travellers (a prohibited input; nothing reads them).
+adult_ages = { min = 21, max = 85 }
+# A budget the text states is the Lead's budget per person for the trip, rounded to this.
+budget_rounded_to = 500
+# Gibberish a bot types: this many made-up words.
+gibberish_words = { min = 3, max = 12 }
+# Links in spam, under the TLD reserved for examples, so none is real.
+spam_links = ["http://cheap-seo.example/offer", "https://best-deals.example/win", "http://followers-now.example", "https://watch-sale.example/shop", "http://site-audit.example/free", "https://earn-fast.example/start"]
+# Expressions the team abbreviates in a note (notes-and-loss-reasons.md, abbreviations; generic usage),
+# applied in this order, as whole words, whatever their case.
+abbreviations = [
+  ["per person per night", "pppn"],
+  ["fully inclusive", "FI"],
+  ["left a voicemail", "LVM"],
+  ["voicemail", "VM"],
+  ["left a message", "LM"],
+  ["no answer", "NA"],
+  ["call back", "CB"],
+  ["follow up", "f/u"],
+  ["itinerary", "itin"],
+  ["version 2", "v2"],
+  ["per person", "pp"],
+  ["people", "pax"],
+  ["deposit", "dep"],
+  ["decision-maker", "DM"],
+  ["honeymoon", "HM"],
+  ["anniversary", "anniv"],
+  ["tomorrow", "tmrw"],
+  ["about", "abt"],
+  ["with", "w/"],
+  ["and", "&"],
+]
+
+# Shorthand besides the abbreviations above that marks a note as abbreviated.
+shorthand = ["x2", "3rd", "thurs"]
+# How the team writes a budget in a note, from the amount per person (thousands: the amount in
+# thousands), several ways in one export (notes-and-loss-reasons.md §2: $12k, USD12,000, 12K pp).
+note_money = ["${thousands}k pp", "USD{amount} pp", "{thousands}K pp", "${amount} per person", "~${thousands}k each"]
+# Parks as the team sometimes misspells them in notes (notes-and-loss-reasons.md §2).
+park_misspellings = { "Serengeti" = ["Serengetti", "Serengheti"], "Okavango Delta" = ["Okavanga Delta", "Okavango"], "Ngorongoro Crater" = ["Ngorogoro", "Ngorongoro"], "Masai Mara" = ["Maasai Mara", "Mara"], "South Luangwa" = ["S Luangwa"], "Victoria Falls" = ["Vic Falls"], "Sossusvlei" = ["Sossusvlie"] }
+
+# How each language writes the facts the slots carry: months, the joining "and", a number of children
+# (one, many), the budget's money (amount with the thousands separator) and the form's country names.
+[text.languages.en]
+months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
+joiner = " and "
+child = ["child", "children"]
+money = "${amount}"
+thousands = ","
+countries = {}
+
+[text.languages.fr]
+months = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"]
+joiner = " et "
+child = ["enfant", "enfants"]
+money = "{amount} dollars"
+thousands = ""
+countries = { "South Africa" = "Afrique du Sud", Tanzania = "Tanzanie", Uganda = "Ouganda", Namibia = "Namibie", Zambia = "Zambie" }
+
+# Parks a very specific message names, by the form's country (named parks are an Intent signal).
+[text.parks]
+Kenya = ["Masai Mara", "Amboseli", "Samburu"]
+Tanzania = ["Serengeti", "Ngorongoro Crater", "Ruaha", "Tarangire"]
+Botswana = ["Okavango Delta", "Chobe", "Makgadikgadi"]
+"South Africa" = ["Kruger", "Sabi Sand", "Madikwe"]
+Rwanda = ["Volcanoes National Park", "Akagera"]
+Uganda = ["Bwindi", "Kibale"]
+Namibia = ["Etosha", "Sossusvlei", "Damaraland"]
+Zambia = ["South Luangwa", "Lower Zambezi"]
+Zimbabwe = ["Hwange", "Mana Pools", "Victoria Falls"]
+
+# ---------------------------------------------------------------------------------------------------------
+# Sales notes and Loss reasons. Their phrases are in the phrase bank ([text]). A Lead with any note has
+# one at its first Contact attempt, one at Engaged and one per itinerary version, and notes on each
+# logged call (issue #6).
 # ---------------------------------------------------------------------------------------------------------
 
 [notes.attempted_with_any_note]
@@ -1166,6 +1381,16 @@ middle = 0.70
 high = 0.90
 confidence = "guessed"
 source = "none (notes-and-loss-reasons.md §6)"
+
+# Of the notes at Engaged, those written as a long paragraph after the discovery call rather than a
+# short recap (notes-and-loss-reasons.md, numbers: discovery-call notes 40-200 words). Added for the
+# text (issue #6), awaiting the user's review.
+[notes.long_discovery_share]
+low = 0.15
+middle = 0.30
+high = 0.50
+confidence = "guessed"
+source = "none (notes-and-loss-reasons.md §2: a few long notes after the main discovery call); added for the text (issue #6), awaiting the user's review"
 
 [notes.short_note_words]
 low = 2
@@ -1214,7 +1439,10 @@ source = "notes-and-loss-reasons.md §5: HVS on misuse of 'lost to competitor'; 
 # What the Hidden truth says made a lost lead not win follows where it was lost (the user's ruling,
 # 2026-10-01): a Lead lost before Engaged truly could not be reached (could_not_reach_them, a share) or
 # was never a real buyer (the rest); a Lead lost at Engaged or later draws from price, timing,
-# never_a_real_buyer and unknown, as weights normalised to sum to one. The team records one of these values.
+# never_a_real_buyer and unknown, as weights normalised to sum to one. A real buyer (notes.real_buyer_share)
+# is never truly "never a real buyer" (the user's ruling on PR #17): lost before Engaged it could not be
+# reached, lost later it lost on price, timing or unknown; the other lost Leads make up the shares as
+# far as that allows. The team records one of these values.
 [loss.reasons]
 recorded = [
   { recorded = "No response", meaning = "could_not_reach_them" },

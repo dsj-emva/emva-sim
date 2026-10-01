@@ -10,11 +10,13 @@ from pathlib import Path
 from random import Random
 
 import pytest
+from fake_model import profile_with_fake_variations
 
 from emva_sim import dataset, hidden_truth, profile
 from emva_sim.intake import RowKind
+from emva_sim.phrases import Phrases
 
-PROFILE = Path(__file__).parent.parent / "profiles" / "planned-hospitality.toml"
+REAL_PROFILE = Path(__file__).parent.parent / "profiles" / "planned-hospitality.toml"
 TRUTH = "hidden-truth/hidden-truth.csv"
 STAGES = "hidden-truth/stage-history.csv"
 
@@ -26,7 +28,21 @@ def rows(path):
 
 @cache
 def raw():
-    return profile.load(PROFILE)
+    return profile.load(REAL_PROFILE)
+
+
+@pytest.fixture(scope="session")
+def test_profile(tmp_path_factory):
+    """A copy of the profile and its phrase bank with a cache the fake model wrote through
+    vary-phrases, so the tests generate text without the model, whether or not the committed
+    cache is complete yet."""
+    return profile_with_fake_variations(REAL_PROFILE, tmp_path_factory.mktemp("profile"))
+
+
+@pytest.fixture(scope="session")
+def test_phrases(test_profile):
+    """The phrase bank with the fake model's cached variations."""
+    return Phrases.load(test_profile, profile.load(test_profile))
 
 
 @cache
@@ -85,7 +101,7 @@ def genuine(folder):
 
 
 @pytest.fixture(scope="session")
-def generate(tmp_path_factory):
+def generate(tmp_path_factory, test_profile):
     """The dataset at a setting and history, seed 1, generated once per test session."""
     made = {}
 
@@ -93,7 +109,7 @@ def generate(tmp_path_factory):
         if (setting, history) not in made:
             out = tmp_path_factory.mktemp("out")
             made[setting, history] = dataset.generate(
-                PROFILE, setting, seed=1, out=out, history=history
+                test_profile, setting, seed=1, out=out, history=history
             )
         return made[setting, history]
 

@@ -3,7 +3,8 @@
 As docs/research/planned-hospitality/sales-steps-and-exports.md §3 records: every field
 double-quoted, header = the property's label, datetimes "YYYY-MM-DD HH:MM", numbers as decimals,
 multi-value cells joined with ";", owners as names. Only what the sales team has recorded before
-the export date appears.
+the export date appears. Calls and notes are exported as their own objects (§3), in the variant
+that has them.
 """
 
 import csv
@@ -13,12 +14,15 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
 from random import Random
+from typing import TYPE_CHECKING
 
 from emva_sim import form, months
 from emva_sim.intake import Submission
 from emva_sim.recording import Change, Recorded, closed_stage
 
-UNCONNECTED_CALL_OUTCOMES = ["No answer", "Left voicemail", "Busy"]
+if TYPE_CHECKING:
+    from emva_sim.notes import Activities
+
 DEAL_RECORD_IDS_FROM = 10_000_000_000
 CONTACT_RECORD_IDS_FROM = 100_000
 CALL_RECORD_IDS_FROM = 30_000_000_000
@@ -73,9 +77,10 @@ def _decimal(value: float) -> str:
 
 
 class Export:
-    def __init__(self, p: dict, records: list[Record], export_date: date):
+    def __init__(self, p: dict, records: list[Record], activities: "Activities", export_date: date):
         self.p = p
         self.records = records
+        self.activities = activities
         self.export_date = export_date
         self.export_at = datetime.combine(export_date, datetime.min.time())
         self.pipeline = p["pipeline"]["name"]
@@ -84,16 +89,18 @@ class Export:
         self.won = closed_stage(p, "won")
         self.fields = p["form"]["fields"]
 
-    def write(self, folder: Path, rng: Random) -> None:
+    def write(self, folder: Path) -> None:
         deals = (self._deals_header(), [self._deal_row(r) for r in self.records])
         contacts = (self._contacts_header(), self._contact_rows())
-        calls = (self._calls_header(), self._call_rows(rng))
+        calls = (self._calls_header(), self._call_rows())
+        notes = (self._notes_header(), self._note_rows())
         for variant in self.p["exports"]["variants"]:
             target = folder / slug(variant["name"])
             _write(target / file_name(self.pipeline, self.export_date), *deals)
             _write(target / file_name("All contacts", self.export_date), *contacts)
             if variant["calls"]:
                 _write(target / file_name("All calls", self.export_date), *calls)
+                _write(target / file_name("All notes", self.export_date), *notes)
 
     def _recorded(self, moment: datetime | None) -> datetime | None:
         return moment if moment is not None and moment < self.export_at else None
@@ -169,7 +176,7 @@ class Export:
             stamp(created),
             r.owner,
             "Existing Business" if s.lead.repeat_client else "New Business",
-            r.recorded.closed_lost_reason if current == self.lost else "",
+            self._lost_reason(r) if current == self.lost else "",
             self.p["volume"]["traffic_source"]["labels"][s.traffic_source],
             "Forms",
             *(stamp(times.get(stage["name"])) for stage in self.stages),
@@ -240,32 +247,48 @@ class Export:
             "Associated Deal IDs",
         ]
 
-    def _call_rows(self, rng: Random) -> list[list[str]]:
-        calls = sorted(
-            (attempt.at, r.deal_id, attempt)
-            for r in self.records
-            for attempt in r.recorded.calls
-            if self._recorded(attempt.at)
-        )
+    def _call_rows(self) -> list[list[str]]:
         by_deal = {r.deal_id: r for r in self.records}
-        rows = []
-        call_ids = record_ids(rng, len(calls), CALL_RECORD_IDS_FROM)
-        for call_id, (at, deal_id, attempt) in zip(call_ids, calls, strict=True):
-            r = by_deal[deal_id]
-            outcome = "Connected" if attempt.connected else rng.choice(UNCONNECTED_CALL_OUTCOMES)
-            rows.append(
-                [
-                    str(call_id),
-                    stamp(at),
-                    f"Call with {self._contact_name(r.submission)}",
-                    "",
-                    outcome,
-                    "Completed",
-                    "Outbound",
-                    self._contact_name(r.submission),
-                    str(r.contact_id),
-                    self._deal_name(r.submission),
-                    str(deal_id),
-                ]
-            )
-        return rows
+        return [
+            [
+                str(call.record_id),
+                stamp(call.at),
+                f"Call with {self._contact_name(by_deal[call.deal_id].submission)}",
+                call.notes.text if call.notes else "",
+                call.outcome,
+                "Completed",
+                "Outbound",
+                *self._associated(by_deal[call.deal_id]),
+            ]
+            for call in self.activities.calls
+        ]
+
+    def _notes_header(self) -> list[str]:
+        return [
+            "Record ID",
+            "Activity date",
+            "Note body",
+            "Associated Contact",
+            "Associated Contact IDs",
+            "Associated Deal",
+            "Associated Deal IDs",
+        ]
+
+    def _note_rows(self) -> list[list[str]]:
+        by_deal = {r.deal_id: r for r in self.records}
+        return [
+            [str(n.record_id), stamp(n.at), n.body.text, *self._associated(by_deal[n.deal_id])]
+            for n in self.activities.notes
+        ]
+
+    def _associated(self, r: Record) -> list[str]:
+        return [
+            self._contact_name(r.submission),
+            str(r.contact_id),
+            self._deal_name(r.submission),
+            str(r.deal_id),
+        ]
+
+    def _lost_reason(self, r: Record) -> str:
+        reason = self.activities.lost_reasons.get(r.deal_id)
+        return reason.text if reason else ""

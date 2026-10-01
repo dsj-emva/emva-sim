@@ -7,13 +7,11 @@ standard errors at that size, written before the numbers were looked at.
 import csv
 import statistics
 from datetime import date, datetime
-from pathlib import Path
 
 import pytest
 
 from emva_sim import dataset
 
-PROFILE = Path(__file__).parent.parent / "profiles" / "planned-hospitality.toml"
 HISTORY = dataset.History(start=date(2024, 1, 1), end=date(2024, 6, 30), export=date(2024, 7, 5))
 DEALS = "export/deals-and-contacts-only/hubspot-crm-exports-safari-enquiries-2024-07-05.csv"
 LADDER = ["Contact attempted", "Engaged", "Qualified", "Proposal", "Won"]
@@ -29,9 +27,9 @@ def moment(text):
 
 
 @pytest.fixture(scope="module")
-def leads(tmp_path_factory):
+def leads(tmp_path_factory, test_profile):
     folder = dataset.generate(
-        PROFILE, "middle", seed=1, out=tmp_path_factory.mktemp("o"), history=HISTORY
+        test_profile, "middle", seed=1, out=tmp_path_factory.mktemp("o"), history=HISTORY
     )
     created = {d["Record ID"]: moment(d["Create Date"]) for d in rows(folder / DEALS)}
     truth = rows(folder / "hidden-truth" / "hidden-truth.csv")

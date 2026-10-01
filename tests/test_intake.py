@@ -10,9 +10,9 @@ from datetime import date, datetime
 from random import Random
 
 import pytest
-from conftest import PROFILE, TRUTH, assert_rate, ends, kinds, number, raw, resolved, rows
+from conftest import TRUTH, assert_rate, ends, kinds, number, raw, resolved, rows
 
-from emva_sim import dataset, form, intake, leads, profile
+from emva_sim import dataset, form, intake, leads, messages, profile
 from emva_sim.hidden_truth import true_path_columns
 from emva_sim.intake import RowKind
 from emva_sim.people import FIRST_NAMES, LAST_NAMES, THROWAWAY_DOMAINS
@@ -289,16 +289,18 @@ def test_the_profiles_share_of_altered_key_fields_are_missing_rather_than_wrong(
 
 
 @pytest.mark.parametrize("setting", ends("mess.wrong_number_one_more"))
-def test_a_wrong_number_is_one_more_at_the_profiles_share(setting):
+def test_a_wrong_number_is_one_more_at_the_profiles_share(setting, test_phrases):
     p = profile.resolve(raw(), setting)
     p["mess"] |= {"field_missing_or_wrong": 1.0, "missing_rather_than_wrong": 0.0}
     p["mess"]["key_fields"] = ["adults"]
     drawn = leads.draw_leads(Random(1), p, date(2024, 1, 1), date(2024, 3, 31))
     start, until = datetime(2024, 1, 1), datetime(2024, 4, 1)
     adults = form.field(p, "adults")["label"]
+    writer = messages.Writer(p, test_phrases)
+    written = [writer.message(Random(2), lead) for lead in drawn]
     pairs = [
         (int(s.lead.answers[adults]), int(s.answers[adults]))
-        for s in intake.submissions(Random(1), p, drawn, start, until)
+        for s in intake.submissions(Random(1), p, drawn, written, writer, start, until)
         if s.kind == RowKind.LEAD
     ]
     assert all(abs(held - true) == 1 for true, held in pairs)
@@ -339,10 +341,10 @@ def files(folder):
     return {p.relative_to(folder): p.read_bytes() for p in sorted(folder.rglob("*")) if p.is_file()}
 
 
-def test_the_same_seed_gives_the_same_mess(tmp_path):
+def test_the_same_seed_gives_the_same_mess(tmp_path, test_profile):
     month = dataset.History(start=date(2024, 1, 1), end=date(2024, 1, 31), export=date(2024, 3, 1))
-    first = dataset.generate(PROFILE, "all-high", seed=5, out=tmp_path / "a", history=month)
-    second = dataset.generate(PROFILE, "all-high", seed=5, out=tmp_path / "b", history=month)
+    first = dataset.generate(test_profile, "all-high", seed=5, out=tmp_path / "a", history=month)
+    second = dataset.generate(test_profile, "all-high", seed=5, out=tmp_path / "b", history=month)
     assert files(first) == files(second)
     truth = rows(first / TRUTH)
     assert {r["row_kind"] for r in truth} == set(RowKind)

@@ -5,6 +5,7 @@ industry fact and carry no planted signal. Emails use the domains reserved for e
 titles and phone formats come from the profile.
 """
 
+import string
 from dataclasses import dataclass
 from random import Random
 
@@ -100,6 +101,12 @@ class Person:
     last_name: str
     email: str
     phone: str
+
+
+def gibberish(rng: Random, shortest: int, longest: int) -> str:
+    """A made-up word of drawn letters, as bots type them."""
+    letters = rng.randint(shortest, longest)
+    return "".join(rng.choice(string.ascii_lowercase) for _ in range(letters))
 
 
 def _phone(rng: Random, formats: list[str]) -> str:

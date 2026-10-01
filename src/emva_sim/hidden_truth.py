@@ -1,7 +1,10 @@
 """The Hidden truth: what the generator knows about every deal, kept apart from the exports.
 
 hidden-truth.csv has one row per deal; stage-history.csv one row per CRM stage change, with when
-it truly happened and when the team recorded it. Read only when grading Emva.
+it truly happened and when the team recorded it; text.csv one row per piece of text in the exports
+(each deal's message, each call's notes, each note, each Closed Lost Reason), with the phrases it
+was written from, what was planted in it, and the sentence carrying a planted text signal as it was
+written before any abbreviation or typo. Read only when grading Emva.
 """
 
 import csv
@@ -12,6 +15,8 @@ from emva_sim import effects, ladder
 from emva_sim.hubspot import Record, stamp
 from emva_sim.intake import RowKind
 from emva_sim.leads import Lead
+from emva_sim.notes import Activities
+from emva_sim.phrases import Text
 from emva_sim.process import TruePath
 
 
@@ -51,6 +56,7 @@ _PATH_COLUMNS = [
 _PROPENSITY_COLUMNS = ["high_quality", *HIDDEN_ATTRIBUTES]
 _OTHER_COLUMNS = [
     "true_loss_reason",
+    "recorded_loss_reason",
     "row_kind",
     "duplicate_of_deal_record_id",
     "invalid_email",
@@ -69,11 +75,33 @@ def columns(p: dict) -> list[str]:
 
 
 STAGE_HISTORY_COLUMNS = ["deal_record_id", "crm_stage", "true_entered_at", "recorded_entered_at"]
+TEXT_COLUMNS = [
+    "deal_record_id",
+    "text",
+    "activity_record_id",
+    "language",
+    "shape",
+    "phrase_ids",
+    "prohibited_mentions",
+    "fact_differs_from_fields",
+    "abbreviated",
+    "typo",
+    "signal",
+]
+MESSAGE, CALL_NOTES, NOTE_BODY, CLOSED_LOST_REASON = (
+    "message",
+    "call notes",
+    "note body",
+    "closed lost reason",
+)
 
 
-def write(folder: Path, p: dict, records: list[Record], paths: list[TruePath]) -> None:
+def write(
+    folder: Path, p: dict, records: list[Record], paths: list[TruePath], activities: Activities
+) -> None:
     _write(folder / "hidden-truth.csv", columns(p), _rows(p, records, paths))
     _write(folder / "stage-history.csv", STAGE_HISTORY_COLUMNS, _stage_history(records))
+    _write(folder / "text.csv", TEXT_COLUMNS, _texts(records, activities))
 
 
 def _write(path: Path, header: list[str], rows: Iterable[list[str]]) -> None:
@@ -123,6 +151,7 @@ def _rows(p: dict, records: list[Record], paths: list[TruePath]) -> Iterator[lis
             str(r.contact_id),
             *true_path,
             r.recorded.true_loss_reason,
+            r.recorded.closed_lost_reason,
             s.kind,
             str(deal_of_lead[s.index]) if s.kind == RowKind.DUPLICATE else "",
             *((_yes_no(s.invalid_email), _yes_no(s.invalid_phone)) if genuine else ("", "")),
@@ -134,3 +163,36 @@ def _stage_history(records: list[Record]) -> Iterator[list[str]]:
     for r in records:
         for change in r.recorded.changes:
             yield [str(r.deal_id), change.stage, stamp(change.true_at), stamp(change.recorded_at)]
+
+
+def _flag(flag: bool | None) -> str:
+    return "" if flag is None else _yes_no(flag)
+
+
+def _text_row(deal_id: int, kind: str, activity: str, text: Text) -> list[str]:
+    differs = {None: "", "": "none"}.get(text.fact_differs, text.fact_differs)
+    return [
+        str(deal_id),
+        kind,
+        activity,
+        text.language,
+        text.shape,
+        ";".join(text.phrase_ids),
+        ";".join(text.mentions),
+        differs,
+        _flag(text.abbreviated),
+        _flag(text.typo),
+        text.signal,
+    ]
+
+
+def _texts(records: list[Record], activities: Activities) -> Iterator[list[str]]:
+    for r in records:
+        yield _text_row(r.deal_id, MESSAGE, "", r.submission.message)
+    for call in activities.calls:
+        if call.notes:
+            yield _text_row(call.deal_id, CALL_NOTES, str(call.record_id), call.notes)
+    for note in activities.notes:
+        yield _text_row(note.deal_id, NOTE_BODY, str(note.record_id), note.body)
+    for deal_id, reason in activities.lost_reasons.items():
+        yield _text_row(deal_id, CLOSED_LOST_REASON, "", reason)

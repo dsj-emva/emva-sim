@@ -1,19 +1,18 @@
+import shutil
 import subprocess
-from pathlib import Path
 
 import pytest
+from conftest import REAL_PROFILE
 
 from emva_sim import cli, datasets
 
-PROFILE = Path(__file__).parent.parent / "profiles" / "planned-hospitality.toml"
 
-
-def test_generate_writes_a_dataset_and_labels_its_numbers(tmp_path, capsys):
+def test_generate_writes_a_dataset_and_labels_its_numbers(tmp_path, capsys, test_profile):
     cli.main(
         [
             "generate",
             "--profile",
-            str(PROFILE),
+            str(test_profile),
             "--setting",
             "middle",
             "--seed",
@@ -30,10 +29,11 @@ def test_generate_writes_a_dataset_and_labels_its_numbers(tmp_path, capsys):
     assert str(folder) in printed
 
 
-def test_an_unknown_setting_exits_with_an_error(tmp_path, capsys):
+def test_an_unknown_setting_exits_with_an_error(tmp_path, capsys, test_profile):
     with pytest.raises(SystemExit) as exit_info:
         cli.main(
-            ["generate", "--profile", str(PROFILE), "--setting", "nope", "--out", str(tmp_path)]
+            ["generate", "--profile", str(test_profile), "--setting", "nope"]
+            + ["--out", str(tmp_path)]
         )
     assert exit_info.value.code == 2
     assert "nope" in capsys.readouterr().err
@@ -50,8 +50,8 @@ def test_datasets_writes_the_sweep_of_the_profile_to_out_and_labels_its_numbers(
 
     monkeypatch.setattr(datasets, "write_all", write_all)
     out = tmp_path / "datasets"
-    cli.main(["datasets", "--profile", str(PROFILE), "--out", str(out)])
-    assert called == [(PROFILE, out)]
+    cli.main(["datasets", "--profile", str(REAL_PROFILE), "--out", str(out)])
+    assert called == [(REAL_PROFILE, out)]
     printed = capsys.readouterr().out
     assert "2 datasets" in printed
     assert "on simulated data" in printed
@@ -61,10 +61,23 @@ def test_datasets_writes_the_sweep_of_the_profile_to_out_and_labels_its_numbers(
 def test_datasets_refuses_an_out_folder_that_is_not_an_earlier_output(tmp_path, capsys):
     (tmp_path / "precious.txt").write_text("keep me")
     with pytest.raises(SystemExit) as exit_info:
-        cli.main(["datasets", "--profile", str(PROFILE), "--out", str(tmp_path)])
+        cli.main(["datasets", "--profile", str(REAL_PROFILE), "--out", str(tmp_path)])
     assert exit_info.value.code == 2
     assert "index.json" in capsys.readouterr().err
     assert (tmp_path / "precious.txt").read_text() == "keep me"
+
+
+@pytest.mark.parametrize("command", ["generate", "datasets"])
+def test_without_the_cached_variations_a_command_exits_naming_the_one_to_run(
+    tmp_path, capsys, command
+):
+    for name in ("planned-hospitality.toml", "planned-hospitality.phrases.toml"):
+        shutil.copy(REAL_PROFILE.parent / name, tmp_path / name)
+    profile = tmp_path / "planned-hospitality.toml"
+    with pytest.raises(SystemExit) as exit_info:
+        cli.main([command, "--profile", str(profile), "--out", str(tmp_path / "out")])
+    assert exit_info.value.code == 2
+    assert "make vary-phrases" in capsys.readouterr().err
 
 
 def test_the_project_script_runs():

@@ -2,22 +2,23 @@ import csv
 import io
 import re
 from datetime import date
-from pathlib import Path
 from random import Random
 
 import pytest
+from conftest import REAL_PROFILE
 
 from emva_sim import dataset, profile
 from emva_sim.logistic import logit
 from emva_sim.process import Process
 
-PROFILE = Path(__file__).parent.parent / "profiles" / "planned-hospitality.toml"
 HISTORY = dataset.History(start=date(2024, 1, 1), end=date(2024, 6, 30), export=date(2024, 7, 5))
 DEALS = "export/with-calls-and-notes/hubspot-crm-exports-safari-enquiries-2024-07-05.csv"
 CONTACTS = "export/with-calls-and-notes/hubspot-crm-exports-all-contacts-2024-07-05.csv"
 CALLS = "export/with-calls-and-notes/hubspot-crm-exports-all-calls-2024-07-05.csv"
+NOTES = "export/with-calls-and-notes/hubspot-crm-exports-all-notes-2024-07-05.csv"
 TRUTH = "hidden-truth/hidden-truth.csv"
 STAGE_HISTORY = "hidden-truth/stage-history.csv"
+TEXT = "hidden-truth/text.csv"
 
 
 def rows(path):
@@ -27,13 +28,13 @@ def rows(path):
 
 @pytest.fixture(scope="module")
 def raw():
-    return profile.load(PROFILE)
+    return profile.load(REAL_PROFILE)
 
 
 @pytest.fixture(scope="module")
-def middle(tmp_path_factory):
+def middle(tmp_path_factory, test_profile):
     out = tmp_path_factory.mktemp("out")
-    return dataset.generate(PROFILE, "middle", seed=1, out=out, history=HISTORY)
+    return dataset.generate(test_profile, "middle", seed=1, out=out, history=HISTORY)
 
 
 def genuine(truth_rows):
@@ -55,11 +56,11 @@ def files(folder):
     return {p.relative_to(folder): p.read_bytes() for p in sorted(folder.rglob("*")) if p.is_file()}
 
 
-def test_the_same_seed_gives_byte_identical_files(tmp_path):
-    first = dataset.generate(PROFILE, "middle", seed=7, out=tmp_path / "a", history=SHORT)
-    second = dataset.generate(PROFILE, "middle", seed=7, out=tmp_path / "b", history=SHORT)
+def test_the_same_seed_gives_byte_identical_files(tmp_path, test_profile):
+    first = dataset.generate(test_profile, "middle", seed=7, out=tmp_path / "a", history=SHORT)
+    second = dataset.generate(test_profile, "middle", seed=7, out=tmp_path / "b", history=SHORT)
     assert files(first) == files(second)
-    assert len(files(first)) == 7
+    assert len(files(first)) == 9
 
 
 def test_the_hidden_truth_gives_a_deal_value_only_to_quoted_or_won_deals(middle):
@@ -86,8 +87,8 @@ LONG_AFTER = dataset.History(
 LONG_CALLS = "export/with-calls-and-notes/hubspot-crm-exports-all-calls-2025-12-31.csv"
 
 
-def logged_share(tmp_path, setting):
-    folder = dataset.generate(PROFILE, setting, seed=1, out=tmp_path, history=LONG_AFTER)
+def logged_share(tmp_path, setting, test_profile):
+    folder = dataset.generate(test_profile, setting, seed=1, out=tmp_path, history=LONG_AFTER)
     made = sum(int(r["call_attempts"]) for r in genuine(rows(folder / TRUTH)))
     return len(rows(folder / LONG_CALLS)) / made
 
@@ -100,36 +101,38 @@ def logged_share(tmp_path, setting):
         ("handling.attempts_logged@high", 0.80),
     ],
 )
-def test_the_calls_export_logs_the_profiles_share_of_call_attempts(tmp_path, setting, share):
-    assert logged_share(tmp_path, setting) == pytest.approx(share, abs=0.06)
+def test_the_calls_export_logs_the_profiles_share_of_call_attempts(
+    tmp_path, setting, share, test_profile
+):
+    assert logged_share(tmp_path, setting, test_profile) == pytest.approx(share, abs=0.06)
 
 
-def test_a_partial_month_gets_its_share_of_the_months_volume(tmp_path):
+def test_a_partial_month_gets_its_share_of_the_months_volume(tmp_path, test_profile):
     two_days = dataset.History(
         start=date(2024, 1, 1), end=date(2024, 1, 2), export=date(2024, 3, 1)
     )
-    folder = dataset.generate(PROFILE, "middle", seed=1, out=tmp_path, history=two_days)
+    folder = dataset.generate(test_profile, "middle", seed=1, out=tmp_path, history=two_days)
     assert len(genuine(rows(folder / TRUTH))) == round(400 * 2 / 31)
 
 
 def test_a_median_delay_that_contradicts_the_late_share_is_refused():
-    p = profile.resolve(profile.load(PROFILE), "middle")
+    p = profile.resolve(profile.load(REAL_PROFILE), "middle")
     p["handling"]["first_attempt_delay_median_hours"] = 24
     with pytest.raises(ValueError, match="a median of 24"):
         Process(p, date(2024, 1, 1))
 
 
-def test_generating_again_replaces_the_previous_dataset(tmp_path):
-    dataset.generate(PROFILE, "middle", seed=7, out=tmp_path, history=SHORT)
+def test_generating_again_replaces_the_previous_dataset(tmp_path, test_profile):
+    dataset.generate(test_profile, "middle", seed=7, out=tmp_path, history=SHORT)
     later = dataset.History(start=SHORT.start, end=SHORT.end, export=date(2024, 4, 1))
-    folder = dataset.generate(PROFILE, "middle", seed=7, out=tmp_path, history=later)
-    assert len(files(folder)) == 7
+    folder = dataset.generate(test_profile, "middle", seed=7, out=tmp_path, history=later)
+    assert len(files(folder)) == 9
     assert all("2024-04-01" in str(p) for p in files(folder) if "export" in str(p))
 
 
-def test_a_different_seed_gives_different_files(tmp_path):
-    first = dataset.generate(PROFILE, "middle", seed=7, out=tmp_path / "a", history=SHORT)
-    second = dataset.generate(PROFILE, "middle", seed=8, out=tmp_path / "b", history=SHORT)
+def test_a_different_seed_gives_different_files(tmp_path, test_profile):
+    first = dataset.generate(test_profile, "middle", seed=7, out=tmp_path / "a", history=SHORT)
+    second = dataset.generate(test_profile, "middle", seed=8, out=tmp_path / "b", history=SHORT)
     assert all(a != b for a, b in zip(files(first).values(), files(second).values(), strict=True))
 
 
@@ -139,10 +142,12 @@ def test_the_dataset_folder_holds_both_export_variants_and_the_hidden_truth(midd
         DEALS,
         CONTACTS,
         CALLS,
+        NOTES,
         DEALS.replace("with-calls-and-notes", "deals-and-contacts-only"),
         CONTACTS.replace("with-calls-and-notes", "deals-and-contacts-only"),
         TRUTH,
         STAGE_HISTORY,
+        TEXT,
     }
     assert middle.name == "middle"
 
@@ -160,7 +165,7 @@ def test_no_hidden_truth_column_appears_in_any_export(middle):
 
 
 def test_every_field_is_double_quoted(middle):
-    for path in [*export_files(middle), middle / TRUTH, middle / STAGE_HISTORY]:
+    for path in [*export_files(middle), middle / TRUTH, middle / STAGE_HISTORY, middle / TEXT]:
         with open(path, newline="", encoding="utf-8") as f:
             raw = list(csv.reader(f))
         quoted = io.StringIO(newline="")
@@ -305,6 +310,7 @@ def test_the_hidden_truth_has_one_row_per_deal_keyed_by_both_record_ids(middle):
         "text_commitment",
         "real_buyer",
         "true_loss_reason",
+        "recorded_loss_reason",
         "row_kind",
         "duplicate_of_deal_record_id",
         "invalid_email",
@@ -314,7 +320,9 @@ def test_the_hidden_truth_has_one_row_per_deal_keyed_by_both_record_ids(middle):
 
 
 # One term per planted effect, in the profile's order; the confounded proxy trap has none.
-TERMS = [name for name, e in profile.load(PROFILE)["effects"].items() if e["form"] != "confounded"]
+TERMS = [
+    name for name, e in profile.load(REAL_PROFILE)["effects"].items() if e["form"] != "confounded"
+]
 
 
 def test_the_terms_are_the_profiles_effects_but_the_proxy_trap():
@@ -324,7 +332,7 @@ def test_the_terms_are_the_profiles_effects_but_the_proxy_trap():
 
 
 def test_an_effect_the_generator_cannot_compute_is_refused():
-    p = profile.resolve(profile.load(PROFILE), "middle")
+    p = profile.resolve(profile.load(REAL_PROFILE), "middle")
     p["effects"]["moon_phase"] = {"form": "additive", "visible": "Submitted"}
     with pytest.raises(ValueError, match="moon_phase"):
         dataset.leads_and_paths(p, Random(1), SHORT)
