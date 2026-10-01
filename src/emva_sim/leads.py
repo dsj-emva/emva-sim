@@ -132,12 +132,22 @@ def _destinations(rng: Random, p: dict, dreamer: bool) -> tuple[str, ...]:
     return tuple(o for o in options if o in chosen)
 
 
+def _share_outside(share: float, excluded: float) -> float:
+    """The chance to give leads outside an excluded group so share still holds over all leads.
+
+    A dreamer never states a budget and never leaves a blank message; drawing the rest at
+    share / (1 - excluded) keeps the profile's share of all
+    leads (as long as share <= 1 - excluded).
+    """
+    return share / (1 - excluded)
+
+
 def _message_words(rng: Random, p: dict, dreamer: bool) -> int:
     """The words of the lead's message; #6 writes text to match."""
     message = p["form"]["message"]
     shape, blank = message["shape"], message["blank_or_token"]
     token = shape["token_words_at_most"]
-    if not dreamer and rng.random() < blank / (1 - message["dreamer_share"]):
+    if not dreamer and rng.random() < _share_outside(blank, message["dreamer_share"]):
         return rng.randint(0, token)
     median, sigma = message["median_words"], message["words_sigma"]
     if dreamer:
@@ -312,7 +322,8 @@ def draw_lead(
         budget_per_person_per_night=draws.lognormal(rng, budget, answers["budget_sigma"]),
         cycle_days=cycle_days,
         travel_at=travel_at,
-        states_budget=not dreamer and rng.random() < answers["states_budget"] / (1 - dreamers),
+        states_budget=not dreamer
+        and rng.random() < _share_outside(answers["states_budget"], dreamers),
         gives_phone=rng.random() < answers["gives_phone_when_optional"],
         dates_given=_dates_given(rng, p),
         destinations=_destinations(rng, p, dreamer),
