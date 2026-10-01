@@ -80,10 +80,7 @@ def _sha256(path: Path) -> str:
 
 
 def _ranges(raw: dict, setting: str) -> dict[str, dict]:
-    ranges = {}
-    for name, end in profile.ends(raw, setting).items():
-        node = raw
-        for key in name.split("."):
-            node = node[key]
-        ranges[name] = {"end": end, "value": node[end]}
-    return ranges
+    return {
+        name: {"end": end, "value": profile.number(raw, name, end)}
+        for name, end in profile.ends(raw, setting).items()
+    }

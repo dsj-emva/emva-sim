@@ -66,6 +66,12 @@ def test_an_unknown_setting_is_rejected(raw, setting):
         profile.resolve(raw, setting)
 
 
+def test_a_ranges_number_at_an_end_is_read_by_its_name(raw):
+    assert profile.number(raw, "volume.leads_per_month", "low") == 100
+    assert profile.number(raw, "volume.leads_per_month", "middle") == 400
+    assert profile.number(raw, "effects.lead_source.referral", "high") == 6.0
+
+
 def leaves(node, path=()):
     """Every plain value of a resolved profile, by its dotted path."""
     if not isinstance(node, dict):
