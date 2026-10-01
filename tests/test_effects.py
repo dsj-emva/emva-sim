@@ -290,14 +290,40 @@ def test_a_missing_budget_takes_no_price_rise():
     ("quality", "name"),
     [(True, "high_quality_within_1h"), (False, "low_quality_within_1h")],
 )
-def test_a_first_contact_attempt_within_an_hour_lifts_by_quality(quality, name, end):
+def test_a_first_attempt_within_an_hour_lifts_fully_and_one_after_a_day_not_at_all(
+    quality, name, end
+):
     full = f"effects.response_speed_by_quality.{name}"
     setting = "middle" if end == "middle" else f"{full}@{end}"
-    effects = Effects(resolved(setting), HISTORY_START)
-    assert effects.response_speed(1.0, quality) == pytest.approx(math.log(at(full, end)))
-    assert effects.response_speed(0.1, quality) == pytest.approx(math.log(at(full, end)))
-    assert effects.response_speed(1.01, quality) == 0.0
-    assert effects.response_speed(30, quality) == 0.0
+    p = resolved(setting)
+    speed = p["effects"]["response_speed_by_quality"]
+    quick, slow = speed["within_hours"], speed["no_lift_from_hours"]
+    effects = Effects(p, HISTORY_START)
+    lift = math.log(at(full, end))
+    assert effects.response_speed(quick, quality) == pytest.approx(lift)
+    assert effects.response_speed(quick / 10, quality) == pytest.approx(lift)
+    assert effects.response_speed(slow, quality) == pytest.approx(0.0)
+    assert effects.response_speed(slow * 2, quality) == 0.0
+
+
+def test_a_speed_shape_the_generator_does_not_know_is_refused():
+    p = resolved()
+    p["effects"]["response_speed_by_quality"]["lift_between"] = "a step"
+    with pytest.raises(ValueError, match="linear in log hours"):
+        Effects(p, HISTORY_START)
+
+
+@pytest.mark.parametrize("quality", [True, False])
+def test_the_lift_of_a_quick_first_attempt_falls_linearly_in_log_hours(quality):
+    # Ruled 2026-10-01 from "the quicker the contact after the form the better".
+    p = resolved()
+    speed = p["effects"]["response_speed_by_quality"]
+    quick, slow = speed["within_hours"], speed["no_lift_from_hours"]
+    effects = Effects(p, HISTORY_START)
+    lift = effects.response_speed(quick, quality)
+    for fraction in (0.25, 0.5, 0.75):
+        hours = quick * (slow / quick) ** fraction
+        assert effects.response_speed(hours, quality) == pytest.approx((1 - fraction) * lift)
 
 
 def test_only_effects_visible_at_submission_count_towards_how_good_a_lead_looks():

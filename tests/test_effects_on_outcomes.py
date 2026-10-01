@@ -19,7 +19,7 @@ from datetime import datetime
 
 import pytest
 from conftest import large_sample
-from odds import log_odds, mantel_haenszel, rest_without
+from odds import log_odds, mantel_haenszel, rest_without, stratum
 
 MAX_SE = 0.07
 PEAK = (7, 8, 9, 10)
@@ -358,7 +358,7 @@ def test_the_market_predicts_the_outcome_on_its_own(middle_sample):
 
 def test_the_market_has_no_effect_once_the_leads_terms_are_held(middle_sample):
     # Strata by the whole win log-odds: budget, lead time, season and every other term held.
-    log_or, se = mantel_haenszel(middle_sample, market_a, market_b, lambda r: round(log_odds(r), 6))
+    log_or, se = mantel_haenszel(middle_sample, market_a, market_b, lambda r: stratum(log_odds(r)))
     assert se <= MAX_SE
     assert abs(log_or) <= 3 * se, math.exp(log_or)
 

@@ -9,9 +9,19 @@ def log_odds(row) -> float:
     return math.log(p / (1 - p))
 
 
+# Strata are bins of this width on the log-odds. Response speed's term is continuous, so exact
+# values would put each lead in a stratum of its own; within a bin the rest differs by at most
+# 0.05, too little to move a measured odds ratio.
+STRATUM_WIDTH = 0.05
+
+
+def stratum(log_odds_value: float) -> int:
+    return round(log_odds_value / STRATUM_WIDTH)
+
+
 def rest_without(term):
     """A stratum key: the lead's log-odds without one term, so every other term is held fixed."""
-    return lambda row: round(log_odds(row) - float(row[f"term_{term}"]), 6)
+    return lambda row: stratum(log_odds(row) - float(row[f"term_{term}"]))
 
 
 def mantel_haenszel(rows, in_group, in_reference, stratum=lambda row: 0):

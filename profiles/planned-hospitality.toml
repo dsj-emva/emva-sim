@@ -1337,13 +1337,17 @@ floor_penalty_kept = { low = 0.25, middle = 0.50, high = 0.75, confidence = "gue
 [effects.response_speed_by_quality]
 form = "interaction"
 visible = "Contact attempted"
-# "within_1h" is a first Contact attempt within within_hours of submission; any later first attempt
-# is the reference. High quality is this top share of leads by win propensity without this effect.
+# "within_1h" is a first Contact attempt within within_hours of submission: the full lift. The lift
+# falls linearly in log hours to none at no_lift_from_hours, and a first attempt from then on is the
+# reference (ruled 2026-10-01 from the user's "the quicker the contact after the form the better").
+# High quality is this top share of leads by win propensity without this effect.
 within_hours = 1
+no_lift_from_hours = 24
+lift_between = "linear in log hours"
 high_quality_top_share = 0.3333333333333333
 high_quality_within_1h = { low = 2.5, middle = 4.0, high = 6.0, confidence = "estimated", source = "the user, from a client they have worked with (2026-10-01): about 4 times; the quicker after the form the better; direction also from HBR, MIT, Telfer" }
 low_quality_within_1h = { low = 1.0, middle = 1.1, high = 1.3, confidence = "guessed", source = "none" }
-note = "reference: first attempt after 24 h; high quality is the top third of hidden quality"
+note = "reference: first attempt 24 h or more after submission, with the lift falling linearly in log hours between 1 h and 24 h; high quality is the top third of hidden quality"
 
 # 8. Message length and specificity (inverted U).
 [effects.message_length]

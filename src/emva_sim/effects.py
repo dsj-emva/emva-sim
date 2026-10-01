@@ -12,6 +12,8 @@ from datetime import date, datetime
 from emva_sim import form, ladder
 from emva_sim.leads import Lead
 
+SPEED_LIFT_BETWEEN = "linear in log hours"
+
 
 def _log(odds_ratio: float) -> float:
     return math.log(odds_ratio)
@@ -23,6 +25,8 @@ class Effects:
         self.e = p["effects"]
         months_in = history_start.month - 1 + self.e["price_rise"]["at_month_of_history"] - 1
         self.rise_at = datetime(history_start.year + months_in // 12, months_in % 12 + 1, 1)
+        if self.e["response_speed_by_quality"]["lift_between"] != SPEED_LIFT_BETWEEN:
+            raise ValueError(f"response speed's lift between must be {SPEED_LIFT_BETWEEN!r}")
         self.seen_at_submission = {
             name for name, effect in self.e.items() if effect["visible"] == ladder.SUBMITTED
         }
@@ -55,11 +59,13 @@ class Effects:
         return sum(value for name, value in terms.items() if name in self.seen_at_submission)
 
     def response_speed(self, hours_to_first_attempt: float, high_quality: bool) -> float:
+        """The full lift within within_hours, none from no_lift_from_hours, linear in log hours
+        between (the profile's lift_between)."""
         effect = self.e["response_speed_by_quality"]
-        if hours_to_first_attempt > effect["within_hours"]:
-            return 0.0
+        quick, slow = effect["within_hours"], effect["no_lift_from_hours"]
         quality = "high_quality_within_1h" if high_quality else "low_quality_within_1h"
-        return _log(effect[quality])
+        hours = min(max(hours_to_first_attempt, quick), slow)
+        return _log(effect[quality]) * math.log(slow / hours) / math.log(slow / quick)
 
     def _budget(self, lead: Lead) -> tuple[float, float]:
         """The budget-floor and price-rise terms of a stated budget.
