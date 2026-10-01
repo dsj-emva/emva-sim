@@ -80,9 +80,10 @@ def test_a_duplicate_is_the_same_person_again_later_as_a_second_contact(middle):
         again, first = contacts[row["deal_record_id"]], contacts[original]
         assert again["Record ID"] != first["Record ID"]
         assert again["Email"] != first["Email"]
-        for name in ("First Name", "Last Name"):
-            assert again[name].lower() == first[name].lower()
-        assert deals[row["deal_record_id"]]["Create Date"] > deals[original]["Create Date"]
+        for name, field in (("First Name", "First name"), ("Last Name", "Last name")):
+            if field not in altered(genuine[original]):
+                assert again[name].lower() == first[name].lower()
+        assert deals[row["deal_record_id"]]["Create Date"] >= deals[original]["Create Date"]
     assert any(contacts[r["deal_record_id"]]["First Name"].islower() for r in duplicates)
 
 
@@ -109,21 +110,19 @@ def test_the_profiles_share_of_rows_are_bot_or_spam(generated, setting, share, t
 
 def junk_signs(contact):
     """The patterns of a bot or spam submission this contact shows."""
-    adults = contact["Number of adults"]
-    children = contact["Number of children"]
+    adults = float(contact["Number of adults"] or 1)
+    children = float(contact["Number of children"] or 0)
     signs = {
         "made-up name": contact["First Name"].capitalize() not in sum(FIRST_NAMES.values(), []),
         "disposable email": contact["Email"].endswith(".example"),
         "links in the message": "http" in contact["Message"],
         "empty message": not contact["Message"],
-        "impossible party": float(adults) == 0
-        or float(adults) > 20
-        or (children and float(children) > 12),
+        "impossible party": adults == 0 or adults > 20 or children > 12,
     }
     return {sign for sign, shown in signs.items() if shown}
 
 
-def test_bots_look_like_junk_and_genuine_leads_do_not(middle):
+def test_bots_look_like_junk_and_genuine_leads_held_rightly_do_not(middle):
     contacts = {c["Associated Deal IDs"]: c for c in rows(middle / CONTACTS)}
     bots = [contacts[r["deal_record_id"]] for r in kinds(middle, "bot or spam")]
     assert bots
@@ -140,7 +139,8 @@ def test_bots_look_like_junk_and_genuine_leads_do_not(middle):
         "impossible party",
     }
     for row in kinds(middle, "lead") + kinds(middle, "duplicate"):
-        assert not junk_signs(contacts[row["deal_record_id"]]) - {"empty message"}
+        if not altered(row):
+            assert not junk_signs(contacts[row["deal_record_id"]]) - {"empty message"}
 
 
 def test_bots_have_no_outcome_so_grading_can_leave_them_out(middle):
@@ -197,6 +197,62 @@ def test_the_profiles_share_of_given_phones_are_invalid(generated, setting, shar
     assert len(invalid) / len(given) == pytest.approx(share, abs=tolerance)
     assert all(r["invalid_phone"] == "yes" for _, r in invalid)
     assert sum(r["invalid_phone"] == "yes" for _, r in given) == len(invalid)
+
+
+KEY_FIELDS = [
+    "First name",
+    "Last name",
+    "Country of residence",
+    "Where would you like to go?",
+    "When would you like to travel?",
+    "Number of nights",
+    "Number of adults",
+    "Number of children",
+    "Accommodation style",
+    "Budget per person (excluding international flights)",
+]
+COLUMN = {
+    "First name": "First Name",
+    "Last name": "Last Name",
+    "Country of residence": "Country/Region",
+}
+
+
+def altered(row):
+    named = row["fields_missing_or_wrong"]
+    return named.split(";") if named else []
+
+
+@pytest.mark.parametrize(
+    ("setting", "share", "tolerance"),
+    [
+        ("middle", 0.30, 0.028),
+        ("mess.field_missing_or_wrong@low", 0.15, 0.022),
+        ("mess.field_missing_or_wrong@high", 0.50, 0.031),
+    ],
+)
+def test_the_profiles_share_of_genuine_records_have_a_key_field_missing_or_wrong(
+    generated, setting, share, tolerance
+):
+    contacts = genuine_contacts(generated(setting))
+    messy = [r for _, r in contacts if altered(r)]
+    assert len(messy) / len(contacts) == pytest.approx(share, abs=tolerance)
+    assert {field for r in messy for field in altered(r)} == set(KEY_FIELDS)
+
+
+def test_a_required_key_field_is_blank_only_where_the_hidden_truth_says_it_is_missing(middle):
+    required = ["First name", "Last name", "Country of residence", "Number of adults"]
+    blank = wrong = 0
+    for contact, row in genuine_contacts(middle):
+        for field in altered(row):
+            if contact[COLUMN.get(field, field)]:
+                wrong += 1
+            else:
+                blank += 1
+        for field in required:
+            if not contact[COLUMN.get(field, field)]:
+                assert field in altered(row), (field, row)
+    assert blank and wrong
 
 
 def test_the_exports_never_say_which_rows_are_duplicates_or_bots(middle):

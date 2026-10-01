@@ -7,6 +7,7 @@ touches a Lead or its true path: the mess is in the copy the sales system holds.
 
 import calendar
 import math
+import re
 import string
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -45,6 +46,7 @@ class Submission:
     travel_month: str
     invalid_email: bool = False
     invalid_phone: bool = False
+    missing_or_wrong: tuple[str, ...] = ()  # labels of the key fields held blank or wrong
 
 
 def submissions(
@@ -66,7 +68,7 @@ def submissions(
 
 
 def _genuine(rng: Random, p: dict, i: int, lead: Lead) -> Submission:
-    """A Lead as the sales system holds it: its email or phone may be invalid."""
+    """A Lead as the sales system holds it: email or phone invalid, a key field blank or wrong."""
     mess = p["mess"]
     answers = dict(lead.answers)
     email, phone = form.field(p, "email")["label"], form.field(p, "phone")["label"]
@@ -76,6 +78,14 @@ def _genuine(rng: Random, p: dict, i: int, lead: Lead) -> Submission:
     invalid_phone = bool(answers[phone]) and rng.random() < mess["invalid_phone"]
     if invalid_phone:
         answers[phone] = _broken_phone(rng, answers[phone])
+    altered = ()
+    if rng.random() < mess["field_missing_or_wrong"]:
+        filled = [form.field(p, role) for role in mess["key_fields"]]
+        key_field = rng.choice([f for f in filled if answers[f["label"]]])
+        label = key_field["label"]
+        missing = rng.random() < 0.5
+        answers[label] = "" if missing else _wrong(rng, p, key_field, answers[label], lead)
+        altered = (label,)
     return Submission(
         LEAD,
         i,
@@ -86,7 +96,28 @@ def _genuine(rng: Random, p: dict, i: int, lead: Lead) -> Submission:
         f"{lead.travel_at:%b}",
         invalid_email,
         invalid_phone,
+        altered,
     )
+
+
+def _wrong(rng: Random, p: dict, form_field: dict, value: str, lead: Lead) -> str:
+    """Another plausible value than the one the lead gave: a slip, a neighbour, another option."""
+    match form_field["kind"]:
+        case "choice" | "multi":
+            return rng.choice([o["label"] for o in form_field["options"] if o["label"] != value])
+        case "number":
+            n = int(value)
+            return str(n + 1 if n <= 1 or rng.random() < 0.5 else n - 1)
+        case "country":
+            countries = [c["name"] for g in p["markets"]["groups"].values() for c in g["countries"]]
+            return rng.choice([c for c in countries if c != value])
+        case "month_year":
+            if year := re.search(r"\d{4}", value):
+                shifted = str(int(year.group()) + rng.choice([-1, 1]))
+                return value[: year.start()] + shifted + value[year.end() :]
+            return f"{calendar.month_name[rng.randint(1, 12)]} {lead.travel_at.year}"
+    slipped = _slip(rng, value)
+    return slipped if slipped != value else value + value[-1]
 
 
 def _broken_address(rng: Random, email: str) -> str:

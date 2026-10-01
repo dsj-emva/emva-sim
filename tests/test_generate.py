@@ -315,4 +315,5 @@ def test_the_hidden_truth_has_one_row_per_deal_keyed_by_both_record_ids(middle):
         "duplicate_of_deal_record_id",
         "invalid_email",
         "invalid_phone",
+        "fields_missing_or_wrong",
     ]
