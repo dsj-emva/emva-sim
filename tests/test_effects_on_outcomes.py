@@ -21,6 +21,8 @@ import pytest
 from conftest import large_sample
 from odds import log_odds, mantel_haenszel, rest_without, stratum
 
+from emva_sim.leads import DatesGiven
+
 MAX_SE = 0.07
 PEAK = (7, 8, 9, 10)
 RISE = datetime(2025, 2, 1)
@@ -78,7 +80,7 @@ def ahead(row):
 
 
 def dated(row):
-    return lead(row).dates_given not in ("year", "not_sure")
+    return lead(row).dates_given not in (DatesGiven.YEAR, DatesGiven.NOT_SURE)
 
 
 def hours_to_first_attempt(row):
@@ -183,16 +185,16 @@ CASES = [
         "dates given as a month",
         "middle",
         0.90,
-        lambda r: lead(r).dates_given == "month",
-        lambda r: lead(r).dates_given == "exact",
+        lambda r: lead(r).dates_given is DatesGiven.MONTH,
+        lambda r: lead(r).dates_given is DatesGiven.EXACT,
         "date_specificity",
     ),
     (
         "no dates given",
         "middle",
         0.55,
-        lambda r: lead(r).dates_given in ("year", "not_sure"),
-        lambda r: lead(r).dates_given == "exact",
+        lambda r: lead(r).dates_given in (DatesGiven.YEAR, DatesGiven.NOT_SURE),
+        lambda r: lead(r).dates_given is DatesGiven.EXACT,
         "date_specificity",
     ),
     ("referral", "middle", 4.0, source("referral"), source("paid_search"), "lead_source"),

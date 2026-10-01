@@ -8,6 +8,7 @@ from random import Random
 import pytest
 
 from emva_sim import form, leads, profile
+from emva_sim.leads import DatesGiven, Market
 
 PROFILE = Path(__file__).parent.parent / "profiles" / "planned-hospitality.toml"
 PEAK = (7, 8, 9, 10)
@@ -135,9 +136,9 @@ def year_at(setting):
 
 
 def market_ratio(p, drawn, measure):
-    by_group = {g: [lead for lead in drawn if lead.market_group == g] for g in "ab"}
-    medians = {g: statistics.median(measure(p, x) for x in by_group[g]) for g in "ab"}
-    return medians["a"] / medians["b"]
+    by_group = {g: [lead for lead in drawn if lead.market_group == g] for g in Market}
+    medians = {g: statistics.median(measure(p, x) for x in by_group[g]) for g in Market}
+    return medians[Market.A] / medians[Market.B]
 
 
 def lead_time_months(_, lead):
@@ -177,11 +178,8 @@ def test_market_a_states_budgets_1_6_times_and_books_1_5_times_as_far_ahead_as_m
 ):
     # effects.proxy_trap_country at its middle: budget median x 1.6, lead time median x 1.5.
     p, drawn = year_of_leads
-    by_group = {g: [lead for lead in drawn if lead.market_group == g] for g in "ab"}
-    budget = {g: statistics.median(budget_to_style_price(p, x) for x in by_group[g]) for g in "ab"}
-    ahead = {g: statistics.median(booking_lead_time_months(x) for x in by_group[g]) for g in "ab"}
-    assert budget["a"] / budget["b"] == pytest.approx(1.6, rel=0.06)
-    assert ahead["a"] / ahead["b"] == pytest.approx(1.5, rel=0.06)
+    assert market_ratio(p, drawn, budget_to_style_price) == pytest.approx(1.6, rel=0.06)
+    assert market_ratio(p, drawn, lead_time_months) == pytest.approx(1.5, rel=0.06)
 
 
 def shares(values):
@@ -230,10 +228,10 @@ def test_the_answers_show_the_leads_hidden_choices(year_of_leads):
         assert named == (";".join(lead.destinations) if lead.destinations else unsure)
     assert sum(lead.states_budget for lead in drawn) == pytest.approx(0.45 * len(drawn), rel=0.05)
     found = shares(lead.dates_given for lead in drawn)
-    assert found["exact"] == pytest.approx(0.25, abs=0.02)
-    assert found["month"] == pytest.approx(0.75 * 0.6, abs=0.02)
-    assert found["year"] == pytest.approx(0.75 * 0.4 * 0.5, abs=0.02)
-    assert found["not_sure"] == pytest.approx(0.75 * 0.4 * 0.5, abs=0.02)
+    assert found[DatesGiven.EXACT] == pytest.approx(0.25, abs=0.02)
+    assert found[DatesGiven.MONTH] == pytest.approx(0.75 * 0.6, abs=0.02)
+    assert found[DatesGiven.YEAR] == pytest.approx(0.75 * 0.4 * 0.5, abs=0.02)
+    assert found[DatesGiven.NOT_SURE] == pytest.approx(0.75 * 0.4 * 0.5, abs=0.02)
 
 
 def test_pooled_over_both_markets_budgets_and_lead_times_keep_the_profiles_medians(year_of_leads):

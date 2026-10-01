@@ -4,6 +4,7 @@ import calendar
 import math
 from dataclasses import dataclass, field, replace
 from datetime import date, datetime, timedelta
+from enum import StrEnum
 from random import Random
 
 from emva_sim import draws, form, months, people
@@ -11,10 +12,26 @@ from emva_sim import draws, form, months, people
 DAYS_PER_MONTH = 365.25 / 12
 
 
+class Market(StrEnum):
+    """The source-market groups of [markets.groups]: A the US, B the UK and Europe."""
+
+    A = "a"
+    B = "b"
+
+
+class DatesGiven(StrEnum):
+    """How precisely a lead gives its travel date."""
+
+    EXACT = "exact"
+    MONTH = "month"
+    YEAR = "year"
+    NOT_SURE = "not_sure"
+
+
 @dataclass(frozen=True)
 class Lead:
     submitted_at: datetime
-    market_group: str
+    market_group: Market
     country: str
     traffic_source: str
     repeat_client: bool
@@ -28,7 +45,7 @@ class Lead:
     travel_at: datetime
     states_budget: bool
     gives_phone: bool
-    dates_given: str
+    dates_given: DatesGiven
     destinations: tuple[str, ...]
     message_words: int
     text_commitment: bool
@@ -73,26 +90,25 @@ def _pick(rng: Random, shares: dict[str, float], rest: str) -> str:
     return rest
 
 
-def _dates_given(rng: Random, p: dict) -> str:
-    """How precisely the lead gives its travel date: exact, month, year or not_sure."""
+def _dates_given(rng: Random, p: dict) -> DatesGiven:
     answers = p["form"]["answers"]
     if rng.random() < answers["states_exact_dates"]:
-        return "exact"
+        return DatesGiven.EXACT
     if rng.random() < answers["month_when_no_exact_dates"]:
-        return "month"
+        return DatesGiven.MONTH
     if rng.random() < answers["year_when_no_month"]:
-        return "year"
-    return "not_sure"
+        return DatesGiven.YEAR
+    return DatesGiven.NOT_SURE
 
 
 def _travel_answer(p: dict, lead: "Lead") -> str:
     travel = lead.travel_at.date()
     match lead.dates_given:
-        case "exact":
+        case DatesGiven.EXACT:
             return travel.isoformat()
-        case "month":
+        case DatesGiven.MONTH:
             return f"{calendar.month_name[travel.month]} {travel.year}"
-        case "year":
+        case DatesGiven.YEAR:
             return str(travel.year)
     return form.field(p, "travel_date")["not_sure_answer"]
 
@@ -231,9 +247,9 @@ def countries(p: dict) -> list[dict]:
     return [c for group in p["markets"]["groups"].values() for c in group["countries"]]
 
 
-def market_group(rng: Random, p: dict) -> str:
+def market_group(rng: Random, p: dict) -> Market:
     """A source market drawn from the profile's shares: group A, else group B."""
-    return "a" if rng.random() < p["markets"]["group_a_share"] else "b"
+    return Market.A if rng.random() < p["markets"]["group_a_share"] else Market.B
 
 
 def traffic_source(rng: Random, p: dict) -> str:
@@ -243,18 +259,22 @@ def traffic_source(rng: Random, p: dict) -> str:
     return _pick(rng, others, source["reference"])
 
 
-def _market_shift(p: dict, group: str, multiplier: float) -> float:
+def _market_shift(p: dict, group: Market, multiplier: float) -> float:
     """The factor on a market's median that puts group A at multiplier times group B.
 
     The share-weighted geometric mean of the two factors is 1, so the profile's own median is the
     median pooled over both markets.
     """
     share_a = p["markets"]["group_a_share"]
-    return multiplier ** ((1 - share_a) if group == "a" else -share_a)
+    return multiplier ** ((1 - share_a) if group is Market.A else -share_a)
 
 
 def draw_lead(
-    rng: Random, p: dict, submitted_at: datetime, group: str, party: tuple[int, int] | None = None
+    rng: Random,
+    p: dict,
+    submitted_at: datetime,
+    group: Market,
+    party: tuple[int, int] | None = None,
 ) -> Lead:
     """One Lead submitted at this moment from this market; party fixes its adults and children."""
     deal, process = p["deal"], p["process"]
@@ -308,8 +328,7 @@ def draw_lead(
 def draw_leads(rng: Random, p: dict, start: date, end: date) -> list[Lead]:
     """Every lead submitted from start to end (inclusive), at the profile's volume and season."""
     covered = months.covered(start, end)
-    markets = p["markets"]
-    weights = {group: _month_weights(p, group) for group in markets["groups"]}
+    weights = {group: _month_weights(p, group) for group in Market}
     count = round(p["volume"]["leads_per_month"] * sum(share for _, _, share in covered))
     arrivals = []
     for _ in range(count):

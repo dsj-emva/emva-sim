@@ -10,10 +10,12 @@ import math
 from datetime import date, datetime
 
 from emva_sim import form, ladder
-from emva_sim.leads import Lead
+from emva_sim.leads import DatesGiven, Lead
 
 SPEED_LIFT_BETWEEN = "linear in log hours"
 RESPONSE_SPEED = "response_speed_by_quality"
+# Travel dates that lead time and season reads as unsure: "next year sometime" or not sure at all.
+UNSURE_DATES = (DatesGiven.YEAR, DatesGiven.NOT_SURE)
 # The form of an effect that has no term of its own (the proxy trap).
 NO_TERM = "confounded"
 
@@ -120,7 +122,7 @@ class Effects:
 
     def _lead_time(self, lead: Lead) -> float:
         effect = self.e["lead_time_by_season"]
-        if lead.dates_given in ("year", "not_sure") or lead.months_ahead > effect["over_months"]:
+        if lead.dates_given in UNSURE_DATES or lead.months_ahead > effect["over_months"]:
             return _log(effect["over_18_months_or_unsure"])
         if lead.months_ahead < effect["under_months"]:
             peak = lead.travel_at.month in self.p["season"]["peak_months"]
@@ -130,9 +132,9 @@ class Effects:
     def _date_specificity(self, lead: Lead) -> float:
         effect = self.e["date_specificity"]
         match lead.dates_given:
-            case "exact":
+            case DatesGiven.EXACT:
                 return 0.0
-            case "month":
+            case DatesGiven.MONTH:
                 return _log(effect["month_only"])
         return _log(effect["no_dates"])
 

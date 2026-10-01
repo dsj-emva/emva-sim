@@ -15,6 +15,7 @@ import pytest
 
 from emva_sim import leads, profile
 from emva_sim.effects import Effects
+from emva_sim.leads import DatesGiven
 
 PROFILE = Path(__file__).parent.parent / "profiles" / "planned-hospitality.toml"
 RAW = profile.load(PROFILE)
@@ -53,7 +54,7 @@ def reference_lead():
         budget_per_person_per_night=1.2 * LUXURY_FLOOR,
         states_budget=True,
         gives_phone=False,
-        dates_given="exact",
+        dates_given=DatesGiven.EXACT,
         destinations=("Kenya", "Tanzania"),
         message_words=100,
         text_commitment=False,
@@ -135,18 +136,18 @@ CASES = [
     ),
     (
         "effects.lead_time_by_season.over_18_months_or_unsure",
-        {"dates_given": "not_sure"},
+        {"dates_given": DatesGiven.NOT_SURE},
         "lead_time_by_season",
     ),
     (
         # a year only is "next year sometime" (what-predicts-a-booking.md §2): unsure too
         "effects.lead_time_by_season.over_18_months_or_unsure",
-        {"dates_given": "year"},
+        {"dates_given": DatesGiven.YEAR},
         "lead_time_by_season",
     ),
-    ("effects.date_specificity.month_only", {"dates_given": "month"}, "date_specificity"),
-    ("effects.date_specificity.no_dates", {"dates_given": "year"}, "date_specificity"),
-    ("effects.date_specificity.no_dates", {"dates_given": "not_sure"}, "date_specificity"),
+    ("effects.date_specificity.month_only", {"dates_given": DatesGiven.MONTH}, "date_specificity"),
+    ("effects.date_specificity.no_dates", {"dates_given": DatesGiven.YEAR}, "date_specificity"),
+    ("effects.date_specificity.no_dates", {"dates_given": DatesGiven.NOT_SURE}, "date_specificity"),
     ("effects.lead_source.referral", {"traffic_source": "referral"}, "lead_source"),
     ("effects.lead_source.paid_social", {"traffic_source": "paid_social"}, "lead_source"),
     ("effects.lead_source.organic", {"traffic_source": "organic"}, "lead_source"),
@@ -197,7 +198,7 @@ def test_the_ends_of_every_effect_give_different_terms():
         {"message_words": 900},  # long, but names 2 countries and states a budget
         {"adults": 4, "children": 2},
         {"adults": 1},
-        {"traffic_source": "paid_search", "dates_given": "exact"},
+        {"traffic_source": "paid_search", "dates_given": DatesGiven.EXACT},
     ],
 )
 def test_the_edges_of_the_reference_groups_carry_no_term(changes):
