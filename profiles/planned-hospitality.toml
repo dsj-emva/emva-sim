@@ -1276,8 +1276,10 @@ source = "notes-and-loss-reasons.md: HVS, 'other' often the largest value; added
 # ---------------------------------------------------------------------------------------------------------
 
 # 1. Budget floor: stated budget per person per night against the floor of the style asked for (threshold).
-# The floor is 0.7 x the style's middle price per night: for luxury about $900, the practitioners' floor of
-# $800-1,000 (what-predicts-a-booking.md §1, search extract only). "Not sure" style uses Comfortable.
+# The floor is 0.7 x the style's price per night at the setting (deal.price_per_person_per_night): at the
+# middle, for luxury, about $900, the practitioners' floor of
+# $800-1,000 (what-predicts-a-booking.md §1, search extract only). "Not sure" style uses Comfortable (the
+# generator draws no "Not sure" style yet).
 [effects.budget_floor]
 form = "threshold"
 visible = "Submitted"
@@ -1286,7 +1288,7 @@ floor_share_of_style_price = 0.7
 below_half_under = 0.5
 below_half = { low = 0.03, middle = 0.10, high = 0.25, confidence = "guessed", source = "none" }
 half_to_floor = { low = 0.30, middle = 0.50, high = 0.80, confidence = "guessed", source = "none" }
-note = "reference: at or above the floor; no further lift above 1.5x the floor"
+note = "reference: a stated budget at or above the floor, with no lift above it; a missing budget takes effects.no_budget instead"
 
 # 2. No budget stated (additive).
 [effects.no_budget]
@@ -1307,7 +1309,7 @@ over_months = 18
 peak_under_4_months = { low = 0.20, middle = 0.40, high = 0.70, confidence = "guessed", source = "none; shape from operator lead-time advice (Rhino Africa, Yellow Zebra)" }
 off_peak_under_4_months = { low = 0.8, middle = 1.0, high = 1.2, confidence = "guessed", source = "none" }
 over_18_months_or_unsure = { low = 0.40, middle = 0.60, high = 0.85, confidence = "guessed", source = "none" }
-note = "reference: peak 6-14 months ahead, off-peak 1-8 months ahead; peak is [season].peak_months"
+note = "reference: every lead outside the named bands, i.e. travel from under_months to over_months ahead with dates given as exact or as a month; peak is [season].peak_months"
 
 # 4. Date specificity (ordered, additive).
 [effects.date_specificity]
@@ -1315,7 +1317,7 @@ form = "additive"
 visible = "Submitted"
 no_dates = { low = 0.35, middle = 0.55, high = 0.80, confidence = "guessed", source = "none" }
 month_only = { low = 0.75, middle = 0.90, high = 1.0, confidence = "guessed", source = "none" }
-note = "reference: exact dates"
+note = "reference: exact dates; no_dates is a year only or not sure"
 
 # 5. Lead source (additive).
 [effects.lead_source]
@@ -1358,7 +1360,7 @@ visible = "Submitted"
 under_words = 15
 under_15_words = { low = 0.40, middle = 0.60, high = 0.85, confidence = "guessed", source = "none" }
 dreamer = { low = 0.55, middle = 0.75, high = 0.95, confidence = "guessed", source = "none" }
-note = "reference: 40-200 specific words; dreamer: over 400 words, no budget, over 3 countries. Read from meaning, never a giveaway keyword"
+note = "reference: every message of under_words or more that is not a dreamer's; dreamer: over 400 words, no budget, over 3 countries (form.message.shape). Read from meaning, never a giveaway keyword"
 
 # 9. Party size (threshold: large private groups rarely book together).
 [effects.party_size]
@@ -1368,7 +1370,7 @@ visible = "Submitted"
 # reference.
 over_travellers = 6
 over_6 = { low = 0.50, middle = 0.70, high = 0.90, confidence = "guessed", source = "what-predicts-a-booking.md §6: direction from Runggaldier et al. 2023" }
-note = "reference: a party of 2"
+note = "reference: a party of over_travellers or fewer"
 
 # 10. Phone given (additive; a signal only because phone is optional on this form).
 [effects.phone_given]
@@ -1386,7 +1388,7 @@ at_month_of_history = 14
 near_floor_under = 1.3
 floor_rise = { low = 0.05, middle = 0.10, high = 0.20, confidence = "guessed", source = "what-predicts-a-booking.md §8: Maasai Mara fee rise to $200 (July 2024)" }
 near_floor_after = { low = 0.55, middle = 0.75, high = 0.90, confidence = "guessed", source = "none" }
-note = "after the rise, leads within 1.0-1.3x of the old floor; leads above 1.5x unaffected"
+note = "from the first day of month at_month_of_history the floor is floor_rise higher; a stated budget at or above the new floor and under near_floor_under times the old one takes near_floor_after; one the rise puts below the new floor takes effects.budget_floor instead, never both (ruled 2026-10-01); every other budget, and a missing one, is the reference"
 
 # 12. Planted in text: meaning carries the signal, never a keyword (issue #6).
 [effects.text_commitment]
