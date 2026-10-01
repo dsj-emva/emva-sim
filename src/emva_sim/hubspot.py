@@ -6,7 +6,6 @@ multi-value cells joined with ";", owners as names. Only what the sales team has
 the export date appears.
 """
 
-import calendar
 import csv
 import re
 from collections.abc import Iterable
@@ -15,11 +14,23 @@ from datetime import date, datetime
 from pathlib import Path
 from random import Random
 
-from emva_sim import form
+from emva_sim import form, months
 from emva_sim.leads import Lead
 from emva_sim.process import TruePath
 
 UNCONNECTED_CALL_OUTCOMES = ["No answer", "Left voicemail", "Busy"]
+DEAL_RECORD_IDS_FROM = 10_000_000_000
+CONTACT_RECORD_IDS_FROM = 100_000
+CALL_RECORD_IDS_FROM = 30_000_000_000
+
+
+def record_ids(rng: Random, count: int, after: int) -> list[int]:
+    """Increasing Record IDs after a starting number, with gaps as HubSpot leaves them."""
+    ids, current = [], after
+    for _ in range(count):
+        current += rng.randint(1, 99)
+        ids.append(current)
+    return ids
 
 
 @dataclass(frozen=True)
@@ -144,9 +155,7 @@ class Export:
         current = max(times, key=lambda name: (times[name], order.index(name)))
         quotes = [amount for at, amount in path.quotes if self._recorded(at)]
         created = lead.submitted_at
-        month_end = date(
-            created.year, created.month, calendar.monthrange(created.year, created.month)[1]
-        )
+        month_end = months.last_day(created.year, created.month)
         close = self._closed(times) or datetime.combine(month_end, datetime.min.time())
         by_label = {f["label"]: f for f in self.fields}
         return [
@@ -224,10 +233,10 @@ class Export:
             if attempt.channel == "call" and attempt.logged and self._recorded(attempt.at)
         )
         by_deal = {r.deal_id: r for r in self.records}
-        rows, call_id = [], 30_000_000_000
-        for at, deal_id, attempt in calls:
+        rows = []
+        call_ids = record_ids(rng, len(calls), CALL_RECORD_IDS_FROM)
+        for call_id, (at, deal_id, attempt) in zip(call_ids, calls, strict=True):
             r = by_deal[deal_id]
-            call_id += rng.randint(1, 99)
             outcome = "Connected" if attempt.connected else rng.choice(UNCONNECTED_CALL_OUTCOMES)
             rows.append(
                 [

@@ -11,11 +11,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from random import Random
 
-from emva_sim import draws
+from emva_sim import draws, ladder
 from emva_sim.leads import Lead
-
-# The Canonical ladder after Contact attempted; the profile names each transition by its stage.
-LADDER_AFTER_CONTACT = ("Engaged", "Qualified", "Proposal", "Won")
 
 
 @dataclass(frozen=True)
@@ -60,7 +57,7 @@ class Process:
     def __init__(self, p: dict):
         self.p = p
         handling = p["handling"]
-        self.transitions = [p["process"]["transition"][s.lower()] for s in LADDER_AFTER_CONTACT]
+        self.transitions = [p["process"]["transition"][s.lower()] for s in ladder.AFTER_CONTACT]
         self.base_log_odds = _logit(math.prod(self.transitions))
         self.attempt_median_days = handling["first_attempt_delay_median_hours"] / 24
         self.late_days = handling["late_after_hours"] / 24
@@ -92,13 +89,13 @@ class Process:
         owner = rng.choice(p["team"]["owners"])
         propensity = _sigmoid(self.base_log_odds)
         start = lead.submitted_at
-        times = {"Submitted": start}
+        times = {ladder.SUBMITTED: start}
         if rng.random() < p["handling"]["neglected_share"]:
             return TruePath(
                 owner=owner,
                 win_propensity=propensity,
                 neglected_lead=True,
-                reached_stage="Submitted",
+                reached_stage=ladder.SUBMITTED,
                 won=False,
                 stage_times=times,
             )
@@ -106,35 +103,35 @@ class Process:
         cycle = lead.cycle_days
         first_attempt = self._first_attempt_days(rng, cycle)
         won = rng.random() < propensity
-        stops_before = None if won else rng.choices(LADDER_AFTER_CONTACT, self.failing_shares)[0]
+        stops_before = None if won else rng.choices(ladder.AFTER_CONTACT, self.failing_shares)[0]
 
-        at = {"Contact attempted": start + timedelta(days=first_attempt)}
+        at = {ladder.CONTACT_ATTEMPTED: start + timedelta(days=first_attempt)}
         middle = draws.sorted_uniforms(rng, 3, first_attempt, cycle)
-        planned = dict(zip(LADDER_AFTER_CONTACT, [*middle, cycle], strict=True))
-        reached = "Contact attempted"
-        for stage in LADDER_AFTER_CONTACT:
+        planned = dict(zip(ladder.AFTER_CONTACT, [*middle, cycle], strict=True))
+        reached = ladder.CONTACT_ATTEMPTED
+        for stage in ladder.AFTER_CONTACT:
             moment = start + timedelta(days=planned[stage])
             if stage == stops_before:
-                at["Lost"] = moment
+                at[ladder.LOST] = moment
                 break
             at[stage] = moment
             reached = stage
         times.update(at)
 
-        engaged_at = at.get("Engaged")
-        attempts = self._attempts(rng, at["Contact attempted"], engaged_at or at["Lost"])
+        engaged_at = at.get(ladder.ENGAGED)
+        attempts = self._attempts(rng, at[ladder.CONTACT_ATTEMPTED], engaged_at or at[ladder.LOST])
         if engaged_at and rng.random() >= p["handling"]["attempt_by_email"]:
             attempts.append(ContactAttempt(engaged_at, "call", True, self._logged(rng)))
 
         quotes, hold, travelled, cancelled = [], None, None, None
-        if "Proposal" in at:
-            end = at.get("Won") or at["Lost"]
-            quotes = self._quotes(rng, lead, at["Proposal"], end)
+        if ladder.PROPOSAL in at:
+            end = at.get(ladder.WON) or at[ladder.LOST]
+            quotes = self._quotes(rng, lead, at[ladder.PROPOSAL], end)
             if won or rng.random() < p["process"]["lost_after_provisional_hold"]:
                 hold = quotes[-1][0] + (end - quotes[-1][0]) * rng.random()
         if won:
             if rng.random() < p["process"]["won_then_cancelled"]:
-                cancelled = at["Won"] + (lead.travel_at - at["Won"]) * rng.random()
+                cancelled = at[ladder.WON] + (lead.travel_at - at[ladder.WON]) * rng.random()
             else:
                 travelled = lead.travel_at
 

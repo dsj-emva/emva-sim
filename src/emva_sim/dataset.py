@@ -12,7 +12,7 @@ from datetime import date
 from pathlib import Path
 from random import Random
 
-from emva_sim import hubspot, leads, profile
+from emva_sim import hubspot, ladder, leads, profile
 from emva_sim.hubspot import Record, stamp
 from emva_sim.process import Process
 
@@ -43,14 +43,6 @@ class History:
 DEFAULT_HISTORY = History()
 
 
-def _record_ids(rng: Random, count: int, first: int) -> list[int]:
-    ids, current = [], first
-    for _ in range(count):
-        current += rng.randint(1, 99)
-        ids.append(current)
-    return ids
-
-
 def _truth_row(r: Record) -> list[str]:
     path = r.path
     return [
@@ -59,10 +51,10 @@ def _truth_row(r: Record) -> list[str]:
         r.lead.market_group.upper(),
         f"{path.win_propensity:.6f}",
         "yes" if path.neglected_lead else "no",
-        stamp(path.stage_times.get("Contact attempted")),
+        stamp(path.stage_times.get(ladder.CONTACT_ATTEMPTED)),
         path.reached_stage,
         "won" if path.won else "not won",
-        stamp(path.stage_times.get("Won")),
+        stamp(path.stage_times.get(ladder.WON)),
         f"{r.lead.deal_value:.2f}" if path.quotes else "",
         str(len(path.quotes)),
         "yes" if path.cancelled_at else "no",
@@ -83,8 +75,8 @@ def generate(
     drawn = leads.draw_leads(rng, p, history.start, history.end)
     process = Process(p)
     paths = [process.path(rng, lead) for lead in drawn]
-    deal_ids = _record_ids(rng, len(drawn), 10_000_000_000)
-    contact_ids = _record_ids(rng, len(drawn), 100_000)
+    deal_ids = hubspot.record_ids(rng, len(drawn), hubspot.DEAL_RECORD_IDS_FROM)
+    contact_ids = hubspot.record_ids(rng, len(drawn), hubspot.CONTACT_RECORD_IDS_FROM)
     records = [Record(*row) for row in zip(deal_ids, contact_ids, drawn, paths, strict=True)]
 
     folder = Path(out) / name(p, setting, seed)

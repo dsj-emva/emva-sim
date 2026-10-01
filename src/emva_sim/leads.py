@@ -5,7 +5,7 @@ from dataclasses import dataclass, field, replace
 from datetime import date, datetime, timedelta
 from random import Random
 
-from emva_sim import draws, form, people
+from emva_sim import draws, form, months, people
 
 DAYS_PER_MONTH = 365.25 / 12
 
@@ -31,23 +31,6 @@ class Lead:
         return self.price_per_person_per_night * self.nights * (self.adults + self.children)
 
 
-def _span(year: int, month: int, start: date, end: date) -> tuple[date, date]:
-    first = max(date(year, month, 1), start)
-    return first, min(date(year, month, calendar.monthrange(year, month)[1]), end)
-
-
-def _months(start: date, end: date) -> list[tuple[int, int, float]]:
-    """Each calendar month the history touches, with the share of that month it covers."""
-    months, year, month = [], start.year, start.month
-    while (year, month) <= (end.year, end.month):
-        first, last = _span(year, month, start, end)
-        months.append(
-            (year, month, ((last - first).days + 1) / calendar.monthrange(year, month)[1])
-        )
-        year, month = (year + 1, 1) if month == 12 else (year, month + 1)
-    return months
-
-
 def _month_weights(p: dict, group: str) -> dict[int, float]:
     seasonality = p["volume"]["seasonality"]
     weights = dict.fromkeys(range(1, 13), 1.0)
@@ -58,7 +41,7 @@ def _month_weights(p: dict, group: str) -> dict[int, float]:
 
 
 def _submitted_at(rng: Random, year: int, month: int, start: date, end: date) -> datetime:
-    first, last = _span(year, month, start, end)
+    first, last = months.span(year, month, start, end)
     minutes = ((last - first).days + 1) * 24 * 60
     return datetime.combine(first, datetime.min.time()) + timedelta(minutes=rng.randrange(minutes))
 
@@ -224,14 +207,14 @@ def _lead(rng: Random, p: dict, submitted_at: datetime, group: str) -> Lead:
 
 def draw_leads(rng: Random, p: dict, start: date, end: date) -> list[Lead]:
     """Every lead submitted from start to end (inclusive), at the profile's volume and season."""
-    months = _months(start, end)
+    covered = months.covered(start, end)
     markets = p["markets"]
     weights = {group: _month_weights(p, group) for group in markets["groups"]}
-    count = round(p["volume"]["leads_per_month"] * sum(share for _, _, share in months))
+    count = round(p["volume"]["leads_per_month"] * sum(share for _, _, share in covered))
     arrivals = []
     for _ in range(count):
         group = "a" if rng.random() < markets["group_a_share"] else "b"
-        chances = [weights[group][m] * share for _, m, share in months]
-        year, month, _ = rng.choices(months, chances)[0]
+        chances = [weights[group][m] * share for _, m, share in covered]
+        year, month, _ = rng.choices(covered, chances)[0]
         arrivals.append((_submitted_at(rng, year, month, start, end), group))
     return [_lead(rng, p, at, group) for at, group in sorted(arrivals)]
