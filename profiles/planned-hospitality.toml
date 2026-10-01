@@ -933,6 +933,9 @@ high = 0.65
 confidence = "estimated"
 source = "the user, from a client they have worked with (2026-10-01): about 50%"
 
+# Deals moved back to the stage recorded before (and on again, entering both again, which overwrites
+# their Date entered). This is how stages recorded "out of order" (issue #8) show in a HubSpot export:
+# each change is entered at or after the one before it, so lateness alone never reorders them.
 [recording.backward_move]
 low = 0.02
 middle = 0.05
