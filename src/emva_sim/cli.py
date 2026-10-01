@@ -10,6 +10,7 @@ import sys
 from pathlib import Path
 
 from emva_sim import dataset, datasets, profile, vary
+from emva_sim.phrases import MissingVariations
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -45,7 +46,7 @@ def main(argv: list[str] | None = None) -> None:
     if args.command == "datasets":
         try:
             listed = datasets.write_all(args.profile, args.out)
-        except datasets.NotAnEarlierOutput as error:
+        except (datasets.NotAnEarlierOutput, MissingVariations) as error:
             parser.error(str(error))
         print(f"Wrote {len(listed)} datasets, on simulated data, to {args.out}")
     elif args.command == "vary-phrases":
@@ -74,6 +75,8 @@ def _generate(parser: argparse.ArgumentParser, args: argparse.Namespace) -> None
         folder = dataset.generate(args.profile, args.setting, args.seed, args.out)
     except profile.UnknownSetting as error:
         parser.error(f"unknown setting {error}")
+    except MissingVariations as error:
+        parser.error(str(error))
     with (folder / "hidden-truth" / "hidden-truth.csv").open(newline="", encoding="utf-8") as f:
         truth = list(csv.DictReader(f))
     leads = [row for row in truth if row["row_kind"] == "lead"]
