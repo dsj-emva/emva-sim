@@ -88,7 +88,7 @@ def _genuine(rng: Random, p: dict, i: int, lead: Lead) -> Submission:
         filled = [form.field(p, role) for role in mess["key_fields"]]
         key_field = rng.choice([f for f in filled if answers[f["label"]]])
         label = key_field["label"]
-        missing = rng.random() < 0.5
+        missing = rng.random() < mess["missing_rather_than_wrong"]
         answers[label] = "" if missing else _wrong(rng, p, key_field, answers[label], lead)
         altered = (label,)
     return Submission(
@@ -111,7 +111,8 @@ def _wrong(rng: Random, p: dict, form_field: dict, value: str, lead: Lead) -> st
             return rng.choice([o["label"] for o in form_field["options"] if o["label"] != value])
         case "number":
             n = int(value)
-            return str(n + 1 if n <= 1 or rng.random() < 0.5 else n - 1)
+            one_more = n <= 1 or rng.random() < p["mess"]["wrong_number_one_more"]
+            return str(n + 1 if one_more else n - 1)
         case "country":
             countries = [c["name"] for c in leads.countries(p)]
             return rng.choice([c for c in countries if c != value])
@@ -165,8 +166,12 @@ def _duplicate(rng: Random, p: dict, held: Submission) -> Submission:
     answers = dict(lead.answers)
     email = form.field(p, "email")["label"]
     same_email = rng.random() < mess["duplicate_same_email"]
-    answers[email] = held.answers[email] if same_email else _other_address(rng, answers[email])
-    if rng.random() < 0.5:
+    answers[email] = (
+        held.answers[email]
+        if same_email
+        else _other_address(rng, answers[email], mess["email_alias_tag"])
+    )
+    if rng.random() < mess["duplicate_name_case_changed"]:
         case = rng.choice([str.lower, str.upper])
         for role in ("first_name", "last_name"):
             label = form.field(p, role)["label"]
@@ -212,10 +217,10 @@ def _gibberish(rng: Random) -> str:
     return "".join(rng.choice(string.ascii_lowercase) for _ in range(rng.randint(5, 10)))
 
 
-def _other_address(rng: Random, email: str) -> str:
+def _other_address(rng: Random, email: str, alias_tag: str) -> str:
     local, domain = email.split("@")
     variants = [
-        f"{local}+travel@{domain}",
+        f"{local}+{alias_tag}@{domain}",
         f"{local.replace('.', '')}@{domain}",
         f"{local}@{rng.choice([d for d in EMAIL_DOMAINS if d != domain])}",
         f"{_slip(rng, local)}@{domain}",

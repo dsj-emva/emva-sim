@@ -145,6 +145,9 @@ held_at_middle = [
   "mess.bot_throwaway_email",
   "mess.bot_impossible_party",
   "mess.duplicate_same_email",
+  "mess.missing_rather_than_wrong",
+  "mess.wrong_number_one_more",
+  "mess.duplicate_name_case_changed",
 ]
 
 # ---------------------------------------------------------------------------------------------------------
@@ -921,7 +924,7 @@ titles = { female = { mrs = 0.35, ms = 0.35, miss = 0.15, dr = 0.10, mx = 0.05 }
 # ---------------------------------------------------------------------------------------------------------
 
 [recording]
-bulk_review = { weekday = "Friday", from_hour = 16, to_hour = 18 }
+bulk_review = { weekday = "Friday", from_hour = 16, to_hour = 18, confidence = "guessed", source = "none; weekly updating before pipeline reviews described (sales-steps-and-exports.md §4: cotera, not primary; neglect-and-mess.md §5: Attention); day and hours guessed" }
 
 [recording.skips_a_stage]
 low = 0.35
@@ -973,6 +976,8 @@ source = "none"
 # ---------------------------------------------------------------------------------------------------------
 
 [mess]
+# The tag a duplicate's alias adds to the address (name+tag@domain).
+email_alias_tag = "travel"
 impossible_party = [
   { adults = { min = 0, max = 0 }, children = { min = 0, max = 0 } },
   { adults = { min = 25, max = 99 }, children = { min = 0, max = 0 } },
@@ -986,6 +991,33 @@ middle = 0.08
 high = 0.20
 confidence = "estimated"
 source = "neglect-and-mess.md §5: CRM-wide 10-30% (Landbase, vendor) covers all records; enquiries lower"
+
+# Of the records with a key field missing or wrong, the share where it is blank (the rest hold a
+# wrong value: a slip, another option or country, a travel year off by one, or a number one more or
+# one fewer, one more at wrong_number_one_more and always when one fewer would leave none). Added for
+# the generator (issue #8), awaiting the user's review.
+[mess.missing_rather_than_wrong]
+low = 0.3
+middle = 0.5
+high = 0.7
+confidence = "guessed"
+source = "none; added for the generator (issue #8), awaiting the user's review"
+
+[mess.wrong_number_one_more]
+low = 0.3
+middle = 0.5
+high = 0.7
+confidence = "guessed"
+source = "none; added for the generator (issue #8), awaiting the user's review"
+
+# Share of duplicates that type the name in another case (all lower or all upper). Added for the
+# generator (issue #8), awaiting the user's review.
+[mess.duplicate_name_case_changed]
+low = 0.3
+middle = 0.5
+high = 0.7
+confidence = "guessed"
+source = "none; added for the generator (issue #8), awaiting the user's review"
 
 # Days from a Lead's submission to its duplicate (the same person again, or through a second channel);
 # exponential with this median. Added for the generator (issue #8), awaiting the user's review.

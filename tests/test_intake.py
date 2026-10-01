@@ -6,12 +6,13 @@ high ends, within three standard errors at the size measured.
 
 import re
 from collections import defaultdict
-from datetime import date
+from datetime import date, datetime
+from random import Random
 
 import pytest
 from conftest import PROFILE, TRUTH, assert_rate, ends, kinds, number, raw, resolved, rows
 
-from emva_sim import dataset, form, leads
+from emva_sim import dataset, form, intake, leads, profile
 from emva_sim.hidden_truth import TRUE_PATH_COLUMNS
 from emva_sim.intake import RowKind
 from emva_sim.people import FIRST_NAMES, LAST_NAMES, THROWAWAY_DOMAINS
@@ -278,6 +279,48 @@ def test_a_required_key_field_is_blank_only_where_the_hidden_truth_says_it_is_mi
             if not contact[column(field)]:
                 assert field in altered(row), (field, row)
     assert blank and wrong
+
+
+@pytest.mark.parametrize("setting", ends("mess.missing_rather_than_wrong"))
+def test_the_profiles_share_of_altered_key_fields_are_missing_rather_than_wrong(generated, setting):
+    held = [(c, f) for c, r in with_contacts(generated(setting), RowKind.LEAD) for f in altered(r)]
+    blank = sum(not contact[column(field)] for contact, field in held)
+    assert_rate(blank, len(held), number(setting, "mess.missing_rather_than_wrong"))
+
+
+@pytest.mark.parametrize("setting", ends("mess.wrong_number_one_more"))
+def test_a_wrong_number_is_one_more_at_the_profiles_share(setting):
+    p = profile.resolve(raw(), setting)
+    p["mess"] |= {"field_missing_or_wrong": 1.0, "missing_rather_than_wrong": 0.0}
+    p["mess"]["key_fields"] = ["adults"]
+    drawn = leads.draw_leads(Random(1), p, date(2024, 1, 1), date(2024, 3, 31))
+    start, until = datetime(2024, 1, 1), datetime(2024, 4, 1)
+    adults = form.field(p, "adults")["label"]
+    pairs = [
+        (int(s.lead.answers[adults]), int(s.answers[adults]))
+        for s in intake.submissions(Random(1), p, drawn, start, until)
+        if s.kind == RowKind.LEAD
+    ]
+    assert all(abs(held - true) == 1 for true, held in pairs)
+    assert all(held == 2 for true, held in pairs if true == 1)  # never none
+    more = [held > true for true, held in pairs if true > 1]
+    assert_rate(sum(more), len(more), number(setting, "mess.wrong_number_one_more"))
+
+
+@pytest.mark.parametrize("setting", ends("mess.duplicate_name_case_changed"))
+def test_the_profiles_share_of_duplicates_type_the_name_in_another_case(generated, setting):
+    folder = generated(setting)
+    deals = {d["Record ID"]: d for d in rows(folder / DEALS)}
+    genuine = {r["deal_record_id"]: r for r in kinds(folder, RowKind.LEAD)}
+    names = []
+    for row in kinds(folder, RowKind.DUPLICATE):
+        original = row["duplicate_of_deal_record_id"]
+        if not {"First name", "Last name"} & set(altered(genuine[original])):
+            names.append((deals[row["deal_record_id"]], deals[original]))
+    changed = sum(
+        again["Associated Contact"] != first["Associated Contact"] for again, first in names
+    )
+    assert_rate(changed, len(names), number(setting, "mess.duplicate_name_case_changed"))
 
 
 @pytest.mark.parametrize(
