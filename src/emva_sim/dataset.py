@@ -5,8 +5,8 @@ Layout: <out>/<dataset>/export/<variant>/<HubSpot file>.csv and
 the seed: no system clock, no global random state.
 """
 
-import csv
 import shutil
+from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
@@ -15,6 +15,7 @@ from random import Random
 from emva_sim import hubspot, ladder, leads, profile
 from emva_sim.hubspot import Record, stamp
 from emva_sim.process import Process
+from emva_sim.recording import Recording
 
 HIDDEN_TRUTH_COLUMNS = [
     "deal_record_id",
@@ -31,6 +32,7 @@ HIDDEN_TRUTH_COLUMNS = [
     "cancelled_after_won",
     "call_attempts",
 ]
+STAGE_HISTORY_COLUMNS = ["deal_record_id", "crm_stage", "true_entered_at", "recorded_entered_at"]
 
 
 @dataclass(frozen=True)
@@ -77,15 +79,22 @@ def generate(
     paths = [process.path(rng, lead) for lead in drawn]
     deal_ids = hubspot.record_ids(rng, len(drawn), hubspot.DEAL_RECORD_IDS_FROM)
     contact_ids = hubspot.record_ids(rng, len(drawn), hubspot.CONTACT_RECORD_IDS_FROM)
-    records = [Record(*row) for row in zip(deal_ids, contact_ids, drawn, paths, strict=True)]
+    recording = Recording(p)
+    recorded = [recording.lead(lead, path) for lead, path in zip(drawn, paths, strict=True)]
+    records = [
+        Record(*row) for row in zip(deal_ids, contact_ids, drawn, paths, recorded, strict=True)
+    ]
 
     folder = Path(out) / name(p, setting, seed)
     shutil.rmtree(folder, ignore_errors=True)
     hubspot.Export(p, records, history.export).write(folder / "export", rng)
-    truth = folder / "hidden-truth" / "hidden-truth.csv"
-    truth.parent.mkdir(parents=True, exist_ok=True)
-    with truth.open("w", newline="", encoding="utf-8") as f:
-        writer = csv.writer(f, quoting=csv.QUOTE_ALL)
-        writer.writerow(HIDDEN_TRUTH_COLUMNS)
-        writer.writerows(_truth_row(r) for r in records)
+    truth = folder / "hidden-truth"
+    hubspot.write_csv(truth / "hidden-truth.csv", HIDDEN_TRUTH_COLUMNS, map(_truth_row, records))
+    hubspot.write_csv(truth / "stage-history.csv", STAGE_HISTORY_COLUMNS, _stage_history(records))
     return folder
+
+
+def _stage_history(records: list[Record]) -> Iterator[list[str]]:
+    for r in records:
+        for change in r.recorded.changes:
+            yield [str(r.deal_id), change.stage, stamp(change.true_at), stamp(change.recorded_at)]

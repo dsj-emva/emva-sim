@@ -17,6 +17,7 @@ from random import Random
 from emva_sim import form, months
 from emva_sim.leads import Lead
 from emva_sim.process import TruePath
+from emva_sim.recording import Change, Recorded
 
 UNCONNECTED_CALL_OUTCOMES = ["No answer", "Left voicemail", "Busy"]
 DEAL_RECORD_IDS_FROM = 10_000_000_000
@@ -39,6 +40,7 @@ class Record:
     contact_id: int
     lead: Lead
     path: TruePath
+    recorded: Recorded
 
 
 def stamp(moment: datetime | None) -> str:
@@ -57,7 +59,7 @@ def date_entered(stage: str, pipeline: str) -> str:
     return f'Date entered "{stage} ({pipeline})"'
 
 
-def _write(path: Path, header: list[str], rows: Iterable[list[str]]) -> None:
+def write_csv(path: Path, header: list[str], rows: Iterable[list[str]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f, quoting=csv.QUOTE_ALL)
@@ -85,29 +87,24 @@ class Export:
         calls = (self._calls_header(), self._call_rows(rng))
         for variant in self.p["exports"]["variants"]:
             target = folder / slug(variant["name"])
-            _write(target / file_name(self.pipeline, self.export_date), *deals)
-            _write(target / file_name("All contacts", self.export_date), *contacts)
+            write_csv(target / file_name(self.pipeline, self.export_date), *deals)
+            write_csv(target / file_name("All contacts", self.export_date), *contacts)
             if variant["calls"]:
-                _write(target / file_name("All calls", self.export_date), *calls)
+                write_csv(target / file_name("All calls", self.export_date), *calls)
 
     def _recorded(self, moment: datetime | None) -> datetime | None:
         return moment if moment is not None and moment < self.export_at else None
 
-    def stage_times(self, path: TruePath) -> dict[str, datetime]:
-        """When the deal entered each CRM stage, for the stages entered before the export date."""
-        times = {}
-        for stage in self.stages:
-            if stage.get("milestone"):
-                moment = path.provisional_hold_at
-            elif stage.get("after_won") == "travelled":
-                moment = path.travelled_at
-            elif stage.get("after_won") == "cancelled":
-                moment = path.cancelled_at
-            else:
-                moment = path.stage_times.get(stage["ladder"])
-            if self._recorded(moment):
-                times[stage["name"]] = moment
-        return times
+    def stage_times(self, r: Record) -> dict[str, datetime]:
+        """The latest recorded entry of each CRM stage, for the changes recorded before the export.
+
+        HubSpot overwrites a stage's Date entered when a deal enters it again.
+        """
+        return {c.stage: c.recorded_at for c in self._visible(r)}
+
+    def _visible(self, r: Record) -> list[Change]:
+        recorded = [c for c in r.recorded.changes if self._recorded(c.recorded_at)]
+        return sorted(recorded, key=lambda c: c.recorded_at)
 
     def _answer(self, lead: Lead, form_field: dict) -> str:
         value = lead.answers[form_field["label"]]
@@ -150,9 +147,8 @@ class Export:
 
     def _deal_row(self, r: Record) -> list[str]:
         lead, path = r.lead, r.path
-        times = self.stage_times(path)
-        order = [s["name"] for s in self.stages]
-        current = max(times, key=lambda name: (times[name], order.index(name)))
+        times = self.stage_times(r)
+        current = self._visible(r)[-1].stage
         quotes = [amount for at, amount in path.quotes if self._recorded(at)]
         created = lead.submitted_at
         month_end = months.last_day(created.year, created.month)
@@ -201,7 +197,7 @@ class Export:
         return [
             str(r.contact_id),
             *(self._answer(lead, f) for f in self.fields if f["label"] in standard),
-            "Customer" if won in self.stage_times(path) else "Opportunity",
+            "Customer" if won in self.stage_times(r) else "Opportunity",
             path.owner,
             stamp(lead.submitted_at),
             self.p["volume"]["traffic_source"]["labels"][lead.traffic_source],

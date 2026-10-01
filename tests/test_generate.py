@@ -15,6 +15,7 @@ DEALS = "export/with-calls-and-notes/hubspot-crm-exports-safari-enquiries-2024-0
 CONTACTS = "export/with-calls-and-notes/hubspot-crm-exports-all-contacts-2024-07-05.csv"
 CALLS = "export/with-calls-and-notes/hubspot-crm-exports-all-calls-2024-07-05.csv"
 TRUTH = "hidden-truth/hidden-truth.csv"
+STAGE_HISTORY = "hidden-truth/stage-history.csv"
 
 
 def rows(path):
@@ -50,7 +51,7 @@ def test_the_same_seed_gives_byte_identical_files(tmp_path):
     first = dataset.generate(PROFILE, "middle", seed=7, out=tmp_path / "a", history=SHORT)
     second = dataset.generate(PROFILE, "middle", seed=7, out=tmp_path / "b", history=SHORT)
     assert files(first) == files(second)
-    assert len(files(first)) == 6
+    assert len(files(first)) == 7
 
 
 def sweep_settings(raw):
@@ -129,7 +130,7 @@ def test_generating_again_replaces_the_previous_dataset(tmp_path):
     dataset.generate(PROFILE, "middle", seed=7, out=tmp_path, history=SHORT)
     later = dataset.History(start=SHORT.start, end=SHORT.end, export=date(2024, 4, 1))
     folder = dataset.generate(PROFILE, "middle", seed=7, out=tmp_path, history=later)
-    assert len(files(folder)) == 6
+    assert len(files(folder)) == 7
     assert all("2024-04-01" in str(p) for p in files(folder) if "export" in str(p))
 
 
@@ -149,6 +150,7 @@ def test_the_dataset_folder_holds_both_export_variants_and_the_hidden_truth(midd
         DEALS.replace("with-calls-and-notes", "deals-and-contacts-only"),
         CONTACTS.replace("with-calls-and-notes", "deals-and-contacts-only"),
         TRUTH,
+        STAGE_HISTORY,
     }
     assert middle.name == "planned-hospitality-middle-seed-1"
 
@@ -166,7 +168,7 @@ def test_no_hidden_truth_column_appears_in_any_export(middle):
 
 
 def test_every_field_is_double_quoted(middle):
-    for path in [*export_files(middle), middle / TRUTH]:
+    for path in [*export_files(middle), middle / TRUTH, middle / STAGE_HISTORY]:
         with open(path, newline="", encoding="utf-8") as f:
             raw = list(csv.reader(f))
         quoted = io.StringIO(newline="")
