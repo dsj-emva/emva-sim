@@ -255,6 +255,46 @@ def test_a_required_key_field_is_blank_only_where_the_hidden_truth_says_it_is_mi
     assert blank and wrong
 
 
+TRUE_PATH = [
+    "market_group",
+    "win_propensity",
+    "neglected_lead",
+    "first_contact_attempt_at",
+    "reached_stage",
+    "outcome",
+    "won_at",
+    "deal_value",
+    "itinerary_versions",
+    "cancelled_after_won",
+    "call_attempts",
+]
+
+
+@pytest.mark.parametrize(
+    "setting",
+    ["mess.bot_or_spam@high", "mess.duplicate_leads@high", "recording.lag_days_median@high"],
+)
+def test_the_mess_never_changes_a_leads_true_path(generated, middle, setting):
+    def true_paths(folder):
+        return [[r[c] for c in TRUE_PATH] for r in kinds(folder, "lead")]
+
+    assert true_paths(generated(setting)) == true_paths(middle)
+
+
+def files(folder):
+    return {p.relative_to(folder): p.read_bytes() for p in sorted(folder.rglob("*")) if p.is_file()}
+
+
+def test_the_same_seed_gives_the_same_mess(tmp_path):
+    month = dataset.History(start=date(2024, 1, 1), end=date(2024, 1, 31), export=date(2024, 3, 1))
+    first = dataset.generate(PROFILE, "all-high", seed=5, out=tmp_path / "a", history=month)
+    second = dataset.generate(PROFILE, "all-high", seed=5, out=tmp_path / "b", history=month)
+    assert files(first) == files(second)
+    truth = rows(first / TRUTH)
+    assert {r["row_kind"] for r in truth} == {"lead", "duplicate", "bot or spam"}
+    assert any(r["fields_missing_or_wrong"] for r in truth)
+
+
 def test_the_exports_never_say_which_rows_are_duplicates_or_bots(middle):
     for path in sorted((middle / "export").rglob("*.csv")):
         header = " ".join(rows(path)[0]).lower()
