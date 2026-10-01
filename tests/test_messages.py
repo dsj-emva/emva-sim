@@ -131,13 +131,24 @@ MENTIONS = [
 ]
 
 
+def fits(lead, mention, language):
+    """Whether the Lead's facts fit a phrase of the mention (a same-sex partner needs a couple)."""
+    group = f"message.{language}.prohibited.{mention}#"
+    known = messages.facts(raw(), lead)
+    return any(pid.startswith(group) and r <= known for pid, r in requirements().items())
+
+
 @pytest.mark.parametrize("mention", MENTIONS)
-def test_each_prohibited_mention_is_planted_at_its_share_of_written_messages(prose, mention):
-    found = prose()
+def test_each_prohibited_mention_is_planted_at_its_share_of_the_messages_that_can_hold_it(
+    prose, mention
+):
+    found = [(lead, text) for lead, text in prose() if fits(lead, mention, text.language)]
     planted = [text for _, text in found if mention in text.mentions]
     assert_rate(len(planted), len(found), number("middle", f"form.message.mentions.{mention}"))
     for text in planted:
         assert any(f".prohibited.{mention}#" in pid for pid in text.phrase_ids)
+    others = [text for lead, text in prose() if not fits(lead, mention, text.language)]
+    assert not [text for text in others if mention in text.mentions]
 
 
 def test_a_planted_mention_is_written_where_it_says(prose):

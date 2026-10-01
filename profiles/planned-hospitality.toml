@@ -726,7 +726,9 @@ confidence = "guessed"
 source = "none; added for the text (issue #6), awaiting the user's review"
 
 # Prohibited inputs planted in the text ([prohibited_inputs].in_text): of the messages that are not
-# blank or a token, those that mention each. Added for the text (issue #6), awaiting the user's review.
+# blank or a token and whose Lead fits the mention (a same-sex partner needs a couple, a pregnancy a
+# woman by Title or a partner), those that mention each. Added for the text (issue #6), awaiting the
+# user's review.
 [form.message.mentions.ages_of_travellers]
 low = 0.05
 middle = 0.1
