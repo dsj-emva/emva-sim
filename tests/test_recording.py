@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from emva_sim import dataset
+from emva_sim import dataset, profile
 
 PROFILE = Path(__file__).parent.parent / "profiles" / "planned-hospitality.toml"
 HISTORY = dataset.History(start=date(2024, 1, 1), end=date(2024, 6, 30), export=date(2025, 12, 31))
@@ -261,6 +261,57 @@ WON = {"Deposit Paid", "Travelled", "Cancelled"}
 def test_the_profiles_share_of_won_deals_have_no_amount(generated, setting, share, tolerance):
     won = [d for d in rows(generated(setting) / DEALS) if d["Deal Stage"] in WON]
     assert sum(not d["Amount"] for d in won) / len(won) == pytest.approx(share, abs=tolerance)
+
+
+MEANINGS = {
+    r["recorded"]: r["meaning"] for r in profile.load(PROFILE)["loss"]["reasons"]["recorded"]
+}
+
+
+def lost_with_truth(folder):
+    truth = {r["deal_record_id"]: r for r in rows(folder / TRUTH)}
+    deals = [d for d in rows(folder / DEALS) if d["Deal Stage"] == "Lost"]
+    return [(d, truth[d["Record ID"]]) for d in deals]
+
+
+@pytest.mark.parametrize(
+    ("setting", "share"),
+    [("middle", 0.35), ("loss.blank_reason@low", 0.15), ("loss.blank_reason@high", 0.50)],
+)
+def test_the_profiles_share_of_lost_deals_have_no_reason(generated, setting, share):
+    lost = lost_with_truth(generated(setting))
+    blank = sum(not deal["Closed Lost Reason"] for deal, _ in lost)
+    assert blank / len(lost) == pytest.approx(share, abs=0.04)
+
+
+@pytest.mark.parametrize(
+    ("setting", "share"),
+    [
+        ("middle", 0.40),
+        ("loss.recorded_differs_from_truth@low", 0.20),
+        ("loss.recorded_differs_from_truth@high", 0.60),
+    ],
+)
+def test_the_profiles_share_of_recorded_reasons_differ_from_the_true_one(generated, setting, share):
+    given = [(d, t) for d, t in lost_with_truth(generated(setting)) if d["Closed Lost Reason"]]
+    differs = sum(MEANINGS[d["Closed Lost Reason"]] != t["true_loss_reason"] for d, t in given)
+    assert differs / len(given) == pytest.approx(share, abs=0.05)
+
+
+def test_every_lost_lead_and_no_other_has_a_true_loss_reason_drawn_from_the_profile(middle):
+    lost = {c["deal_record_id"] for c in rows(middle / STAGES) if c["crm_stage"] == "Lost"}
+    truth = rows(middle / TRUTH)
+    for row in truth:
+        assert bool(row["true_loss_reason"]) == (row["deal_record_id"] in lost), row
+    reasons = Counter(r["true_loss_reason"] for r in truth if r["true_loss_reason"])
+    # The middle shares sum to 1.15, so each is scaled down to its part of the total.
+    for reason, share in [
+        ("could_not_reach_them", 0.35),
+        ("price", 0.40),
+        ("timing", 0.25),
+        ("never_a_real_buyer", 0.15),
+    ]:
+        assert reasons[reason] / reasons.total() == pytest.approx(share / 1.15, abs=0.03)
 
 
 def test_close_date_follows_the_recorded_close_not_the_true_one(middle):

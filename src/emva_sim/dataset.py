@@ -31,6 +31,7 @@ HIDDEN_TRUTH_COLUMNS = [
     "itinerary_versions",
     "cancelled_after_won",
     "call_attempts",
+    "true_loss_reason",
 ]
 STAGE_HISTORY_COLUMNS = ["deal_record_id", "crm_stage", "true_entered_at", "recorded_entered_at"]
 
@@ -61,6 +62,7 @@ def _truth_row(r: Record) -> list[str]:
         str(len(path.quotes)),
         "yes" if path.cancelled_at else "no",
         str(sum(attempt.channel == "call" for attempt in path.attempts)),
+        r.recorded.true_loss_reason,
     ]
 
 

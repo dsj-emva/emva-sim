@@ -303,4 +303,5 @@ def test_the_hidden_truth_has_one_row_per_lead_keyed_by_both_record_ids(middle):
         "itinerary_versions",
         "cancelled_after_won",
         "call_attempts",
+        "true_loss_reason",
     ]

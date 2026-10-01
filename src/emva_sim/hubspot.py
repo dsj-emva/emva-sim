@@ -79,6 +79,7 @@ class Export:
         self.export_at = datetime.combine(export_date, datetime.min.time())
         self.pipeline = p["pipeline"]["name"]
         self.stages = p["pipeline"]["stages"]
+        self.lost = next(s["name"] for s in self.stages if s.get("closed") == "lost")
         self.fields = p["form"]["fields"]
 
     def write(self, folder: Path, rng: Random) -> None:
@@ -164,7 +165,7 @@ class Export:
             stamp(created),
             path.owner,
             "Existing Business" if lead.repeat_client else "New Business",
-            "",
+            r.recorded.closed_lost_reason if current == self.lost else "",
             self.p["volume"]["traffic_source"]["labels"][lead.traffic_source],
             "Forms",
             *(stamp(times.get(s["name"])) for s in self.stages),

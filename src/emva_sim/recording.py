@@ -15,6 +15,7 @@ from emva_sim.leads import Lead
 from emva_sim.process import TruePath
 
 MINUTE = timedelta(minutes=1)
+UNKNOWN = "unknown"
 
 
 @dataclass(frozen=True)
@@ -34,6 +35,8 @@ class Change:
 class Recorded:
     changes: list[Change]
     quotes: list[tuple[datetime, float]]  # each itinerary version's Amount and when it was sent
+    closed_lost_reason: str
+    true_loss_reason: str  # Hidden truth: what truly made a lost lead not win
 
 
 class Recording:
@@ -45,6 +48,10 @@ class Recording:
         self.order = {s["name"]: i for i, s in enumerate(self.stages)}
         self.open = {s["name"] for s in self.stages if "closed" not in s and "after_won" not in s}
         self.lost = next(s["name"] for s in self.stages if s.get("closed") == "lost")
+        self.reasons = p["loss"]["reasons"]
+        self.meanings: dict[str, list[str]] = {}
+        for reason in self.reasons["recorded"]:
+            self.meanings.setdefault(reason["meaning"], []).append(reason["recorded"])
 
     def true_events(self, path: TruePath) -> list[tuple[str, datetime]]:
         """Each CRM stage the deal truly entered and when, in the order it entered them."""
@@ -84,7 +91,29 @@ class Recording:
         if self.rng.random() < self.p["recording"]["backward_move"]:
             changes = self._move_back(changes)
         no_amount = path.won and self.rng.random() < self.p["recording"]["won_without_amount"]
-        return Recorded(changes, [] if no_amount else path.quotes)
+        true_reason = self._true_loss_reason() if events[-1][0] == self.lost else ""
+        recorded_lost = any(c.stage == self.lost and c.recorded_at for c in changes)
+        reason = self._recorded_loss_reason(true_reason) if recorded_lost else ""
+        return Recorded(changes, [] if no_amount else path.quotes, reason, true_reason)
+
+    def _true_loss_reason(self) -> str:
+        """What truly made a lost lead not win, drawn from the profile's shares.
+
+        "unknown" takes what the shares leave; shares summing over one are scaled to sum to one.
+        """
+        shares = {key: self.reasons[key] for key in self.meanings if key != UNKNOWN}
+        rest = max(0.0, 1 - sum(shares.values()))
+        return self.rng.choices([*shares, UNKNOWN], [*shares.values(), rest])[0]
+
+    def _recorded_loss_reason(self, true_reason: str) -> str:
+        """The Closed Lost Reason the team picks: blank, the true one, or another one."""
+        loss = self.p["loss"]
+        if self.rng.random() < loss["blank_reason"]:
+            return ""
+        meaning = true_reason
+        if self.rng.random() < loss["recorded_differs_from_truth"]:
+            meaning = self.rng.choice([m for m in self.meanings if m != true_reason])
+        return self.rng.choice(self.meanings[meaning])
 
     def _move_back(self, changes: list[Change]) -> list[Change]:
         """Move the deal back from one open stage to the stage it was recorded at before.
