@@ -247,6 +247,22 @@ def test_moving_back_overwrites_the_date_entered_of_the_stage_entered_again(midd
     assert overwritten
 
 
+WON = {"Deposit Paid", "Travelled", "Cancelled"}
+
+
+@pytest.mark.parametrize(
+    ("setting", "share", "tolerance"),
+    [
+        ("middle", 0.10, 0.06),
+        ("recording.won_without_amount@low", 0.02, 0.03),
+        ("recording.won_without_amount@high", 0.30, 0.09),
+    ],
+)
+def test_the_profiles_share_of_won_deals_have_no_amount(generated, setting, share, tolerance):
+    won = [d for d in rows(generated(setting) / DEALS) if d["Deal Stage"] in WON]
+    assert sum(not d["Amount"] for d in won) / len(won) == pytest.approx(share, abs=tolerance)
+
+
 def test_close_date_follows_the_recorded_close_not_the_true_one(middle):
     by_deal = history_by_deal(middle)
     closed = [d for d in rows(middle / DEALS) if d["Deal Stage"] in {"Deposit Paid", "Lost"}]

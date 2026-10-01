@@ -33,6 +33,7 @@ class Change:
 @dataclass(frozen=True)
 class Recorded:
     changes: list[Change]
+    quotes: list[tuple[datetime, float]]  # each itinerary version's Amount and when it was sent
 
 
 class Recording:
@@ -82,7 +83,8 @@ class Recording:
             changes.append(Change(stage, at, last))
         if self.rng.random() < self.p["recording"]["backward_move"]:
             changes = self._move_back(changes)
-        return Recorded(changes)
+        no_amount = path.won and self.rng.random() < self.p["recording"]["won_without_amount"]
+        return Recorded(changes, [] if no_amount else path.quotes)
 
     def _move_back(self, changes: list[Change]) -> list[Change]:
         """Move the deal back from one open stage to the stage it was recorded at before.

@@ -149,7 +149,7 @@ class Export:
         lead, path = r.lead, r.path
         times = self.stage_times(r)
         current = self._visible(r)[-1].stage
-        quotes = [amount for at, amount in path.quotes if self._recorded(at)]
+        quotes = [amount for at, amount in r.recorded.quotes if self._recorded(at)]
         created = lead.submitted_at
         month_end = months.last_day(created.year, created.month)
         close = self._closed(times) or datetime.combine(month_end, datetime.min.time())
