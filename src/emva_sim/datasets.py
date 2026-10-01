@@ -19,7 +19,8 @@ from emva_sim import dataset, profile
 from emva_sim.dataset import DEFAULT_HISTORY, History
 
 BASE_SEED = 1
-DATA_SOURCE = "on simulated data"
+# The Data source, and the label every number from it carries.
+DATA_SOURCE = {"data_source": "simulated data", "label": "on simulated data"}
 
 
 def settings(raw: dict) -> list[str]:
@@ -46,7 +47,7 @@ def write_all(profile_path: Path, out: Path, history: History = DEFAULT_HISTORY)
         list(pool.map(partial(_write_one, raw, named, Path(out), history), listed))
     _write_json(
         Path(out) / "index.json",
-        {"data_source": DATA_SOURCE, "profile": named, "base_seed": BASE_SEED, "datasets": listed},
+        {**DATA_SOURCE, "profile": named, "base_seed": BASE_SEED, "datasets": listed},
     )
     return listed
 
@@ -59,7 +60,7 @@ def _write_one(raw: dict, named: dict, out: Path, history: History, listed: dict
     _write_json(
         folder / "manifest.json",
         {
-            "data_source": DATA_SOURCE,
+            **DATA_SOURCE,
             "profile": named,
             "setting": listed["setting"],
             "seed": listed["seed"],

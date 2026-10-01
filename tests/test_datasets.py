@@ -90,7 +90,7 @@ def test_a_manifest_names_its_profile_its_dates_and_that_its_numbers_are_on_simu
     written,
 ):
     m = manifest(written, "middle")
-    assert m["data_source"] == "on simulated data"
+    assert (m["data_source"], m["label"]) == ("simulated data", "on simulated data")
     assert m["profile"] == {
         "file": "planned-hospitality.toml",
         "sha256": hashlib.sha256(PROFILE.read_bytes()).hexdigest(),
@@ -101,7 +101,7 @@ def test_a_manifest_names_its_profile_its_dates_and_that_its_numbers_are_on_simu
 
 def test_the_index_lists_every_dataset_its_setting_and_its_seed(written):
     index = json.loads((written / "index.json").read_text())
-    assert index["data_source"] == "on simulated data"
+    assert (index["data_source"], index["label"]) == ("simulated data", "on simulated data")
     assert index["base_seed"] == 1
     listed = index["datasets"]
     assert len(listed) == 149
