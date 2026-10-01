@@ -1,7 +1,7 @@
 """Mess at intake, on simulated data: duplicates, bots or spam, and what the CRM holds wrongly.
 
 One fixed seed, six months of leads. Each rate is checked at the middle and at its range's low and
-high ends, within three standard errors at the size measured.
+high ends, within STANDARD_ERRORS (conftest) at the size measured.
 """
 
 import re

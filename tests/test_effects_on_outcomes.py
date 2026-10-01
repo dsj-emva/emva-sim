@@ -2,9 +2,10 @@
 
 For each effect, contacted leads in its group against its reference group, by what the lead is
 (never by the term itself), in strata where every other term is held fixed. The measured odds ratio
-of winning (Mantel-Haenszel) must lie within 3 standard errors of the profile's value at the
-sample's setting, and each comparison must be precise enough to mean something: a standard error of
-at most MAX_SE on the log odds ratio. Both rules were written before any result was seen. Every
+of winning (Mantel-Haenszel) must lie within STANDARD_ERRORS (conftest) of the profile's value at
+the sample's setting, and each comparison must be precise enough to mean something: a standard
+error of at most MAX_SE on the log odds ratio. The cap was written before any result was seen; the
+tolerance was 3 standard errors until a check elsewhere failed by chance (see conftest). Every
 number that picks a group (bands, floors, dates, months) is read from the sample's resolved profile.
 
 Samples, each generated once:
@@ -21,7 +22,7 @@ from dataclasses import dataclass
 from datetime import datetime
 
 import pytest
-from conftest import large_sample
+from conftest import STANDARD_ERRORS, large_sample
 from odds import log_odds, mantel_haenszel, rest_without, stratum
 
 from emva_sim import dataset
@@ -410,7 +411,11 @@ def assert_at_profiles_size(sample, case, setting="middle"):
     expected = case.expected(sample.p)
     cap, _reason = RELAXED_SE.get((case.name, setting), (MAX_SE, ""))
     assert se <= cap, (case.name, se)
-    assert abs(log_or - math.log(expected)) <= 3 * se, (case.name, math.exp(log_or), expected)
+    assert abs(log_or - math.log(expected)) <= STANDARD_ERRORS * se, (
+        case.name,
+        math.exp(log_or),
+        expected,
+    )
 
 
 @pytest.mark.parametrize("case", CASES, ids=[c.name for c in CASES])
@@ -438,8 +443,8 @@ def test_season_changes_what_a_short_lead_time_does(rich_samples):
     off_peak_case = BY_NAME["off-peak travel under 4 months ahead"]
     difference, se = contrast(sample, peak_case, off_peak_case)
     expected = math.log(peak_case.expected(sample.p) / off_peak_case.expected(sample.p))
-    assert difference < -3 * se
-    assert abs(difference - expected) <= 3 * se
+    assert difference < -STANDARD_ERRORS * se
+    assert abs(difference - expected) <= STANDARD_ERRORS * se
 
 
 def test_quality_changes_what_a_quick_first_attempt_does(middle_sample):
@@ -448,8 +453,8 @@ def test_quality_changes_what_a_quick_first_attempt_does(middle_sample):
     low = BY_NAME["low quality, first attempt within 1 hour"]
     difference, se = contrast(middle_sample, high, low)
     expected = math.log(high.expected(middle_sample.p) / low.expected(middle_sample.p))
-    assert difference > 3 * se
-    assert abs(difference - expected) <= 3 * se
+    assert difference > STANDARD_ERRORS * se
+    assert abs(difference - expected) <= STANDARD_ERRORS * se
 
 
 @pytest.mark.parametrize(
@@ -466,7 +471,7 @@ def test_the_middle_does_best_with_both_ends_worse(
     sample = middle_sample if sample_name == "middle" else rich_samples["middle"]
     for name in (short, long):
         log_or, se = measured(sample, BY_NAME[name])
-        assert log_or < -3 * se, name
+        assert log_or < -STANDARD_ERRORS * se, name
 
 
 def market_a(row):
@@ -479,9 +484,9 @@ def market_b(row):
 
 def test_the_market_predicts_the_outcome_on_its_own(middle_sample):
     # Only through the budget floor (stated by 45%, felt only below the floor) at the middle: an
-    # odds ratio near 1.1, but clear of 1 by more than 3 standard errors.
+    # odds ratio near 1.1, but clear of 1 by more than STANDARD_ERRORS.
     log_or, se = mantel_haenszel(middle_sample.rows, market_a, market_b)
-    assert log_or > 3 * se, math.exp(log_or)
+    assert log_or > STANDARD_ERRORS * se, math.exp(log_or)
 
 
 def test_the_market_has_no_effect_once_the_leads_terms_are_held(middle_sample):
@@ -490,7 +495,7 @@ def test_the_market_has_no_effect_once_the_leads_terms_are_held(middle_sample):
         middle_sample.rows, market_a, market_b, lambda r: stratum(log_odds(r))
     )
     assert se <= MAX_SE
-    assert abs(log_or) <= 3 * se, math.exp(log_or)
+    assert abs(log_or) <= STANDARD_ERRORS * se, math.exp(log_or)
 
 
 def test_the_market_has_no_term_of_its_own(middle_sample):

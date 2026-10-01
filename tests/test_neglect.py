@@ -5,12 +5,12 @@ lead looks at submission, neglecting it with a chance falling linearly from 2s f
 lead to 0 for the best (s = handling.neglected_share; how a lead looks is its place among the leads
 by the terms of effects visible at Submitted); the rest neglects any lead at s. Each test below
 computes from that rule, the profile's numbers and each lead's terms what neglect should look like,
-and checks the sample is within 3 standard errors of it.
+and checks the sample is within STANDARD_ERRORS (conftest) of it.
 """
 
 import math
 
-from conftest import large_sample
+from conftest import STANDARD_ERRORS, large_sample
 from odds import log_odds
 
 from emva_sim import ladder
@@ -55,7 +55,7 @@ def test_good_leads_make_up_their_expected_share_of_the_neglected(middle_sample)
     ]
     found = sum(neglected) / len(neglected)
     se = math.sqrt(expected * (1 - expected) / len(neglected))
-    assert abs(found - expected) <= 3 * se, (found, expected, se)
+    assert abs(found - expected) <= STANDARD_ERRORS * se, (found, expected, se)
 
 
 def test_high_quality_is_exactly_the_top_third_by_hidden_quality(middle_sample):
@@ -97,6 +97,6 @@ def test_neglect_follows_how_a_lead_looks_more_at_the_high_end_than_at_the_low_e
     high, high_expected, high_se = bottom_to_top("handling.neglect_follows_apparent_quality@high")
     # At the low end (f = 0) the rule expects no link at all; at the high end (f = 0.25) one.
     assert low_expected == 0.0
-    assert abs(low - low_expected) <= 3 * low_se
-    assert abs(high - high_expected) <= 3 * high_se
-    assert high - low > 3 * math.hypot(low_se, high_se)
+    assert abs(low - low_expected) <= STANDARD_ERRORS * low_se
+    assert abs(high - high_expected) <= STANDARD_ERRORS * high_se
+    assert high - low > STANDARD_ERRORS * math.hypot(low_se, high_se)

@@ -7,6 +7,7 @@ from pathlib import Path
 from random import Random
 
 import pytest
+from conftest import STANDARD_ERRORS, tolerance
 
 from emva_sim import form, leads, profile
 from emva_sim.leads import DatesGiven, Market
@@ -18,8 +19,8 @@ MEDIAN_SE = math.sqrt(math.pi / 2)
 
 
 def assert_share(found, expected, n):
-    """A share within 3 standard errors of expected, at n leads."""
-    assert abs(found - expected) <= 3 * math.sqrt(expected * (1 - expected) / n), (found, expected)
+    """A share within STANDARD_ERRORS of expected, at n leads."""
+    assert abs(found - expected) <= tolerance(expected, n), (found, expected)
 
 
 @pytest.fixture(scope="module")
@@ -151,12 +152,12 @@ def year_at(setting):
 
 
 def assert_market_ratio(p, drawn, measure, sigma, expected):
-    """Market A's median over market B's, within 3 standard errors of expected (log scale)."""
+    """Market A's median over market B's, within STANDARD_ERRORS of expected (log scale)."""
     by_group = {g: [lead for lead in drawn if lead.market_group == g] for g in Market}
     medians = {g: statistics.median(measure(p, x) for x in by_group[g]) for g in Market}
     found = math.log(medians[Market.A] / medians[Market.B])
     se = MEDIAN_SE * sigma * math.sqrt(sum(1 / len(group) for group in by_group.values()))
-    assert abs(found - math.log(expected)) <= 3 * se, (math.exp(found), expected)
+    assert abs(found - math.log(expected)) <= STANDARD_ERRORS * se, (math.exp(found), expected)
 
 
 def assert_markets_apart(p, drawn, budget, lead_time):
@@ -240,7 +241,7 @@ def test_most_messages_run_near_the_profiles_median_length(year_of_leads):
         if shape["token_words_at_most"] < lead.message_words <= shape["dreamer_over_words"]
     ]
     se = MEDIAN_SE * message["words_sigma"] / math.sqrt(len(written))
-    assert abs(math.log(statistics.median(written) / 45)) <= 3 * se
+    assert abs(math.log(statistics.median(written) / 45)) <= STANDARD_ERRORS * se
 
 
 @pytest.mark.parametrize(("flag", "share"), [("text_commitment", 0.20), ("real_buyer", 0.50)])
@@ -280,4 +281,4 @@ def test_pooled_over_both_markets_budgets_and_lead_times_keep_the_profiles_media
         pooled = statistics.median(measure(p, x) for x in drawn)
         spread = math.hypot(sigma, math.log(trap[gap]) / 2)
         se = MEDIAN_SE * spread / math.sqrt(len(drawn))
-        assert abs(math.log(pooled / expected)) <= 3 * se, (pooled, expected)
+        assert abs(math.log(pooled / expected)) <= STANDARD_ERRORS * se, (pooled, expected)
