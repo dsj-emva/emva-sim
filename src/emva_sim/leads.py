@@ -33,10 +33,19 @@ class Lead:
         return self.price_per_person_per_night * self.nights * (self.adults + self.children)
 
 
-def _months(start: date, end: date) -> list[tuple[int, int]]:
+def _span(year: int, month: int, start: date, end: date) -> tuple[date, date]:
+    first = max(date(year, month, 1), start)
+    return first, min(date(year, month, calendar.monthrange(year, month)[1]), end)
+
+
+def _months(start: date, end: date) -> list[tuple[int, int, float]]:
+    """Each calendar month the history touches, with the share of that month it covers."""
     months, year, month = [], start.year, start.month
     while (year, month) <= (end.year, end.month):
-        months.append((year, month))
+        first, last = _span(year, month, start, end)
+        months.append(
+            (year, month, ((last - first).days + 1) / calendar.monthrange(year, month)[1])
+        )
         year, month = (year + 1, 1) if month == 12 else (year, month + 1)
     return months
 
@@ -51,8 +60,7 @@ def _month_weights(p: dict, group: str) -> dict[int, float]:
 
 
 def _submitted_at(rng: Random, year: int, month: int, start: date, end: date) -> datetime:
-    first = max(date(year, month, 1), start)
-    last = min(date(year, month, calendar.monthrange(year, month)[1]), end)
+    first, last = _span(year, month, start, end)
     minutes = ((last - first).days + 1) * 24 * 60
     return datetime.combine(first, datetime.min.time()) + timedelta(minutes=rng.randrange(minutes))
 
@@ -237,10 +245,11 @@ def draw_leads(rng: Random, p: dict, start: date, end: date) -> list[Lead]:
     """Every lead submitted from start to end (inclusive), at the profile's volume and season."""
     months = _months(start, end)
     weights = {group: _month_weights(p, group) for group in ("A", "B")}
-    count = round(p["volume"]["leads_per_month"] * len(months))
+    count = round(p["volume"]["leads_per_month"] * sum(share for _, _, share in months))
     arrivals = []
     for _ in range(count):
         group = "A" if rng.random() < p["effects"]["proxy_trap_country"]["group_a_share"] else "B"
-        year, month = rng.choices(months, [weights[group][m] for _, m in months])[0]
+        chances = [weights[group][m] * share for _, m, share in months]
+        year, month, _ = rng.choices(months, chances)[0]
         arrivals.append((_submitted_at(rng, year, month, start, end), group))
     return [_lead(rng, p, at, group) for at, group in sorted(arrivals)]

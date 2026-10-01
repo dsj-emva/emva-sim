@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from emva_sim import dataset, profile
+from emva_sim.process import Process
 
 PROFILE = Path(__file__).parent.parent / "profiles" / "planned-hospitality.toml"
 HISTORY = dataset.History(start=date(2024, 1, 1), end=date(2024, 6, 30), export=date(2024, 7, 5))
@@ -52,24 +53,34 @@ def test_the_same_seed_gives_byte_identical_files(tmp_path):
     assert len(files(first)) == 6
 
 
-@pytest.mark.parametrize(
-    "setting",
-    [
-        "all-low",
-        "handling.first_attempt_delay_median_hours@low",
-        "handling.first_attempt_after_24h@low",
-        "handling.first_attempt_after_24h@high",
-    ],
-)
-def test_wide_first_attempt_delays_still_generate(tmp_path, setting):
-    folder = dataset.generate(PROFILE, setting, seed=1, out=tmp_path, history=SHORT)
-    assert rows(folder / TRUTH)
+def sweep_settings(raw):
+    one_at_a_time = raw["sweep"]["one_at_a_time"]
+    ends = [f"{name}@{end}" for name in one_at_a_time for end in ("low", "high")]
+    return ["middle", *ends, "all-low", "all-high"]
 
 
-@pytest.mark.parametrize("setting", ["all-high", "handling.first_attempt_delay_median_hours@high"])
-def test_a_median_delay_that_contradicts_the_late_share_is_refused(tmp_path, setting):
+def test_every_dataset_of_the_sweep_generates(raw, tmp_path):
+    tiny = dataset.History(start=date(2024, 1, 1), end=date(2024, 1, 2), export=date(2024, 3, 1))
+    settings = sweep_settings(raw)
+    assert len(settings) == 149
+    for setting in settings:
+        folder = dataset.generate(PROFILE, setting, seed=1, out=tmp_path, history=tiny)
+        assert rows(folder / TRUTH), setting
+
+
+def test_a_partial_month_gets_its_share_of_the_months_volume(tmp_path):
+    two_days = dataset.History(
+        start=date(2024, 1, 1), end=date(2024, 1, 2), export=date(2024, 3, 1)
+    )
+    folder = dataset.generate(PROFILE, "middle", seed=1, out=tmp_path, history=two_days)
+    assert len(rows(folder / TRUTH)) == round(400 * 2 / 31)
+
+
+def test_a_median_delay_that_contradicts_the_late_share_is_refused():
+    p = profile.resolve(profile.load(PROFILE), "middle")
+    p["handling"]["first_attempt_delay_median_hours"] = 24
     with pytest.raises(ValueError, match="a median of 24"):
-        dataset.generate(PROFILE, setting, seed=1, out=tmp_path, history=SHORT)
+        Process(p)
 
 
 def test_generating_again_replaces_the_previous_dataset(tmp_path):

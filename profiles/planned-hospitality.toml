@@ -603,19 +603,21 @@ high = 0.25
 confidence = "guessed"
 source = "none (neglect-and-mess.md open question 1)"
 
-# Hours to the first Contact attempt: below late_after_hours, the lognormal fitted to the median and to the
-# share after late_after_hours; a late first attempt is log-uniform between late_after_hours and the lead's
-# days to Won. The two must agree: a median below late_after_hours needs a share after it below one half
-# (issue #5; at the median's high end of 24 h they do not, awaiting the user's ruling).
+# Hours to the first Contact attempt, in two pieces (issue #5, ruled 2026-10-01):
+# - below late_after_hours, a lognormal fitted to first_attempt_delay_median_hours and to the share after
+#   late_after_hours (first_attempt_after_24h), so both numbers hold;
+# - a late first attempt (that share) is log-uniform between late_after_hours and the lead's days to Won, so
+#   every first attempt comes before the lead's cycle would end and no tail runs off the calendar.
+# The two numbers must agree: a median below late_after_hours needs a share after it below one half.
 [handling]
 late_after_hours = 24
 
 [handling.first_attempt_delay_median_hours]
 low = 0.5
 middle = 4
-high = 24
+high = 12
 confidence = "estimated"
-source = "neglect-and-mess.md §2: median 39 min (real estate audit); 48% of HBR responders within 1 h"
+source = "neglect-and-mess.md §2: median 39 min (real estate audit); 48% of HBR responders within 1 h; high end cut from 24 h to 12 h so it agrees with first_attempt_after_24h at 45%"
 
 [handling.first_attempt_after_24h]
 low = 0.10
