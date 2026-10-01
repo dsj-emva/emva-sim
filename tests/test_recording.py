@@ -253,7 +253,7 @@ def test_the_profiles_share_of_lost_deals_have_no_reason(generated, setting):
 @pytest.mark.parametrize("setting", ends("loss.recorded_differs_from_truth"))
 def test_the_profiles_share_of_recorded_reasons_differ_from_the_true_one(generated, setting):
     given = [(d, t) for d, t in lost_with_truth(generated(setting)) if d["Closed Lost Reason"]]
-    differs = sum(MEANINGS[d["Closed Lost Reason"]] != t["true_loss_reason"] for d, t in given)
+    differs = sum(MEANINGS[t["recorded_loss_reason"]] != t["true_loss_reason"] for _, t in given)
     assert_rate(differs, len(given), number(setting, "loss.recorded_differs_from_truth"))
 
 

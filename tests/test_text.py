@@ -4,19 +4,28 @@ Reasons and bots' spam, written from the phrase bank and the echoed test cache (
 One fixed seed, six months of leads, exported long after the last one so their notes are in.
 """
 
+import re
 import shutil
+from collections import defaultdict
 from datetime import date
 
 import pytest
-from conftest import PROFILE, REAL_PROFILE, assert_rate, kinds, number, rows
+import separability
+from conftest import PROFILE, REAL_PROFILE, STAGES, assert_rate, ends, kinds, number, rows
 
 from emva_sim import dataset, datasets, phrases
+from emva_sim.hidden_truth import CALL_NOTES, CLOSED_LOST_REASON, NOTE_BODY
+from emva_sim.hidden_truth import MESSAGE as MESSAGE_TEXT
 from emva_sim.intake import RowKind
 from emva_sim.phrases import MissingVariations
 
 HISTORY = dataset.History(start=date(2024, 1, 1), end=date(2024, 6, 30), export=date(2025, 12, 31))
 EXPORT = "export/with-calls-and-notes"
 CONTACTS = f"{EXPORT}/hubspot-crm-exports-all-contacts-2025-12-31.csv"
+DEALS = f"{EXPORT}/hubspot-crm-exports-safari-enquiries-2025-12-31.csv"
+CALLS = f"{EXPORT}/hubspot-crm-exports-all-calls-2025-12-31.csv"
+NOTES = f"{EXPORT}/hubspot-crm-exports-all-notes-2025-12-31.csv"
+TEXTS = "hidden-truth/text.csv"
 MESSAGE = "Message"
 
 
@@ -86,3 +95,194 @@ def test_the_profiles_share_of_bots_write_spam(generated, setting):
     # Gibberish has no link: a third of the spam, by kind.
     share = number(setting, "mess.bot_spam_message") * 2 / 3
     assert_rate(len(spam), len(bots), share)
+
+
+def texts(folder, kind=None):
+    found = rows(folder / TEXTS)
+    return [t for t in found if kind is None or t["text"] == kind]
+
+
+def notes_of_deal(folder):
+    """Each deal's Sales notes from the hidden truth: call notes and note bodies."""
+    by_deal = defaultdict(list)
+    for t in texts(folder):
+        if t["text"] in (CALL_NOTES, NOTE_BODY):
+            by_deal[t["deal_record_id"]].append(t)
+    return by_deal
+
+
+def attempted(folder):
+    return [r for r in kinds(folder, RowKind.LEAD) if r["first_contact_attempt_at"]]
+
+
+@pytest.mark.parametrize("setting", ends("notes.attempted_with_any_note"))
+def test_the_profiles_share_of_attempted_leads_have_sales_notes(generated, setting):
+    folder = generated(setting)
+    noted = notes_of_deal(folder)
+    leads = attempted(folder)
+    with_notes = [r for r in leads if noted[r["deal_record_id"]]]
+    assert_rate(len(with_notes), len(leads), number(setting, "notes.attempted_with_any_note"))
+    neglected = [r for r in kinds(folder, RowKind.LEAD) if not r["first_contact_attempt_at"]]
+    assert not [r for r in neglected if noted[r["deal_record_id"]]]
+
+
+def groups(text_row):
+    return {pid.split("#")[0] for pid in text_row["phrase_ids"].split(";") if pid}
+
+
+def engaged_before_export(folder):
+    """The deals that truly entered In Discussion (Engaged) before the export."""
+    return {
+        c["deal_record_id"]
+        for c in rows(folder / STAGES)
+        if c["crm_stage"] == "In Discussion"
+        and c["true_entered_at"]
+        and c["true_entered_at"] < "2025-12-31"
+    }
+
+
+def test_notes_say_whether_the_lead_is_a_real_buyer_only_from_engaged_on(middle):
+    noted = notes_of_deal(middle)
+    engaged = engaged_before_export(middle)
+    checked = 0
+    for row in attempted(middle):
+        if not noted[row["deal_record_id"]]:
+            continue
+        said = set().union(*(groups(t) for t in noted[row["deal_record_id"]]))
+        meaning = {
+            g.rsplit(".", 1)[1]
+            for g in said
+            if (".discovery." in g or ".follow_up." in g) and not g.endswith(".revised")
+        }
+        if row["deal_record_id"] in engaged:
+            assert meaning == {"real_buyer" if row["real_buyer"] == "yes" else "not_real_buyer"}
+            checked += 1
+        else:
+            assert not meaning, row
+    assert checked
+
+
+@pytest.mark.parametrize(
+    ("setting", "flag", "share"),
+    [
+        *[(s, "abbreviated", "notes.with_abbreviation") for s in ends("notes.with_abbreviation")],
+        *[(s, "typo", "notes.with_typo") for s in ends("notes.with_typo")],
+    ],
+)
+def test_notes_carry_abbreviations_and_typos_at_their_shares(generated, setting, flag, share):
+    notes = [t for t in texts(generated(setting)) if t["text"] in (CALL_NOTES, NOTE_BODY)]
+    marked = sum(t[flag] == "yes" for t in notes)
+    assert_rate(marked, len(notes), number(setting, share))
+
+
+def test_the_notes_export_holds_each_note_on_its_deal_and_contact(middle):
+    deals = {d["Record ID"]: d for d in rows(middle / DEALS)}
+    exported = rows(middle / NOTES)
+    assert exported
+    assert list(exported[0]) == [
+        "Record ID",
+        "Activity date",
+        "Note body",
+        "Associated Contact",
+        "Associated Contact IDs",
+        "Associated Deal",
+        "Associated Deal IDs",
+    ]
+    truth = {t["activity_record_id"]: t for t in texts(middle, NOTE_BODY)}
+    assert set(truth) == {n["Record ID"] for n in exported}
+    for note in exported:
+        deal = deals[note["Associated Deal IDs"]]
+        assert deal["Associated Contact IDs"] == note["Associated Contact IDs"]
+        assert note["Note body"]
+        assert note["Activity date"] < "2025-12-31"
+
+
+def test_a_logged_call_has_notes_only_on_a_lead_with_notes_and_says_what_happened(middle):
+    calls = rows(middle / CALLS)
+    truth = {t["activity_record_id"]: t for t in texts(middle, CALL_NOTES)}
+    assert {c["Record ID"] for c in calls if c["Call notes"]} == set(truth)
+    for call in calls:
+        if call["Call notes"]:
+            said = groups(truth[call["Record ID"]])
+            if call["Call outcome"] == "Connected":
+                assert any(".discovery." in g for g in said)
+            else:
+                assert said == {f"notes.call.{call['Call outcome'].lower().replace(' ', '_')}"}
+
+
+def test_a_closed_lost_reason_is_written_from_the_reason_the_team_recorded(middle):
+    truth = {r["deal_record_id"]: r for r in rows(middle / "hidden-truth/hidden-truth.csv")}
+    reasons = {t["deal_record_id"]: t for t in texts(middle, CLOSED_LOST_REASON)}
+    lost = [d for d in rows(middle / DEALS) if d["Deal Stage"] == "Lost"]
+    assert lost
+    for deal in lost:
+        recorded = truth[deal["Record ID"]]["recorded_loss_reason"]
+        assert bool(deal["Closed Lost Reason"]) == bool(recorded), deal["Record ID"]
+        if recorded:
+            assert groups(reasons[deal["Record ID"]]) == {f"loss_reason.{recorded}"}
+    shown = {d["Closed Lost Reason"] for d in lost if d["Closed Lost Reason"]}
+    assert len(shown) > len({truth[d["Record ID"]]["recorded_loss_reason"] for d in lost})
+
+
+def test_no_phrase_id_or_hidden_text_column_reaches_an_export(middle):
+    for path in sorted((middle / "export").rglob("*.csv")):
+        content = path.read_text(encoding="utf-8")
+        assert not re.search(r"[a-z_]+\.[a-z_. ]+#\d", content), path
+        header = set(rows(path)[0])
+        assert not header & {"phrase_ids", "prohibited_mentions", "fact_differs_from_fields"}
+
+
+def written_messages(folder):
+    """Each genuine Lead's written message (not blank or a token) as its contact shows it, with
+    its hidden truth and the text's."""
+    messages = message_of_deal(folder)
+    truth = {t["deal_record_id"]: t for t in texts(folder, MESSAGE_TEXT)}
+    return [
+        (messages[r["deal_record_id"]], r, truth[r["deal_record_id"]])
+        for r in kinds(folder, RowKind.LEAD)
+        if truth[r["deal_record_id"]]["shape"] not in ("blank", "token")
+    ]
+
+
+def test_every_lead_with_a_decision_made_and_no_other_writes_one_in_its_message(middle):
+    found = written_messages(middle)
+    for _, row, text in found:
+        committed = {g for g in groups(text) if g.endswith(".commitment")}
+        assert bool(committed) == (row["text_commitment"] == "yes"), row["deal_record_id"]
+    assert sum(row["text_commitment"] == "yes" for _, row, _ in found)
+
+
+COMMITMENT_SETTINGS = ["middle", "effects.text_commitment.share_of_leads@high", "all-high"]
+
+
+@pytest.mark.parametrize("setting", COMMITMENT_SETTINGS)
+def test_no_word_or_short_phrase_tells_a_decision_made_from_none(generated, setting):
+    found = [
+        (text, row["text_commitment"] == "yes")
+        for text, row, _ in written_messages(generated(setting))
+    ]
+    assert separability.separating(found) == [], separability.strongest(found)
+
+
+def engaged_notes(folder):
+    """Each genuine Lead's Sales notes, joined, for the Leads with notes that reached Engaged
+    before the export, and whether it is a real buyer."""
+    exported = {c["Record ID"]: c["Call notes"] for c in rows(folder / CALLS)}
+    exported |= {n["Record ID"]: n["Note body"] for n in rows(folder / NOTES)}
+    noted = notes_of_deal(folder)
+    engaged = engaged_before_export(folder)
+    return [
+        (
+            " ".join(exported[t["activity_record_id"]] for t in noted[r["deal_record_id"]]),
+            r["real_buyer"] == "yes",
+        )
+        for r in kinds(folder, RowKind.LEAD)
+        if r["deal_record_id"] in engaged and noted[r["deal_record_id"]]
+    ]
+
+
+@pytest.mark.parametrize("setting", ["middle", "notes.real_buyer_share@high", "all-high"])
+def test_no_word_or_short_phrase_in_the_notes_tells_a_real_buyer_from_the_rest(generated, setting):
+    found = engaged_notes(generated(setting))
+    assert sum(flag for _, flag in found) > 100
+    assert separability.separating(found) == [], separability.strongest(found)

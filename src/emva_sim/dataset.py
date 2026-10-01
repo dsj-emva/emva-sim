@@ -12,7 +12,7 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 from random import Random
 
-from emva_sim import hidden_truth, hubspot, intake, leads, messages, profile
+from emva_sim import hidden_truth, hubspot, intake, leads, messages, notes, profile
 from emva_sim.hubspot import Record
 from emva_sim.intake import RowKind
 from emva_sim.leads import Lead
@@ -88,6 +88,8 @@ def write(
             owner, recorded = rng.choice(p["team"]["owners"]), recording.not_a_lead(s.submitted_at)
         records.append(Record(deal_id, contact_id, owner, s, recorded))
 
+    export_at = datetime.combine(history.export, datetime.min.time())
+    activities = notes.Notes(p, phrases, writer, rng).write(records, paths, export_at)
     shutil.rmtree(folder, ignore_errors=True)
-    hubspot.Export(p, records, history.export).write(folder / "export", rng)
-    hidden_truth.write(folder / "hidden-truth", p, records, paths)
+    hubspot.Export(p, records, activities, history.export).write(folder / "export")
+    hidden_truth.write(folder / "hidden-truth", p, records, paths, activities)

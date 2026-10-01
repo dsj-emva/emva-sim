@@ -411,57 +411,73 @@ recap = [
   "Call with lead about {countries}, {party} people, dates {year}.",
 ]
 
-# What the conversation showed about the Lead (effects.notes_real_buyer), in meaning, not keywords.
+# What the conversation showed about the Lead (effects.notes_real_buyer), in meaning, not keywords:
+# the two lists are written in pairs that share their small words ("no", "still", "said", "but",
+# "will", "next", "asked"), so only what the note says tells them apart.
 [notes.discovery]
 real_buyer = [
-  "Partner keen, checking annual leave before we hold space.",
-  "Asked good questions about the private vehicle and fine with the budget.",
-  "Has read up on the camps and knows what they want; wants the itinerary by Friday.",
-  "Wants a call with both of them on Thursday to go through the options.",
-  "Asked how the deposit works and when it is due.",
+  "No issue with the budget, wants to hold space next week.",
   "Said they would rather book with us than go direct.",
-  "Lovely couple, very clear about what they want, happy with the price per person.",
-  "Already sent passport names so we can hold the internal flights.",
-  "Happy with the camp style suggested, just needs to pick dates with work.",
-  "Talked about the budget openly, it fits what they are asking for.",
-  "Keen to get going, asked us to send the itinerary as soon as possible.",
-  "Knows the area well from a previous trip and wants the same guide if possible.",
+  "Still keen after seeing the prices, asked how the deposit works.",
   "Will discuss with partner tonight and come back tomorrow with dates.",
-  "Clear decision-maker, wants to lock in the camps this week.",
+  "Wants a call with both of them on Thursday, any time, to go through the options.",
+  "Asked for a deposit invoice as soon as the camps confirm.",
+  "Knows the area well from a trip last year, wants the same guide again.",
+  "Happy with the camp style, but needs to pick dates with work first.",
+  "Already sent passport names so we can hold the internal flights.",
+  "Lovely couple, very clear about what they want and about the time of year.",
+  "Talked about the budget openly, it fits the trip they are asking for.",
+  "Clear decision-maker, not one to wait, wants to lock in the camps.",
+  "Says the price is fine and means it, asked us to start on the itinerary.",
+  "Has been thinking about this for years, partner keen, only checking time off.",
 ]
 not_real_buyer = [
-  "Just pricing for now, will come back.",
-  "Says they're collecting quotes from a few companies, no dates.",
-  "Not sure about dates, maybe next year or the one after.",
+  "No budget given, wants to think about it next year.",
+  "Said they are collecting quotes from a few companies first.",
+  "Still not sure about dates after seeing the prices, asked for time.",
+  "Will discuss with partner some time, no rush apparently.",
   "Wants five countries in a week for a fraction of the cost.",
-  "Only after a sample itinerary to show family, no plans to travel yet.",
-  "Vague on budget, changed the subject when asked.",
-  "Will discuss with partner, no rush apparently.",
-  "Asked for the cheapest option for 'whenever'.",
-  "Hard to pin down, kept saying they would think about it.",
-  "Seemed to be researching for an article rather than travelling.",
-  "Asked about the deposit only to say they never pay one up front.",
+  "Asked us to find the cheapest camps for 'whenever'.",
+  "Keen in principle, but said the same about two trips last year.",
+  "Hard to pin down, kept saying they would think about it with work.",
+  "Only after a sample itinerary to show family so we can stop calling.",
+  "Pleasant couple, unclear about what they want or when.",
+  "Vague about the budget, changed the subject when asked about the trip.",
+  "Seemed to be researching an article, not planning a trip this year.",
   "Says price is no issue, then asked for a cheaper version with the same camps.",
-  "Pleasant call but no idea when or with whom they would go.",
-  "Keen in principle, but said the same about two other trips last year.",
+  "Asked about the deposit only to say they never pay one up front.",
 ]
 
+# The note on the first itinerary sent, written in pairs as the discovery notes are; each later
+# version gets a revised note, which says nothing about the Lead.
 [notes.follow_up]
+revised = [
+  "Sent the revised itinerary with the changes discussed.",
+  "Revised costing sent with the new camp dates.",
+  "Updated itinerary sent with the night swap.",
+  "New version of the itinerary sent with flights added.",
+  "Itinerary updated with a different camp and sent.",
+  "Sent version 2 of the itinerary with the extra night.",
+]
 real_buyer = [
-  "Itinerary version 2 sent with the swap they asked for; they want to hold space.",
-  "Sent itinerary version 2; they asked about paying the deposit by card.",
+  "Itinerary version 2 sent; quick reply, keen to hold space.",
   "Follow up call: happy with the camps, just checking flights.",
-  "They replied the same day with small changes only, itinerary nearly final.",
-  "Itinerary sent, they called back within the hour with questions about transfers.",
-  "Follow up: both of them like the plan, asked us to hold the rooms.",
+  "No reply by email, but they called to say the deposit goes over tomorrow.",
+  "No changes needed, deposit coming next week.",
+  "Still on track, thinking only about which flights; asked for the final itinerary.",
+  "Last version sent, want to book it the same day.",
+  "They asked about a cheaper camp on one night, but otherwise ready.",
+  "Ready now: no more thinking, both like the plan and want the rooms held.",
 ]
 not_real_buyer = [
-  "Sent itinerary, no reply. Follow up next week.",
-  "Itinerary sent; they asked for a cheaper version again.",
-  "Follow up email, they said they are still thinking.",
-  "Chased about the itinerary, said busy and will get back to us.",
-  "Itinerary version 2 sent, still no dates from them.",
-  "Follow up call: polite, but nothing has moved since last time.",
+  "Itinerary version 2 sent; no reply yet, will chase next week.",
+  "Follow up call: polite, but they had nothing new on the camps.",
+  "No reply by email, and they did not pick up to say why.",
+  "No changes asked for, no dates coming either.",
+  "Still thinking, they asked for more time on the itinerary.",
+  "Last version sent, want to wait and see about it.",
+  "They asked about a cheaper version of the whole trip again.",
+  "Months now: they said they are still thinking about the plan.",
 ]
 
 # ---------------------------------------------------------------------------------------------------------

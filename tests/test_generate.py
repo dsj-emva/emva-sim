@@ -15,8 +15,10 @@ HISTORY = dataset.History(start=date(2024, 1, 1), end=date(2024, 6, 30), export=
 DEALS = "export/with-calls-and-notes/hubspot-crm-exports-safari-enquiries-2024-07-05.csv"
 CONTACTS = "export/with-calls-and-notes/hubspot-crm-exports-all-contacts-2024-07-05.csv"
 CALLS = "export/with-calls-and-notes/hubspot-crm-exports-all-calls-2024-07-05.csv"
+NOTES = "export/with-calls-and-notes/hubspot-crm-exports-all-notes-2024-07-05.csv"
 TRUTH = "hidden-truth/hidden-truth.csv"
 STAGE_HISTORY = "hidden-truth/stage-history.csv"
+TEXT = "hidden-truth/text.csv"
 
 
 def rows(path):
@@ -58,7 +60,7 @@ def test_the_same_seed_gives_byte_identical_files(tmp_path):
     first = dataset.generate(PROFILE, "middle", seed=7, out=tmp_path / "a", history=SHORT)
     second = dataset.generate(PROFILE, "middle", seed=7, out=tmp_path / "b", history=SHORT)
     assert files(first) == files(second)
-    assert len(files(first)) == 7
+    assert len(files(first)) == 9
 
 
 def test_the_hidden_truth_gives_a_deal_value_only_to_quoted_or_won_deals(middle):
@@ -122,7 +124,7 @@ def test_generating_again_replaces_the_previous_dataset(tmp_path):
     dataset.generate(PROFILE, "middle", seed=7, out=tmp_path, history=SHORT)
     later = dataset.History(start=SHORT.start, end=SHORT.end, export=date(2024, 4, 1))
     folder = dataset.generate(PROFILE, "middle", seed=7, out=tmp_path, history=later)
-    assert len(files(folder)) == 7
+    assert len(files(folder)) == 9
     assert all("2024-04-01" in str(p) for p in files(folder) if "export" in str(p))
 
 
@@ -138,10 +140,12 @@ def test_the_dataset_folder_holds_both_export_variants_and_the_hidden_truth(midd
         DEALS,
         CONTACTS,
         CALLS,
+        NOTES,
         DEALS.replace("with-calls-and-notes", "deals-and-contacts-only"),
         CONTACTS.replace("with-calls-and-notes", "deals-and-contacts-only"),
         TRUTH,
         STAGE_HISTORY,
+        TEXT,
     }
     assert middle.name == "middle"
 
@@ -159,7 +163,7 @@ def test_no_hidden_truth_column_appears_in_any_export(middle):
 
 
 def test_every_field_is_double_quoted(middle):
-    for path in [*export_files(middle), middle / TRUTH, middle / STAGE_HISTORY]:
+    for path in [*export_files(middle), middle / TRUTH, middle / STAGE_HISTORY, middle / TEXT]:
         with open(path, newline="", encoding="utf-8") as f:
             raw = list(csv.reader(f))
         quoted = io.StringIO(newline="")
@@ -304,6 +308,7 @@ def test_the_hidden_truth_has_one_row_per_deal_keyed_by_both_record_ids(middle):
         "text_commitment",
         "real_buyer",
         "true_loss_reason",
+        "recorded_loss_reason",
         "row_kind",
         "duplicate_of_deal_record_id",
         "invalid_email",

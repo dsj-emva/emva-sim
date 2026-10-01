@@ -132,7 +132,7 @@ def _wrong(rng: Random, p: dict, form_field: dict, value: str, lead: Lead) -> st
                 shifted = str(int(year.group()) + rng.choice([-1, 1]))
                 return value[: year.start()] + shifted + value[year.end() :]
             return f"{calendar.month_name[rng.randint(1, 12)]} {lead.travel_at.year}"
-    slipped = _slip(rng, value)
+    slipped = slip(rng, value)
     return slipped if slipped != value else value + value[-1]
 
 
@@ -240,12 +240,12 @@ def _other_address(rng: Random, email: str, alias_tag: str) -> str:
         f"{local}+{alias_tag}@{domain}",
         f"{local.replace('.', '')}@{domain}",
         f"{local}@{rng.choice([d for d in EMAIL_DOMAINS if d != domain])}",
-        f"{_slip(rng, local)}@{domain}",
+        f"{slip(rng, local)}@{domain}",
     ]
     return rng.choice([v for v in variants if v != email])
 
 
-def _slip(rng: Random, text: str) -> str:
+def slip(rng: Random, text: str) -> str:
     """Two neighbouring characters typed the wrong way round, or one left out."""
     if len(text) < 3:
         return text + text[-1:]

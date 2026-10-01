@@ -223,7 +223,7 @@ class Writer:
             built.close()
             return Text(built.text(), tuple(p.phrase.id for p in built.parts), language, TOKEN)
         shape = self._shape(rng, lead)
-        values = self._values(rng, lead, language)
+        values = self.values(rng, lead, language)
         allowed = (SHAPE_SLOTS[shape] | MENTION_SLOTS) & set(values)
         built = _Message(rng, self.phrases, base, lead.message_words, values, allowed)
         planted = self._required(rng, built, lead)
@@ -292,8 +292,8 @@ class Writer:
             built.take("nights", ["nights"])
             built.take("budget", ["budget"])
 
-    def _values(self, rng: Random, lead: Lead, language: str) -> dict:
-        """The slots this Lead can fill, in the message's language."""
+    def values(self, rng: Random, lead: Lead, language: str) -> dict:
+        """The slots this Lead can fill, in this language."""
         words_of = self.text["languages"][language]
         names = words_of["countries"]
         ages = self.text["adult_ages"]
