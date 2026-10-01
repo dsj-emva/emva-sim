@@ -87,7 +87,7 @@ one_at_a_time = [
   "effects.lead_source.paid_social",
   "effects.lead_source.organic",
   "effects.repeat_client.odds_ratio",
-  "effects.repeat_client.share_of_leads",
+  "form.answers.travelled_before",
   "effects.repeat_client.floor_penalty_kept",
   "effects.response_speed_by_quality.high_quality_within_1h",
   "effects.response_speed_by_quality.low_quality_within_1h",
@@ -100,7 +100,7 @@ one_at_a_time = [
   "effects.text_commitment.odds_ratio",
   "effects.text_commitment.share_of_leads",
   "effects.notes_real_buyer.odds_ratio",
-  "effects.proxy_trap_country.group_a_share",
+  "markets.group_a_share",
   "effects.proxy_trap_country.budget_multiplier",
   "effects.proxy_trap_country.lead_time_multiplier",
 ]
@@ -108,7 +108,6 @@ held_at_middle = [
   "volume.seasonality.uk_europe.january_weight",
   "volume.seasonality.uk_europe.november_december_weight",
   "volume.seasonality.us.november_to_march_weight",
-  "form.answers.includes_children",
   "form.party_mix.couple",
   "form.party_mix.family",
   "form.party_mix.friends",
@@ -122,9 +121,55 @@ held_at_middle = [
   "deal.deposit_share",
   "deal.final_to_first_quote",
   "process.itinerary_versions_per_won",
-  "handling.first_attempt_by_email",
+  "handling.attempt_by_email",
   "notes.short_note_words",
+  "volume.traffic_source.organic",
+  "volume.traffic_source.paid_social",
+  "volume.traffic_source.referral",
+  "form.answers.countries_named",
+  "form.answers.enquired_before",
+  "form.answers.dates_fixed",
+  "form.answers.dates_flexible",
+  "form.answers.newsletter_opt_in",
+  "form.answers.month_when_no_exact_dates",
+  "form.answers.year_when_no_month",
+  "form.party_size.family_children",
+  "form.party_size.friends_adults",
+  "deal.nights_sigma",
+  "process.booking_lead_time_sigma",
+  "process.lost_after_provisional_hold",
 ]
+
+# ---------------------------------------------------------------------------------------------------------
+# Markets and the travel season: facts the base draws and the planted effects both read.
+# ---------------------------------------------------------------------------------------------------------
+
+[season]
+peak_months = [7, 8, 9, 10]
+
+# Source markets: group A is the US, group B the UK and Europe. Each names the seasonality it follows and
+# its countries, each country with the phone formats its leads write ("#" is any digit). The formats use
+# the ranges regulators reserve for fiction (Ofcom 07700 900xxx, US 555-01xx, ARCEP 06 39 98 xx xx), so no
+# number belongs to anyone.
+[markets.groups.a]
+seasonality = "us"
+countries = [
+  { name = "United States", phones = ["+1 (212) 555-01##", "+1 (312) 555-01##", "+1 (415) 555-01##", "+1 (617) 555-01##", "+1 (303) 555-01##"] },
+]
+
+[markets.groups.b]
+seasonality = "uk_europe"
+countries = [
+  { name = "United Kingdom", phones = ["+44 7700 900###"] },
+  { name = "France", phones = ["+33 6 39 98 ## ##"] },
+]
+
+[markets.group_a_share]
+low = 0.30
+middle = 0.50
+high = 0.70
+confidence = "guessed"
+source = "none"
 
 # ---------------------------------------------------------------------------------------------------------
 # Volume and season.
@@ -138,7 +183,10 @@ confidence = "estimated"
 source = "cycle-and-deal-size.md §4: from a guessed operator size; no published volume"
 
 # Enquiries by month of submission, as a weight on the average month (1.0 elsewhere). The booking cycle
-# depends on the source market (the user, 2026-10-01); the markets are the proxy trap's groups.
+# depends on the source market (the user, 2026-10-01); [markets] says which market follows which.
+[volume.seasonality]
+months ={ january_weight = [1], november_december_weight = [11, 12], november_to_march_weight = [11, 12, 1, 2, 3] }
+
 [volume.seasonality.uk_europe.january_weight]
 low = 1.3
 middle = 1.6
@@ -160,34 +208,225 @@ high = 1.7
 confidence = "estimated"
 source = "the user, from experience (2026-10-01): the key booking cycle for the US is November to March; size guessed"
 
+# Original Traffic Source of each lead (HubSpot's labels); paid search is the rest. The names match
+# effects.lead_source. Added for the generator (issue #5), awaiting the user's review.
+[volume.traffic_source]
+reference = "paid_search"
+labels = { paid_search = "Paid Search", organic = "Organic Search", paid_social = "Paid Social", referral = "Referrals" }
+# What a lead answers to "How did you hear about us?" for each source (one option key at random); a repeat
+# client answers heard_as_repeat_client.
+heard_as = { paid_search = ["google"], organic = ["google", "ai_assistant", "magazine", "other"], paid_social = ["instagram", "facebook"], referral = ["friend", "travel_agent"] }
+heard_as_repeat_client = "travelled_before"
+
+[volume.traffic_source.organic]
+low = 0.15
+middle = 0.25
+high = 0.35
+confidence = "guessed"
+source = "none; added for the generator (issue #5), awaiting the user's review"
+
+[volume.traffic_source.paid_social]
+low = 0.15
+middle = 0.25
+high = 0.35
+confidence = "guessed"
+source = "none; added for the generator (issue #5), awaiting the user's review"
+
+[volume.traffic_source.referral]
+low = 0.05
+middle = 0.10
+high = 0.15
+confidence = "guessed"
+source = "none; added for the generator (issue #5), awaiting the user's review"
+
 # ---------------------------------------------------------------------------------------------------------
 # The enquiry form.
 # Field labels are what the form shows; the export columns below carry them.
 # ---------------------------------------------------------------------------------------------------------
 
 [form]
-fields = [
-  { label = "Title", kind = "choice", options = ["Mr", "Mrs", "Ms", "Miss", "Dr", "Mx"], required = true },
-  { label = "First name", kind = "text", required = true },
-  { label = "Last name", kind = "text", required = true },
-  { label = "Email", kind = "email", required = true },
-  { label = "Phone", kind = "phone", required = false },
-  { label = "Country of residence", kind = "country", required = true },
-  { label = "Where would you like to go?", kind = "multi", options = ["Kenya", "Tanzania", "Botswana", "South Africa", "Rwanda", "Uganda", "Namibia", "Zambia", "Zimbabwe", "Not sure yet"], required = true },
-  { label = "When would you like to travel?", kind = "month_year", allow = ["exact dates", "month", "year only", "not sure"], required = true },
-  { label = "Are your dates flexible?", kind = "choice", options = ["Fixed", "Flexible", "Not sure"], required = false },
-  { label = "Number of nights", kind = "choice", options = ["Under 5", "5-7", "8-10", "11-14", "15+", "Not sure"], required = false },
-  { label = "Number of adults", kind = "number", required = true },
-  { label = "Number of children", kind = "number", required = false },
-  { label = "Ages of children", kind = "text", required = false },
-  { label = "Accommodation style", kind = "choice", options = ["Comfortable", "Luxury", "Ultra-luxury", "Not sure"], required = false },
-  { label = "Budget per person (excluding international flights)", kind = "choice", options = ["Under $4,000", "$4,000 - $7,000", "$7,000 - $10,000", "$10,000 - $20,000", "$20,000+", "Not sure"], required = false },
-  { label = "Have you travelled with us before?", kind = "choice", options = ["Yes", "I have enquired before", "No"], required = false },
-  { label = "How did you hear about us?", kind = "choice", options = ["Google", "Instagram", "Facebook", "Recommended by a friend", "Travelled with you before", "Magazine", "Travel agent", "ChatGPT or another AI assistant", "Other"], required = false },
-  { label = "Tell us about your dream trip", kind = "long_text", required = false },
-  { label = "Sign me up for the newsletter", kind = "checkbox", required = false },
-]
 source = "enquiry-forms.md §1: fields seen on 12 operator forms (Expert Africa, Go2Africa, Rhino Africa, Steppes, Audley, Scott Dunn, &Beyond, Cazenove+Loyd, Natural Selection, Porini, SafariBookings, Noboru); budget bands after Go2Africa and Scott Dunn"
+
+# "role" says what a field asks and an option's "key", "min"/"max" or "not_sure" what it means, so the
+# generator reads none of this form's wording. A band holds values from min (inclusive) to max (exclusive).
+[[form.fields]]
+label = "Title"
+role = "title"
+kind = "choice"
+required = true
+options = [
+  { label = "Mr", key = "mr" },
+  { label = "Mrs", key = "mrs" },
+  { label = "Ms", key = "ms" },
+  { label = "Miss", key = "miss" },
+  { label = "Dr", key = "dr" },
+  { label = "Mx", key = "mx" },
+]
+
+[[form.fields]]
+label = "First name"
+role = "first_name"
+kind = "text"
+required = true
+
+[[form.fields]]
+label = "Last name"
+role = "last_name"
+kind = "text"
+required = true
+
+[[form.fields]]
+label = "Email"
+role = "email"
+kind = "email"
+required = true
+
+[[form.fields]]
+label = "Phone"
+role = "phone"
+kind = "phone"
+required = false
+
+[[form.fields]]
+label = "Country of residence"
+role = "country"
+kind = "country"
+required = true
+
+[[form.fields]]
+label = "Where would you like to go?"
+role = "destinations"
+kind = "multi"
+required = true
+options = [
+  { label = "Kenya" },
+  { label = "Tanzania" },
+  { label = "Botswana" },
+  { label = "South Africa" },
+  { label = "Rwanda" },
+  { label = "Uganda" },
+  { label = "Namibia" },
+  { label = "Zambia" },
+  { label = "Zimbabwe" },
+  { label = "Not sure yet", not_sure = true },
+]
+
+[[form.fields]]
+label = "When would you like to travel?"
+role = "travel_date"
+kind = "month_year"
+allow = ["exact dates", "month", "year only", "not sure"]
+not_sure_answer = "Not sure"
+required = true
+
+[[form.fields]]
+label = "Are your dates flexible?"
+role = "dates_flexible"
+kind = "choice"
+required = false
+options = [
+  { label = "Fixed", key = "fixed" },
+  { label = "Flexible", key = "flexible" },
+  { label = "Not sure", not_sure = true },
+]
+
+[[form.fields]]
+label = "Number of nights"
+role = "nights"
+kind = "choice"
+required = false
+options = [
+  { label = "Under 5", max = 5 },
+  { label = "5-7", min = 5, max = 8 },
+  { label = "8-10", min = 8, max = 11 },
+  { label = "11-14", min = 11, max = 15 },
+  { label = "15+", min = 15 },
+  { label = "Not sure", not_sure = true },
+]
+
+[[form.fields]]
+label = "Number of adults"
+role = "adults"
+kind = "number"
+required = true
+
+[[form.fields]]
+label = "Number of children"
+role = "children"
+kind = "number"
+required = false
+
+[[form.fields]]
+label = "Ages of children"
+role = "children_ages"
+kind = "text"
+required = false
+
+[[form.fields]]
+label = "Accommodation style"
+role = "style"
+kind = "choice"
+required = false
+options = [
+  { label = "Comfortable", key = "comfortable" },
+  { label = "Luxury", key = "luxury" },
+  { label = "Ultra-luxury", key = "ultra_luxury" },
+  { label = "Not sure", not_sure = true },
+]
+
+[[form.fields]]
+label = "Budget per person (excluding international flights)"
+role = "budget_per_person"
+kind = "choice"
+required = false
+options = [
+  { label = "Under $4,000", max = 4000 },
+  { label = "$4,000 - $7,000", min = 4000, max = 7000 },
+  { label = "$7,000 - $10,000", min = 7000, max = 10000 },
+  { label = "$10,000 - $20,000", min = 10000, max = 20000 },
+  { label = "$20,000+", min = 20000 },
+  { label = "Not sure", not_sure = true },
+]
+
+[[form.fields]]
+label = "Have you travelled with us before?"
+role = "travelled_before"
+kind = "choice"
+required = false
+options = [
+  { label = "Yes", key = "yes" },
+  { label = "I have enquired before", key = "enquired_before" },
+  { label = "No", key = "no" },
+]
+
+[[form.fields]]
+label = "How did you hear about us?"
+role = "heard_about"
+kind = "choice"
+required = false
+options = [
+  { label = "Google", key = "google" },
+  { label = "Instagram", key = "instagram" },
+  { label = "Facebook", key = "facebook" },
+  { label = "Recommended by a friend", key = "friend" },
+  { label = "Travelled with you before", key = "travelled_before" },
+  { label = "Magazine", key = "magazine" },
+  { label = "Travel agent", key = "travel_agent" },
+  { label = "ChatGPT or another AI assistant", key = "ai_assistant" },
+  { label = "Other", key = "other" },
+]
+
+[[form.fields]]
+label = "Tell us about your dream trip"
+role = "message"
+kind = "long_text"
+required = false
+
+[[form.fields]]
+label = "Sign me up for the newsletter"
+role = "newsletter"
+kind = "checkbox"
+required = false
 
 # How often leads fill what the form allows them to skip, and what they write.
 [form.answers.states_budget]
@@ -218,12 +457,44 @@ high = 0.80
 confidence = "guessed"
 source = "none"
 
-[form.answers.includes_children]
-low = 0.15
-middle = 0.25
-high = 0.35
+# Leads who answer "Yes" to "Have you travelled with us before?": the repeat clients of effects.repeat_client.
+[form.answers.travelled_before]
+low = 0.01
+middle = 0.03
+high = 0.06
+confidence = "estimated"
+source = "the user, from a client they have worked with (2026-10-01): small, since past clients usually go straight to their existing contact, not the form"
+
+# Of the other leads, those who answer "I have enquired before"; the rest answer "No".
+[form.answers.enquired_before]
+low = 0.03
+middle = 0.08
+high = 0.15
 confidence = "guessed"
-source = "none (enquiry-forms.md §3); Go2Africa party mix 28% families"
+source = "none; added for the generator (issue #5), awaiting the user's review"
+
+# "Are your dates flexible?": Fixed, Flexible, and "Not sure" for the rest.
+[form.answers.dates_fixed]
+low = 0.20
+middle = 0.30
+high = 0.40
+confidence = "guessed"
+source = "none; added for the generator (issue #5), awaiting the user's review"
+
+[form.answers.dates_flexible]
+low = 0.35
+middle = 0.50
+high = 0.55
+confidence = "guessed"
+source = "none; added for the generator (issue #5), awaiting the user's review"
+
+# Leads who tick "Sign me up for the newsletter".
+[form.answers.newsletter_opt_in]
+low = 0.20
+middle = 0.40
+high = 0.60
+confidence = "guessed"
+source = "none; added for the generator (issue #5), awaiting the user's review"
 
 [form.answers.mentions_occasion]
 low = 0.10
@@ -238,6 +509,31 @@ middle = 0.05
 high = 0.10
 confidence = "guessed"
 source = "none (enquiry-forms.md §3)"
+
+# Countries named in "Where would you like to go?" (mean; 1 plus a Poisson number). "Not sure yet" drawn
+# among them stands alone. Added for the generator (issue #5), awaiting the user's review.
+[form.answers.countries_named]
+low = 1.3
+middle = 1.6
+high = 2.0
+confidence = "guessed"
+source = "none; added for the generator (issue #5), awaiting the user's review"
+
+# How leads that give no exact dates answer "When would you like to travel?": a month, else a year only,
+# else "not sure". Added for the generator (issue #5), awaiting the user's review.
+[form.answers.month_when_no_exact_dates]
+low = 0.45
+middle = 0.60
+high = 0.75
+confidence = "guessed"
+source = "none; added for the generator (issue #5), awaiting the user's review"
+
+[form.answers.year_when_no_month]
+low = 0.30
+middle = 0.50
+high = 0.70
+confidence = "guessed"
+source = "none; added for the generator (issue #5), awaiting the user's review"
 
 # Party type; solo is the rest. Middles are Go2Africa's shares of enquiries (16% solo).
 [form.party_mix.couple]
@@ -260,6 +556,30 @@ middle = 0.10
 high = 0.14
 confidence = "estimated"
 source = "cycle-and-deal-size.md §2a: Go2Africa State of Safari 2025 (middle); ends estimated"
+
+# Party sizes. Adults per party type (a friends party has at least its number, plus a Poisson number up to
+# the mean friends_adults below); a family has 1 or more children (1 plus a Poisson number, mean
+# family_children), each aged a whole number of years drawn evenly from child_ages. Children come only
+# with families, so form.party_mix.family is the share of leads with children (the user's ruling,
+# 2026-10-01, replacing form.answers.includes_children). Added for the generator (issue #5), awaiting the
+# user's review.
+[form.party_size]
+adults = { solo = 1, couple = 2, family = 2, friends = 2 }
+child_ages = { min = 0, max = 17 }
+
+[form.party_size.family_children]
+low = 1.5
+middle = 2.0
+high = 2.5
+confidence = "guessed"
+source = "cycle-and-deal-size.md §2a: a family of 4, guessed at 3-6; added for the generator (issue #5), awaiting the user's review"
+
+[form.party_size.friends_adults]
+low = 3.0
+middle = 4.0
+high = 5.0
+confidence = "guessed"
+source = "cycle-and-deal-size.md §2a: a friends group of 4, guessed at 3-6; added for the generator (issue #5), awaiting the user's review"
 
 # The message. Lengths in words.
 [form.message.median_words]
@@ -347,10 +667,22 @@ high = 10
 confidence = "estimated"
 source = "cycle-and-deal-size.md §2a: Go2Africa State of Safari 2025; safari.com Travel Pulse (spread 3-21)"
 
-# Deal value is price per person per night x nights x paying travellers. At the middle this gives a median
+# Nights are lognormal around deal.nights (their median) with this sigma, at least 1.
+[deal.nights_sigma]
+low = 0.30
+middle = 0.45
+high = 0.60
+confidence = "guessed"
+source = "cycle-and-deal-size.md §2a: spread 3-21 nights; added for the generator (issue #5), awaiting the user's review"
+
+# The prices above are season averages (the user's ruling, 2026-10-01): a trip in
+# effects.lead_time_by_season.peak_months pays deal.peak_to_low_season_rate times the low-season rate, and
+# the average over the calendar's travel months (taken as spread evenly) is the price above.
+# Deal value is price per person per night x nights x paying travellers. The research expected a median
 # near $15,000 and a 5th-95th percentile of about $5k-100k (cycle-and-deal-size.md §2a, from Go2Africa's
-# $8,625 per person sharing, a budget stated in enquiries, not booked spend). The generator's tests check
-# that, rather than the profile setting it twice.
+# $8,625 per person sharing, a budget stated in enquiries, not booked spend). At the middle the generator
+# produces, on simulated data, a median of about $16,000 and a 5th-95th percentile of about $4k-72k for
+# quoted deals (issue #5); its tests hold it there, rather than the profile setting it twice.
 [deal.style_mix.luxury]
 low = 0.35
 middle = 0.45
@@ -395,8 +727,8 @@ stages = [
   { name = "Itinerary Sent", ladder = "Proposal" },
   { name = "Provisional Hold", ladder = "Proposal", milestone = true },
   { name = "Deposit Paid", ladder = "Won", closed = "won" },
-  { name = "Travelled", ladder = "Won", after_won = true },
-  { name = "Cancelled", ladder = "Won", after_won = true },
+  { name = "Travelled", ladder = "Won", after_won = "travelled" },
+  { name = "Cancelled", ladder = "Won", after_won = "cancelled" },
   { name = "Lost", ladder = "Lost", closed = "lost" },
 ]
 source = "sales-steps-and-exports.md §2: Safari Portal, SafariOffice, TripCreator, Zoho travel templates"
@@ -454,6 +786,22 @@ high = 9
 confidence = "estimated"
 source = "cycle-and-deal-size.md §1a: Rhino Africa average 186-190 days; Tourism Update"
 
+# Months from deposit to travel are lognormal around the median above with this sigma.
+[process.booking_lead_time_sigma]
+low = 0.4
+middle = 0.6
+high = 0.8
+confidence = "guessed"
+source = "cycle-and-deal-size.md §1a: range 1-18 months, right-skewed; added for the generator (issue #5), awaiting the user's review"
+
+# Share of leads lost at Proposal that had reached Provisional Hold (every Won lead passes through it).
+[process.lost_after_provisional_hold]
+low = 0.05
+middle = 0.15
+high = 0.30
+confidence = "guessed"
+source = "none; added for the generator (issue #5), awaiting the user's review"
+
 [process.itinerary_versions_per_won]
 low = 1
 middle = 2
@@ -488,12 +836,21 @@ high = 0.25
 confidence = "guessed"
 source = "none (neglect-and-mess.md open question 1)"
 
+# Hours to the first Contact attempt, in two pieces (issue #5, ruled 2026-10-01):
+# - below late_after_hours, a lognormal fitted to first_attempt_delay_median_hours and to the share after
+#   late_after_hours (first_attempt_after_24h), so both numbers hold;
+# - a late first attempt (that share) is log-uniform between late_after_hours and the lead's days to Won, so
+#   every first attempt comes before the lead's cycle would end and no tail runs off the calendar.
+# The two numbers must agree: a median below late_after_hours needs a share after it below one half.
+[handling]
+late_after_hours = 24
+
 [handling.first_attempt_delay_median_hours]
 low = 0.5
 middle = 4
-high = 24
+high = 12
 confidence = "estimated"
-source = "neglect-and-mess.md §2: median 39 min (real estate audit); 48% of HBR responders within 1 h"
+source = "neglect-and-mess.md §2: median 39 min (real estate audit); 48% of HBR responders within 1 h; high end cut from 24 h to 12 h so it agrees with first_attempt_after_24h at 45%"
 
 [handling.first_attempt_after_24h]
 low = 0.10
@@ -509,7 +866,8 @@ high = 5
 confidence = "estimated"
 source = "neglect-and-mess.md §3: InsideSales mean 1.3; Velocify (vendor)"
 
-[handling.first_attempt_by_email]
+# Share of Contact attempts made by email (the rest are calls, the only attempts a calls export shows).
+[handling.attempt_by_email]
 low = 0.60
 middle = 0.80
 high = 0.95
@@ -527,7 +885,21 @@ source = "neglect-and-mess.md §4: 24-52% with manual add-ins (Weflow, vendor)"
 # Every dataset is written in both variants, because many advertisers' exports carry no record of Contact
 # attempts (neglect-and-mess.md §4).
 [exports]
-variants = ["with calls and notes", "deals and contacts only"]
+variants = [{ name = "with calls and notes", calls = true }, { name = "deals and contacts only", calls = false }]
+# HubSpot's own contact property for a form field, where it has one; every other field is a custom contact
+# property under its form label (sales-steps-and-exports.md §3).
+contact_properties = { "First name" = "First Name", "Last name" = "Last Name", "Email" = "Email", "Phone" = "Phone Number", "Country of residence" = "Country/Region", "Tell us about your dream trip" = "Message" }
+# Form fields a workflow copies onto the deal as custom deal properties (sales-steps-and-exports.md §3).
+deal_properties = ["Where would you like to go?", "When would you like to travel?", "Are your dates flexible?", "Number of nights", "Number of adults", "Number of children", "Accommodation style", "Budget per person (excluding international flights)", "Have you travelled with us before?", "How did you hear about us?"]
+
+# The sales team, as HubSpot exports owners (made-up names). Added for the generator (issue #5).
+[team]
+owners = ["Amara Okafor", "James Whitfield", "Sofia Marchetti", "Tom Brennan"]
+
+# Titles leads give, as weights by the gender of their made-up first name. Guessed, and kept as plain values
+# rather than ranges because Title is a prohibited input that changes nothing in the Hidden truth.
+[people]
+titles = { female = { mrs = 0.35, ms = 0.35, miss = 0.15, dr = 0.10, mx = 0.05 }, male = { mr = 0.85, dr = 0.10, mx = 0.05 } }
 
 # ---------------------------------------------------------------------------------------------------------
 # How the sales team records stages.
@@ -732,11 +1104,10 @@ note = "reference: a stated budget at or above the floor; missing is not below t
 [effects.lead_time_by_season]
 form = "interaction"
 visible = "Submitted"
-peak_months = [7, 8, 9, 10]
 peak_under_4_months = { low = 0.20, middle = 0.40, high = 0.70, confidence = "guessed", source = "none; shape from operator lead-time advice (Rhino Africa, Yellow Zebra)" }
 off_peak_under_4_months = { low = 0.8, middle = 1.0, high = 1.2, confidence = "guessed", source = "none" }
 over_18_months_or_unsure = { low = 0.40, middle = 0.60, high = 0.85, confidence = "guessed", source = "none" }
-note = "reference: peak 6-14 months ahead, off-peak 1-8 months ahead"
+note = "reference: peak 6-14 months ahead, off-peak 1-8 months ahead; peak is [season].peak_months"
 
 # 4. Date specificity (ordered, additive).
 [effects.date_specificity]
@@ -760,7 +1131,6 @@ note = "reference: paid search. The source is HubSpot's Original Traffic Source 
 form = "additive"
 visible = "Submitted"
 odds_ratio = { low = 4.0, middle = 6.0, high = 10.0, confidence = "estimated", source = "the user, from a client they have worked with (2026-10-01): past clients almost always book again" }
-share_of_leads = { low = 0.01, middle = 0.03, high = 0.06, confidence = "estimated", source = "the user, from a client they have worked with (2026-10-01): small, since past clients usually go straight to their existing contact, not the form" }
 floor_penalty_kept = { low = 0.25, middle = 0.50, high = 0.75, confidence = "guessed", source = "none; share of the budget-floor penalty (on the log-odds) a repeat client still feels" }
 
 # 7. Response speed x lead quality: advertiser behaviour, not a property of the lead (interaction).
@@ -819,7 +1189,6 @@ odds_ratio = { low = 2.0, middle = 3.5, high = 6.0, confidence = "guessed", sour
 [effects.proxy_trap_country]
 form = "confounded"
 visible = "Submitted"
-group_a_share = { low = 0.30, middle = 0.50, high = 0.70, confidence = "guessed", source = "none" }
 budget_multiplier = { low = 1.3, middle = 1.6, high = 2.0, confidence = "guessed", source = "what-predicts-a-booking.md §9: origin predicts strongly (Runggaldier et al. 2023); Go2Africa spend by country" }
 lead_time_multiplier = { low = 1.2, middle = 1.5, high = 2.0, confidence = "guessed", source = "none" }
-note = "group A is the US, group B the UK and Europe; direct effect on the Outcome is zero at every end; carried by Country of residence, phone country code, enquiry language and, through the booking cycle, the month of the enquiry"
+note = "the groups and their shares are in [markets]; group A is the US, group B the UK and Europe; direct effect on the Outcome is zero at every end; carried by Country of residence, phone country code, enquiry language and, through the booking cycle, the month of the enquiry"
