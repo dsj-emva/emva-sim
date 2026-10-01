@@ -77,7 +77,7 @@ def _write(path: Path, header: list[str], rows: Iterable[list[str]]) -> None:
 def _true_path(lead: Lead, path: TruePath) -> list[str]:
     return [
         lead.market_group.upper(),
-        f"{path.win_propensity:.8g}",
+        f"{path.propensity.chance:.8g}",
         _yes_no(path.neglected_lead),
         stamp(path.stage_times.get(ladder.CONTACT_ATTEMPTED)),
         path.reached_stage,
@@ -87,9 +87,9 @@ def _true_path(lead: Lead, path: TruePath) -> list[str]:
         str(len(path.quotes)),
         _yes_no(bool(path.cancelled_at)),
         str(sum(attempt.channel == "call" for attempt in path.attempts)),
-        f"{path.base_log_odds:.6f}",
-        *(f"{term:.6f}" for term in path.terms.values()),
-        _yes_no(path.high_quality),
+        f"{path.propensity.base_log_odds:.6f}",
+        *(f"{term:.6f}" for term in path.propensity.terms.values()),
+        _yes_no(path.propensity.high_quality),
         *(_attribute(getattr(lead, name)) for name in HIDDEN_ATTRIBUTES),
     ]
 

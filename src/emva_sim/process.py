@@ -29,11 +29,23 @@ class ContactAttempt:
 
 
 @dataclass(frozen=True)
-class TruePath:
-    owner: str
+class Propensity:
+    """What sets a lead's chance of a won Outcome once contacted, from the Hidden truth."""
+
     base_log_odds: float
     terms: dict[str, float]
     high_quality: bool
+
+    @property
+    def chance(self) -> float:
+        """The base plus the terms, on the log-odds."""
+        return sigmoid(self.base_log_odds + sum(self.terms.values()))
+
+
+@dataclass(frozen=True)
+class TruePath:
+    owner: str
+    propensity: Propensity
     neglected_lead: bool
     reached_stage: str
     won: bool
@@ -43,15 +55,6 @@ class TruePath:
     provisional_hold_at: datetime | None = None
     travelled_at: datetime | None = None
     cancelled_at: datetime | None = None
-
-    @property
-    def win_propensity(self) -> float:
-        return win_propensity(self.base_log_odds, self.terms)
-
-
-def win_propensity(base_log_odds: float, terms: dict[str, float]) -> float:
-    """A lead's chance of a won Outcome once contacted: the base plus its terms, on the log-odds."""
-    return sigmoid(base_log_odds + sum(terms.values()))
 
 
 def _base_log_odds(terms: list[float], target: float) -> float:
@@ -154,7 +157,10 @@ class Process:
             sum(t.values()) for t, s in zip(terms, starts, strict=True) if not s.neglected_lead
         ]
         base = _base_log_odds(contacted, self.win_rate) if contacted else logit(self.win_rate)
-        return [self._path(rng, *row, base) for row in zip(leads, starts, terms, high, strict=True)]
+        return [
+            self._path(rng, lead, start, Propensity(base, lead_terms, quality))
+            for lead, start, lead_terms, quality in zip(leads, starts, terms, high, strict=True)
+        ]
 
     def _start(self, rng: Random, lead: Lead, looks: float) -> _Start:
         """Owner, neglect and the first Contact attempt: the advertiser's handling of the lead.
@@ -179,19 +185,16 @@ class Process:
         rng: Random,
         lead: Lead,
         start: _Start,
-        terms: dict[str, float],
-        high_quality: bool,
-        base: float,
+        propensity: Propensity,
     ) -> TruePath:
         p = self.p
         owner = start.owner
-        hidden = {"base_log_odds": base, "terms": terms, "high_quality": high_quality}
         start_at = lead.submitted_at
         times = {ladder.SUBMITTED: start_at}
         if start.neglected_lead:
             return TruePath(
                 owner=owner,
-                **hidden,
+                propensity=propensity,
                 neglected_lead=True,
                 reached_stage=ladder.SUBMITTED,
                 won=False,
@@ -200,7 +203,7 @@ class Process:
 
         cycle = lead.cycle_days
         first_attempt = start.first_attempt_days
-        won = rng.random() < win_propensity(base, terms)
+        won = rng.random() < propensity.chance
         stops_before = None if won else rng.choices(ladder.AFTER_CONTACT, self.failing_shares)[0]
 
         at = {ladder.CONTACT_ATTEMPTED: start_at + timedelta(days=first_attempt)}
@@ -235,7 +238,7 @@ class Process:
 
         return TruePath(
             owner=owner,
-            **hidden,
+            propensity=propensity,
             neglected_lead=False,
             reached_stage=reached,
             won=won,
