@@ -1,6 +1,7 @@
 """Leads as they arrive: when each is submitted, the trip it wants, and its answers to the form."""
 
 import calendar
+import math
 from dataclasses import dataclass, field, replace
 from datetime import date, datetime, timedelta
 from random import Random
@@ -25,11 +26,28 @@ class Lead:
     budget_per_person_per_night: float
     cycle_days: float
     travel_at: datetime
+    states_budget: bool
+    gives_phone: bool
+    dates_given: str
+    destinations: tuple[str, ...]
+    message_words: int
+    message_specificity: str
+    text_commitment: bool
+    real_buyer: bool
     answers: dict[str, str] = field(default_factory=dict)
 
     @property
     def deal_value(self) -> float:
-        return self.price_per_person_per_night * self.nights * (self.adults + self.children)
+        return self.price_per_person_per_night * self.nights * self.party_size
+
+    @property
+    def party_size(self) -> int:
+        return self.adults + self.children
+
+    @property
+    def months_ahead(self) -> float:
+        """Months from submission to travel."""
+        return (self.travel_at - self.submitted_at).total_seconds() / 86400 / DAYS_PER_MONTH
 
 
 def _month_weights(p: dict, group: str) -> dict[int, float]:
@@ -56,23 +74,68 @@ def _pick(rng: Random, shares: dict[str, float], rest: str) -> str:
     return rest
 
 
-def _travel_answer(rng: Random, p: dict, travel: date) -> str:
+def _dates_given(rng: Random, p: dict) -> str:
+    """How precisely the lead gives its travel date: exact, month, year or not_sure."""
     answers = p["form"]["answers"]
     if rng.random() < answers["states_exact_dates"]:
-        return travel.isoformat()
+        return "exact"
     if rng.random() < answers["month_when_no_exact_dates"]:
-        return f"{calendar.month_name[travel.month]} {travel.year}"
+        return "month"
     if rng.random() < answers["year_when_no_month"]:
-        return str(travel.year)
+        return "year"
+    return "not_sure"
+
+
+def _travel_answer(p: dict, lead: "Lead") -> str:
+    travel = lead.travel_at.date()
+    match lead.dates_given:
+        case "exact":
+            return travel.isoformat()
+        case "month":
+            return f"{calendar.month_name[travel.month]} {travel.year}"
+        case "year":
+            return str(travel.year)
     return form.field(p, "travel_date")["not_sure_answer"]
 
 
-def _destinations(rng: Random, p: dict) -> str:
+def _destinations(rng: Random, p: dict, dreamer: bool) -> tuple[str, ...]:
+    """The countries the lead names, in the form's order; none when it is not sure yet.
+
+    A dreamer names more than the dreamer's countries and is never unsure.
+    """
     options = [o["label"] for o in form.field(p, "destinations")["options"]]
-    count = 1 + draws.poisson(rng, p["form"]["answers"]["countries_named"] - 1)
-    chosen = rng.sample(options, min(count, len(options)))
     unsure = form.unsure(p, "destinations")
-    return unsure if unsure in chosen else ";".join(o for o in options if o in chosen)
+    if dreamer:
+        countries = [o for o in options if o != unsure]
+        more = p["form"]["message"]["shape"]["dreamer_over_countries"] + 1
+        chosen = rng.sample(countries, rng.randint(more, len(countries)))
+    else:
+        count = 1 + draws.poisson(rng, p["form"]["answers"]["countries_named"] - 1)
+        chosen = rng.sample(options, min(count, len(options)))
+        if unsure in chosen:
+            return ()
+    return tuple(o for o in options if o in chosen)
+
+
+def _message(rng: Random, p: dict, dreamer: bool) -> tuple[int, str]:
+    """The words of the lead's message and how specific it is; #6 writes text to match."""
+    message = p["form"]["message"]
+    shape, blank, vague = message["shape"], message["blank_or_token"], message["vague_share"]
+    token = shape["token_words_at_most"]
+    if not dreamer and rng.random() < blank / (1 - message["dreamer_share"]):
+        return rng.randint(0, token), "blank_or_token"
+    if rng.random() < vague / (1 - blank):
+        specificity = "vague"
+    else:
+        partly = shape["partly_to_very_specific"]
+        specificity = "partly_specific" if rng.random() < partly / (1 + partly) else "very_specific"
+    median, sigma = message["median_words"], message["words_sigma"]
+    if dreamer:
+        over = shape["dreamer_over_words"]
+        return math.floor(
+            draws.lognormal_between(rng, median, sigma, over, math.inf)
+        ) + 1, specificity
+    return max(token + 1, round(draws.lognormal(rng, median, sigma))), specificity
 
 
 def _heard_about(rng: Random, p: dict, lead: Lead) -> str:
@@ -96,13 +159,13 @@ def _answer(rng: Random, p: dict, lead: Lead, person: people.Person, form_field:
         case "email":
             return person.email
         case "phone":
-            return person.phone if rng.random() < answers["gives_phone_when_optional"] else ""
+            return person.phone if lead.gives_phone else ""
         case "country":
             return lead.country
         case "destinations":
-            return _destinations(rng, p)
+            return ";".join(lead.destinations) or form.unsure(p, "destinations")
         case "travel_date":
-            return _travel_answer(rng, p, lead.travel_at.date())
+            return _travel_answer(p, lead)
         case "dates_flexible":
             shares = {"fixed": answers["dates_fixed"], "flexible": answers["dates_flexible"]}
             key = _pick(rng, shares, "")
@@ -122,9 +185,8 @@ def _answer(rng: Random, p: dict, lead: Lead, person: people.Person, form_field:
         case "style":
             return form.label(p, "style", lead.style)
         case "budget_per_person":
-            stated = rng.random() < answers["states_budget"]
             per_person = lead.budget_per_person_per_night * lead.nights
-            return form.band(p, "budget_per_person", per_person) if stated else ""
+            return form.band(p, "budget_per_person", per_person) if lead.states_budget else ""
         case "travelled_before":
             if lead.repeat_client:
                 return form.label(p, "travelled_before", "yes")
@@ -221,6 +283,9 @@ def draw_lead(
     price = _seasonal_price(p, style, travel_at.month)
     budget = deal["price_per_person_per_night"][style] * answers["budget_to_style_price"]
     budget *= _market_shift(p, group, trap["budget_multiplier"])
+    dreamers = p["form"]["message"]["dreamer_share"]
+    dreamer = rng.random() < dreamers
+    message_words, message_specificity = _message(rng, p, dreamer)
     lead = Lead(
         submitted_at=submitted_at,
         market_group=group,
@@ -235,6 +300,14 @@ def draw_lead(
         budget_per_person_per_night=draws.lognormal(rng, budget, answers["budget_sigma"]),
         cycle_days=cycle_days,
         travel_at=travel_at,
+        states_budget=not dreamer and rng.random() < answers["states_budget"] / (1 - dreamers),
+        gives_phone=rng.random() < answers["gives_phone_when_optional"],
+        dates_given=_dates_given(rng, p),
+        destinations=_destinations(rng, p, dreamer),
+        message_words=message_words,
+        message_specificity=message_specificity,
+        text_commitment=rng.random() < p["effects"]["text_commitment"]["share_of_leads"],
+        real_buyer=rng.random() < p["notes"]["real_buyer_share"],
     )
     person = people.draw(rng, p["people"]["titles"], country["phones"])
     answers = {f["label"]: _answer(rng, p, lead, person, f) for f in p["form"]["fields"]}

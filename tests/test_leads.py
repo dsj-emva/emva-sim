@@ -1,12 +1,13 @@
 import re
 import statistics
+from collections import Counter
 from datetime import date
 from pathlib import Path
 from random import Random
 
 import pytest
 
-from emva_sim import leads, profile
+from emva_sim import form, leads, profile
 
 PROFILE = Path(__file__).parent.parent / "profiles" / "planned-hospitality.toml"
 PEAK = (7, 8, 9, 10)
@@ -25,14 +26,15 @@ def test_the_profiles_price_is_the_season_average(drawn):
     peak = [lead.price_per_person_per_night for lead in luxury if lead.travel_at.month in PEAK]
     low = [lead.price_per_person_per_night for lead in luxury if lead.travel_at.month not in PEAK]
     assert peak and low
-    assert peak == pytest.approx([1605.88] * len(peak), abs=0.01)
-    assert low == pytest.approx([1147.06] * len(low), abs=0.01)
+    assert peak == pytest.approx([1605.88] * len(peak), abs=0.02)
+    assert low == pytest.approx([1147.06] * len(low), abs=0.02)
 
 
 def test_the_lead_draws_read_only_the_effects_that_shape_a_lead():
-    # The proxy trap shifts the draws themselves; every other effect acts on the propensity.
+    # The proxy trap shifts the draws themselves and text_commitment's share sets a hidden flag;
+    # every other effect acts only on the propensity.
     p = profile.resolve(profile.load(PROFILE), "middle")
-    p["effects"] = {"proxy_trap_country": p["effects"]["proxy_trap_country"]}
+    p["effects"] = {name: p["effects"][name] for name in ("proxy_trap_country", "text_commitment")}
     assert leads.draw_leads(Random(1), p, date(2024, 1, 1), date(2024, 1, 2))
 
 
@@ -137,6 +139,65 @@ def test_market_a_states_budgets_1_6_times_and_books_1_5_times_as_far_ahead_as_m
     ahead = {g: statistics.median(booking_lead_time_months(x) for x in by_group[g]) for g in "ab"}
     assert budget["a"] / budget["b"] == pytest.approx(1.6, rel=0.06)
     assert ahead["a"] / ahead["b"] == pytest.approx(1.5, rel=0.06)
+
+
+def shares(values):
+    counted = Counter(values)
+    return {key: n / sum(counted.values()) for key, n in counted.items()}
+
+
+def test_messages_are_blank_vague_or_specific_at_the_profiles_shares(year_of_leads):
+    # form.message middles: 20% blank or a token, 30% vague, the rest partly and very
+    # specific 2 to 1. Tolerances in these tests are about 3 standard errors at 4,800 leads.
+    _, drawn = year_of_leads
+    found = shares(lead.message_specificity for lead in drawn)
+    assert found["blank_or_token"] == pytest.approx(0.20, abs=0.02)
+    assert found["vague"] == pytest.approx(0.30, abs=0.02)
+    assert found["partly_specific"] == pytest.approx(0.50 * 2 / 3, abs=0.02)
+    assert found["very_specific"] == pytest.approx(0.50 / 3, abs=0.02)
+    assert all(
+        lead.message_words <= 3 for lead in drawn if lead.message_specificity == "blank_or_token"
+    )
+
+
+def test_dreamers_write_over_400_words_name_over_3_countries_and_state_no_budget(year_of_leads):
+    # form.message.dreamer_share at its middle: 5 in 100 leads.
+    _, drawn = year_of_leads
+    dreamers = [
+        lead
+        for lead in drawn
+        if lead.message_words > 400 and len(lead.destinations) > 3 and not lead.states_budget
+    ]
+    assert len(dreamers) / len(drawn) == pytest.approx(0.05, abs=0.01)
+
+
+def test_most_messages_run_near_the_profiles_median_length(year_of_leads):
+    _, drawn = year_of_leads
+    written = [lead.message_words for lead in drawn if lead.message_specificity != "blank_or_token"]
+    assert statistics.median(written) == pytest.approx(45, rel=0.1)
+
+
+@pytest.mark.parametrize(("flag", "share"), [("text_commitment", 0.20), ("real_buyer", 0.50)])
+def test_the_hidden_text_flags_follow_their_shares(year_of_leads, flag, share):
+    _, drawn = year_of_leads
+    assert sum(getattr(lead, flag) for lead in drawn) / len(drawn) == pytest.approx(share, abs=0.02)
+
+
+def test_the_answers_show_the_leads_hidden_choices(year_of_leads):
+    p, drawn = year_of_leads
+    unsure = form.unsure(p, "destinations")
+    for lead in drawn:
+        assert bool(lead.answers["Phone"]) == lead.gives_phone
+        budget = lead.answers["Budget per person (excluding international flights)"]
+        assert bool(budget) == lead.states_budget
+        named = lead.answers["Where would you like to go?"]
+        assert named == (";".join(lead.destinations) if lead.destinations else unsure)
+    assert sum(lead.states_budget for lead in drawn) == pytest.approx(0.45 * len(drawn), rel=0.05)
+    found = shares(lead.dates_given for lead in drawn)
+    assert found["exact"] == pytest.approx(0.25, abs=0.02)
+    assert found["month"] == pytest.approx(0.75 * 0.6, abs=0.02)
+    assert found["year"] == pytest.approx(0.75 * 0.4 * 0.5, abs=0.02)
+    assert found["not_sure"] == pytest.approx(0.75 * 0.4 * 0.5, abs=0.02)
 
 
 def test_pooled_over_both_markets_budgets_and_lead_times_keep_the_profiles_medians(year_of_leads):

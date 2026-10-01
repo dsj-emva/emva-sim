@@ -150,6 +150,9 @@ held_at_middle = [
   "mess.duplicate_name_case_changed",
   "form.answers.budget_to_style_price",
   "form.answers.budget_sigma",
+  "form.message.words_sigma",
+  "form.message.dreamer_share",
+  "notes.real_buyer_share",
 ]
 
 # ---------------------------------------------------------------------------------------------------------
@@ -619,6 +622,35 @@ middle = 45
 high = 80
 confidence = "guessed"
 source = "none (enquiry-forms.md §2)"
+
+# The shape of a message: a token is at most this many words; a dreamer (effects.message_length) writes
+# over dreamer_over_words, names over dreamer_over_countries countries and states no budget. Fixed
+# thresholds, from effects.message_length's note (issue #7). Messages that are not blank or vague are
+# partly and very specific in the ratio partly_to_very_specific (form.message.vague_share).
+[form.message.shape]
+token_words_at_most = 3
+partly_to_very_specific = 2.0
+dreamer_over_words = 400
+dreamer_over_countries = 3
+
+# Words in a message that is neither blank nor a token are lognormal around median_words with this
+# sigma; a blank or a token is 0 to 3 words. Added for the planted effects (issue #7), awaiting the
+# user's review.
+[form.message.words_sigma]
+low = 0.6
+middle = 0.9
+high = 1.2
+confidence = "guessed"
+source = "none; added for the planted effects (issue #7), awaiting the user's review"
+
+# Leads who are "dreamers" (effects.message_length): over 400 words, over 3 countries named and no
+# budget stated. Added for the planted effects (issue #7), awaiting the user's review.
+[form.message.dreamer_share]
+low = 0.02
+middle = 0.05
+high = 0.08
+confidence = "guessed"
+source = "none; the type is described by practitioners (what-predicts-a-booking.md §5), no number found; added for the planted effects (issue #7), awaiting the user's review"
 
 [form.message.blank_or_token]
 low = 0.10
@@ -1143,6 +1175,15 @@ middle = 10
 high = 25
 confidence = "guessed"
 source = "none (notes-and-loss-reasons.md §2)"
+
+# Leads who are real buyers, as the Sales notes will show from Engaged on (effects.notes_real_buyer).
+# Added for the planted effects (issue #7), awaiting the user's review.
+[notes.real_buyer_share]
+low = 0.30
+middle = 0.50
+high = 0.70
+confidence = "guessed"
+source = "none; added for the planted effects (issue #7), awaiting the user's review"
 
 [notes.with_abbreviation]
 low = 0.30
