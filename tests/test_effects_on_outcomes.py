@@ -10,8 +10,8 @@ The middle sample is 150,000 leads at the middle. Effects whose groups win too r
 that precision (the party size, the repeat client's softened floor, the price rise, a budget under
 half the floor, a short lead time) are measured on a second sample of 72,000 leads with every
 effect size still at its middle but more leads in those groups and more wins: more repeat clients,
-larger friends' parties, more budgets stated, a lower and wider budget spread, and a higher reply
-and deposit rate.
+larger friends' parties, more budgets and exact dates stated, a lower and wider budget spread,
+and a higher reply and deposit rate.
 """
 
 import math
@@ -38,6 +38,7 @@ def rich_sample():
             "form.party_mix.friends": 0.40,
             "form.party_size.friends_adults": 7.0,
             "form.answers.states_budget": 0.90,
+            "form.answers.states_exact_dates": 0.60,
             "form.answers.budget_to_style_price": 0.6,
             "form.answers.budget_sigma": 1.0,
             "process.transition.engaged": 0.8,
@@ -77,7 +78,7 @@ def ahead(row):
 
 
 def dated(row):
-    return lead(row).dates_given != "not_sure"
+    return lead(row).dates_given not in ("year", "not_sure")
 
 
 def hours_to_first_attempt(row):

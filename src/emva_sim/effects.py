@@ -88,7 +88,7 @@ class Effects:
 
     def _lead_time(self, lead: Lead) -> float:
         effect = self.e["lead_time_by_season"]
-        if lead.dates_given == "not_sure" or lead.months_ahead > effect["over_months"]:
+        if lead.dates_given in ("year", "not_sure") or lead.months_ahead > effect["over_months"]:
             return _log(effect["over_18_months_or_unsure"])
         if lead.months_ahead < effect["under_months"]:
             peak = lead.travel_at.month in self.p["season"]["peak_months"]

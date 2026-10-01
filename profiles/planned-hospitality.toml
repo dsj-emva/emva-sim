@@ -1300,7 +1300,8 @@ note = "reference: a stated budget at or above the floor; missing is not below t
 form = "interaction"
 visible = "Submitted"
 # Months from submission to travel: "under_4_months" is under under_months, "over_18_months" over
-# over_months; "unsure" is the travel date answered "Not sure". Every other lead time is the reference.
+# over_months; "unsure" is a travel date answered "Not sure" or as a year only ("next year sometime",
+# what-predicts-a-booking.md §2). Every other lead time is the reference.
 under_months = 4
 over_months = 18
 peak_under_4_months = { low = 0.20, middle = 0.40, high = 0.70, confidence = "guessed", source = "none; shape from operator lead-time advice (Rhino Africa, Yellow Zebra)" }

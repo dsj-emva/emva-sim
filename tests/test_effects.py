@@ -139,6 +139,12 @@ CASES = [
         {"dates_given": "not_sure"},
         "lead_time_by_season",
     ),
+    (
+        # a year only is "next year sometime" (what-predicts-a-booking.md §2): unsure too
+        "effects.lead_time_by_season.over_18_months_or_unsure",
+        {"dates_given": "year"},
+        "lead_time_by_season",
+    ),
     ("effects.date_specificity.month_only", {"dates_given": "month"}, "date_specificity"),
     ("effects.date_specificity.no_dates", {"dates_given": "year"}, "date_specificity"),
     ("effects.date_specificity.no_dates", {"dates_given": "not_sure"}, "date_specificity"),
