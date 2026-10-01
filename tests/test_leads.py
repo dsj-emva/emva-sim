@@ -27,6 +27,12 @@ def test_the_profiles_price_is_the_season_average(drawn):
     assert low == pytest.approx([1147.06] * len(low), abs=0.01)
 
 
+def test_the_base_draws_read_no_planted_effect():
+    p = profile.resolve(profile.load(PROFILE), "middle")
+    del p["effects"]
+    assert leads.draw_leads(Random(1), p, date(2024, 1, 1), date(2024, 1, 2))
+
+
 def test_children_come_only_with_families(drawn):
     with_children = [lead for lead in drawn if lead.children]
     assert all(lead.adults == 2 for lead in with_children)

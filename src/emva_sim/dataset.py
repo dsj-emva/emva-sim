@@ -55,7 +55,7 @@ def _truth_row(r: Record) -> list[str]:
     return [
         str(r.deal_id),
         str(r.contact_id),
-        r.lead.market_group,
+        r.lead.market_group.upper(),
         f"{path.win_propensity:.6f}",
         "yes" if path.contacted else "no",
         stamp(path.stage_times.get("Contact attempted")),

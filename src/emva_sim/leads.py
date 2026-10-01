@@ -53,7 +53,7 @@ def _months(start: date, end: date) -> list[tuple[int, int, float]]:
 def _month_weights(p: dict, group: str) -> dict[int, float]:
     seasonality = p["volume"]["seasonality"]
     weights = dict.fromkeys(range(1, 13), 1.0)
-    for name, weight in seasonality[seasonality["markets"][group.lower()]].items():
+    for name, weight in seasonality[p["markets"]["groups"][group]["seasonality"]].items():
         for month in seasonality["months"][name]:
             weights[month] = weight
     return weights
@@ -212,7 +212,7 @@ def _seasonal_price(p: dict, style: str, travel_month: int) -> float:
     the calendar; peak months pay peak_to_low_season_rate times the rest.
     """
     deal = p["deal"]
-    peak_months = p["effects"]["lead_time_by_season"]["peak_months"]
+    peak_months = p["season"]["peak_months"]
     rate = deal["peak_to_low_season_rate"]
     peak_share = len(peak_months) / 12
     low = deal["price_per_person_per_night"][_key(style)] / (1 - peak_share + peak_share * rate)
@@ -221,10 +221,10 @@ def _seasonal_price(p: dict, style: str, travel_month: int) -> float:
 
 def _lead(rng: Random, p: dict, submitted_at: datetime, group: str) -> Lead:
     deal, process, source = p["deal"], p["process"], p["volume"]["traffic_source"]
-    country = rng.choice(p["effects"]["proxy_trap_country"][f"group_{group.lower()}_countries"])
+    country = rng.choice(p["markets"]["groups"][group]["countries"])
     others = {k: source[k] for k in source["labels"] if k != source["reference"]}
     traffic_source = _pick(rng, others, source["reference"])
-    repeat_client = rng.random() < p["effects"]["repeat_client"]["share_of_leads"]
+    repeat_client = rng.random() < p["form"]["answers"]["travelled_before"]
     adults, children = _party(rng, p)
     style = _style(rng, p)
     nights = max(1, round(draws.lognormal(rng, deal["nights"], deal["nights_sigma"])))
@@ -256,11 +256,12 @@ def _lead(rng: Random, p: dict, submitted_at: datetime, group: str) -> Lead:
 def draw_leads(rng: Random, p: dict, start: date, end: date) -> list[Lead]:
     """Every lead submitted from start to end (inclusive), at the profile's volume and season."""
     months = _months(start, end)
-    weights = {group: _month_weights(p, group) for group in ("A", "B")}
+    markets = p["markets"]
+    weights = {group: _month_weights(p, group) for group in markets["groups"]}
     count = round(p["volume"]["leads_per_month"] * sum(share for _, _, share in months))
     arrivals = []
     for _ in range(count):
-        group = "A" if rng.random() < p["effects"]["proxy_trap_country"]["group_a_share"] else "B"
+        group = "a" if rng.random() < markets["group_a_share"] else "b"
         chances = [weights[group][m] * share for _, m, share in months]
         year, month, _ = rng.choices(months, chances)[0]
         arrivals.append((_submitted_at(rng, year, month, start, end), group))

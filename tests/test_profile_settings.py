@@ -22,7 +22,7 @@ def test_middle_puts_every_range_at_its_middle(raw):
 def test_plain_values_are_kept(raw):
     resolved = profile.resolve(raw, "middle")
     assert resolved["pipeline"]["name"] == "Safari Enquiries"
-    assert resolved["effects"]["lead_time_by_season"]["peak_months"] == [7, 8, 9, 10]
+    assert resolved["season"]["peak_months"] == [7, 8, 9, 10]
 
 
 def test_one_range_at_its_low_keeps_every_other_range_at_its_middle(raw):
