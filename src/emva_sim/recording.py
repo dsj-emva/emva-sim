@@ -6,15 +6,20 @@ and hubspot.py shows only what was recorded before the export date.
 """
 
 import calendar
-import math
 from dataclasses import dataclass, replace
 from datetime import date, datetime, time, timedelta
 from random import Random
 
+from emva_sim import draws
 from emva_sim.process import ContactAttempt, TruePath
 
 MINUTE = timedelta(minutes=1)
 UNKNOWN = "unknown"
+
+
+def closed_stage(p: dict, closed: str) -> str:
+    """The pipeline's CRM stage that closes a deal as won or as lost."""
+    return next(s["name"] for s in p["pipeline"]["stages"] if s.get("closed") == closed)
 
 
 @dataclass(frozen=True)
@@ -47,7 +52,7 @@ class Recording:
         self.stages = p["pipeline"]["stages"]
         self.order = {s["name"]: i for i, s in enumerate(self.stages)}
         self.open = {s["name"] for s in self.stages if "closed" not in s and "after_won" not in s}
-        self.lost = next(s["name"] for s in self.stages if s.get("closed") == "lost")
+        self.lost = closed_stage(p, "lost")
         self.reasons = p["loss"]["reasons"]
         self.meanings: dict[str, list[str]] = {}
         for reason in self.reasons["recorded"]:
@@ -179,7 +184,7 @@ class Recording:
         if self.rng.random() < self.p["recording"]["bulk_update_share"]:
             return self._review_after(at)
         median = self.p["recording"]["lag_days_median"]
-        lag = self.rng.expovariate(math.log(2) / median) if median else 0.0
+        lag = draws.exponential(self.rng, median)
         return at + timedelta(days=lag)
 
     def _review_after(self, at: datetime) -> datetime:

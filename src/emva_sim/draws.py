@@ -20,6 +20,11 @@ def lognormal(rng: Random, median: float, sigma: float) -> float:
     return median * math.exp(sigma * rng.gauss(0.0, 1.0))
 
 
+def exponential(rng: Random, median: float) -> float:
+    """An exponential draw with this median (0 when the median is 0)."""
+    return rng.expovariate(math.log(2) / median) if median else 0.0
+
+
 def lognormal_between(rng: Random, median: float, sigma: float, low: float, high: float) -> float:
     """A lognormal draw conditioned on falling between low (0 or more) and high."""
 

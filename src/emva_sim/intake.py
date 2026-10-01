@@ -6,20 +6,26 @@ touches a Lead or its true path: the mess is in the copy the sales system holds.
 """
 
 import calendar
-import math
 import re
 import string
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from enum import StrEnum
 from random import Random
 
-from emva_sim import form, leads
+from emva_sim import draws, form, leads
 from emva_sim.leads import Lead
 from emva_sim.people import EMAIL_DOMAINS
 
-LEAD = "lead"
-DUPLICATE = "duplicate"
-BOT = "bot or spam"
+
+class RowKind(StrEnum):
+    """What a row of the export is; only a genuine Lead has a true path and an Outcome."""
+
+    LEAD = "lead"
+    DUPLICATE = "duplicate"
+    BOT = "bot or spam"
+
+
 # Throwaway addresses under the TLD reserved for examples (RFC 2606), so none is a real service.
 DISPOSABLE_DOMAINS = ["tempinbox.example", "throwmail.example", "10minutemail.example"]
 SPAM_PITCHES = [
@@ -37,7 +43,7 @@ class Submission:
     lead is the index of the Lead it is, or of the Lead a duplicate repeats; a bot has none.
     """
 
-    kind: str
+    kind: RowKind
     lead: int | None
     submitted_at: datetime
     answers: dict[str, str]
@@ -92,7 +98,7 @@ def _genuine(rng: Random, p: dict, i: int, lead: Lead) -> Submission:
         answers[label] = "" if missing else _wrong(rng, p, key_field, answers[label], lead)
         altered = (label,)
     return Submission(
-        LEAD,
+        RowKind.LEAD,
         i,
         lead.submitted_at,
         answers,
@@ -114,7 +120,7 @@ def _wrong(rng: Random, p: dict, form_field: dict, value: str, lead: Lead) -> st
             n = int(value)
             return str(n + 1 if n <= 1 or rng.random() < 0.5 else n - 1)
         case "country":
-            countries = [c["name"] for g in p["markets"]["groups"].values() for c in g["countries"]]
+            countries = [c["name"] for c in leads.countries(p)]
             return rng.choice([c for c in countries if c != value])
         case "month_year":
             if year := re.search(r"\d{4}", value):
@@ -160,7 +166,7 @@ def _duplicate(rng: Random, p: dict, i: int, lead: Lead) -> Submission:
     address: an alias, another domain or a slip. Its name may be typed in another case.
     """
     median = p["mess"]["duplicate_days_later"]
-    later = lead.submitted_at + timedelta(days=rng.expovariate(math.log(2) / median))
+    later = lead.submitted_at + timedelta(days=draws.exponential(rng, median))
     answers = dict(lead.answers)
     email = form.field(p, "email")["label"]
     answers[email] = _other_address(rng, answers[email])
@@ -170,7 +176,7 @@ def _duplicate(rng: Random, p: dict, i: int, lead: Lead) -> Submission:
             label = form.field(p, role)["label"]
             answers[label] = case(answers[label])
     return Submission(
-        DUPLICATE,
+        RowKind.DUPLICATE,
         i,
         later,
         answers,
@@ -184,7 +190,7 @@ def _bot(rng: Random, p: dict, at: datetime) -> Submission:
     """A bot or spam submission: made-up names, a disposable address, junk or no message."""
     answers = {f["label"]: _bot_answer(rng, p, f, at) for f in p["form"]["fields"]}
     return Submission(
-        BOT,
+        RowKind.BOT,
         None,
         at.replace(second=0, microsecond=0),
         answers,
@@ -204,7 +210,7 @@ def _bot_answer(rng: Random, p: dict, form_field: dict, at: datetime) -> str:
         case _, "phone":
             return rng.choice(["", "1234567890", str(rng.randrange(10**5, 10**6))])
         case _, "country":
-            countries = [c for g in p["markets"]["groups"].values() for c in g["countries"]]
+            countries = leads.countries(p)
             return rng.choice(countries)["name"]
         case _, "month_year":
             month = calendar.month_name[rng.randint(1, 12)]

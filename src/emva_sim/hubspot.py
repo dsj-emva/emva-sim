@@ -16,7 +16,7 @@ from random import Random
 
 from emva_sim import form, months
 from emva_sim.intake import Submission
-from emva_sim.recording import Change, Recorded
+from emva_sim.recording import Change, Recorded, closed_stage
 
 UNCONNECTED_CALL_OUTCOMES = ["No answer", "Left voicemail", "Busy"]
 DEAL_RECORD_IDS_FROM = 10_000_000_000
@@ -60,7 +60,7 @@ def date_entered(stage: str, pipeline: str) -> str:
     return f'Date entered "{stage} ({pipeline})"'
 
 
-def write_csv(path: Path, header: list[str], rows: Iterable[list[str]]) -> None:
+def _write(path: Path, header: list[str], rows: Iterable[list[str]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f, quoting=csv.QUOTE_ALL)
@@ -80,7 +80,8 @@ class Export:
         self.export_at = datetime.combine(export_date, datetime.min.time())
         self.pipeline = p["pipeline"]["name"]
         self.stages = p["pipeline"]["stages"]
-        self.lost = next(s["name"] for s in self.stages if s.get("closed") == "lost")
+        self.lost = closed_stage(p, "lost")
+        self.won = closed_stage(p, "won")
         self.fields = p["form"]["fields"]
 
     def write(self, folder: Path, rng: Random) -> None:
@@ -89,10 +90,10 @@ class Export:
         calls = (self._calls_header(), self._call_rows(rng))
         for variant in self.p["exports"]["variants"]:
             target = folder / slug(variant["name"])
-            write_csv(target / file_name(self.pipeline, self.export_date), *deals)
-            write_csv(target / file_name("All contacts", self.export_date), *contacts)
+            _write(target / file_name(self.pipeline, self.export_date), *deals)
+            _write(target / file_name("All contacts", self.export_date), *contacts)
             if variant["calls"]:
-                write_csv(target / file_name("All calls", self.export_date), *calls)
+                _write(target / file_name("All calls", self.export_date), *calls)
 
     def _recorded(self, moment: datetime | None) -> datetime | None:
         return moment if moment is not None and moment < self.export_at else None
@@ -194,11 +195,11 @@ class Export:
     def _contact_row(self, r: Record) -> list[str]:
         s = r.submission
         standard = self.p["exports"]["contact_properties"]
-        won = next(stage["name"] for stage in self.stages if stage.get("closed") == "won")
+
         return [
             str(r.contact_id),
             *(self._answer(s, f) for f in self.fields if f["label"] in standard),
-            "Customer" if won in self.stage_times(r) else "Opportunity",
+            "Customer" if self.won in self.stage_times(r) else "Opportunity",
             r.owner,
             stamp(s.submitted_at),
             self.p["volume"]["traffic_source"]["labels"][s.traffic_source],

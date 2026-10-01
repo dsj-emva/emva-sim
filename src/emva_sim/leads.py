@@ -171,6 +171,11 @@ def _seasonal_price(p: dict, style: str, travel_month: int) -> float:
     return low * rate if travel_month in peak_months else low
 
 
+def countries(p: dict) -> list[dict]:
+    """Every country of every source market, each with its name and phone formats."""
+    return [c for group in p["markets"]["groups"].values() for c in group["countries"]]
+
+
 def traffic_source(rng: Random, p: dict) -> str:
     """An Original Traffic Source drawn from the profile's mix."""
     source = p["volume"]["traffic_source"]
