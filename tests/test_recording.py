@@ -267,31 +267,56 @@ def test_every_lost_lead_and_no_other_has_a_true_loss_reason(middle):
         assert bool(row["true_loss_reason"]) == (row["deal_record_id"] in lost), row
 
 
-def true_reasons(folder, lost_before_engaged):
-    """The true loss reasons of the Leads lost before Engaged, or of those lost at it or later."""
-    return Counter(
-        r["true_loss_reason"]
+def lost_leads(folder, lost_before_engaged):
+    """The hidden truth of the Leads lost before Engaged, or of those lost at it or later."""
+    return [
+        r
         for r in rows(folder / TRUTH)
         if r["true_loss_reason"]
         and (r["reached_stage"] == "Contact attempted") == lost_before_engaged
-    )
+    ]
 
 
-@pytest.mark.parametrize("setting", ends("loss.reasons.could_not_reach_them"))
+def true_reasons(folder, lost_before_engaged):
+    return Counter(r["true_loss_reason"] for r in lost_leads(folder, lost_before_engaged))
+
+
+BUYER_ENDS = [*ends("notes.real_buyer_share"), "all-low", "all-high"]
+
+
+@pytest.mark.parametrize("setting", BUYER_ENDS)
+def test_a_real_buyer_is_never_truly_lost_as_never_a_real_buyer(generated, setting):
+    # Ruled on PR #17: lost before Engaged a real buyer could not be reached; lost later it lost
+    # on price, timing or an unknown reason.
+    for before in (True, False):
+        lost = lost_leads(generated(setting), lost_before_engaged=before)
+        real = Counter(r["true_loss_reason"] for r in lost if r["real_buyer"] == "yes")
+        assert real
+        assert "never_a_real_buyer" not in real
+        if before:
+            assert set(real) == {"could_not_reach_them"}
+
+
+@pytest.mark.parametrize("setting", [*ends("loss.reasons.could_not_reach_them"), *BUYER_ENDS])
 def test_a_lead_lost_before_engaged_truly_could_not_be_reached_or_was_never_a_buyer(
     generated, setting
 ):
-    reasons = true_reasons(generated(setting), lost_before_engaged=True)
+    # Every real buyer lost before Engaged could not be reached, so the share is the profile's
+    # where the real buyers are fewer than it, and the real buyers' share where they are more.
+    lost = lost_leads(generated(setting), lost_before_engaged=True)
+    reasons = Counter(r["true_loss_reason"] for r in lost)
     assert set(reasons) == {"could_not_reach_them", "never_a_real_buyer"}
-    share = number(setting, "loss.reasons.could_not_reach_them")
+    real = sum(r["real_buyer"] == "yes" for r in lost) / len(lost)
+    share = max(number(setting, "loss.reasons.could_not_reach_them"), real)
     assert_rate(reasons["could_not_reach_them"], reasons.total(), share)
 
 
-def test_a_lead_lost_later_has_a_true_reason_by_the_profiles_weights(middle):
-    reasons = true_reasons(middle, lost_before_engaged=False)
+@pytest.mark.parametrize("setting", BUYER_ENDS)
+def test_a_lead_lost_later_has_a_true_reason_by_the_profiles_weights(generated, setting):
+    reasons = true_reasons(generated(setting), lost_before_engaged=False)
     later = set(MEANINGS.values()) - {"could_not_reach_them"}
     assert set(reasons) == later
-    weights = {m: number("middle", f"loss.reasons.{m}") for m in later}
+    weights = {m: number(setting, f"loss.reasons.{m}") for m in later}
     for reason, weight in weights.items():
         assert_rate(reasons[reason], reasons.total(), weight / sum(weights.values()))
 

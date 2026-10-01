@@ -6,11 +6,13 @@ and hubspot.py shows only what was recorded before the export date.
 """
 
 import calendar
+from collections.abc import Iterable
 from dataclasses import dataclass, replace
 from datetime import date, datetime, time, timedelta
 from random import Random
 
 from emva_sim import draws, ladder
+from emva_sim.leads import Lead
 from emva_sim.process import ContactAttempt, TruePath
 
 MINUTE = timedelta(minutes=1)
@@ -47,7 +49,9 @@ class Recorded:
 
 
 class Recording:
-    def __init__(self, p: dict, rng: Random):
+    def __init__(self, p: dict, rng: Random, leads: list[Lead], paths: list[TruePath]):
+        """leads and paths are every genuine Lead and its true path: the real buyers' share among
+        the lost sets how the other lost Leads' true reasons are drawn."""
         self.p = p
         self.rng = rng
         self.reviews: dict[date, datetime] = {}
@@ -59,6 +63,16 @@ class Recording:
         self.meanings: dict[str, list[str]] = {}
         for reason in self.reasons["recorded"]:
             self.meanings.setdefault(reason["meaning"], []).append(reason["recorded"])
+        self.later = [m for m in self.meanings if m != UNREACHED]
+        self.real_share_lost = {
+            early: _real_share(
+                lead
+                for lead, path in zip(leads, paths, strict=True)
+                if ladder.LOST in path.stage_times
+                and (ladder.ENGAGED not in path.stage_times) == early
+            )
+            for early in (True, False)
+        }
 
     def true_events(self, path: TruePath) -> list[tuple[str, datetime]]:
         """Each CRM stage the deal truly entered and when, in the order it entered them."""
@@ -76,7 +90,7 @@ class Recording:
                 events.append((stage["name"], moment))
         return sorted(events, key=lambda event: (event[1], self.order[event[0]]))
 
-    def lead(self, path: TruePath) -> Recorded:
+    def lead(self, lead: Lead, path: TruePath) -> Recorded:
         """How the team records a genuine Lead's true path, at the profile's [recording] rates.
 
         A dead lead may be left open at its last stage instead of Lost; a record may skip a run
@@ -105,7 +119,8 @@ class Recording:
         if self.rng.random() < self.p["recording"]["backward_move"]:
             changes = self._move_back(changes)
         no_amount = path.won and self.rng.random() < self.p["recording"]["won_without_amount"]
-        true_reason = self._true_loss_reason(path) if events[-1][0] == self.lost else ""
+        lost = events[-1][0] == self.lost
+        true_reason = self._true_loss_reason(lead, path) if lost else ""
         recorded_lost = any(c.stage == self.lost and c.recorded_at for c in changes)
         reason = self._recorded_loss_reason(true_reason) if recorded_lost else ""
         calls = [a for a in path.attempts if a.channel == "call" and a.logged]
@@ -124,17 +139,28 @@ class Recording:
             reason = self._recorded_loss_reason(UNKNOWN)
         return Recorded(changes, [], reason, "", [])
 
-    def _true_loss_reason(self, path: TruePath) -> str:
+    def _true_loss_reason(self, lead: Lead, path: TruePath) -> str:
         """What truly made a lost lead not win, following where it was lost.
 
-        A Lead lost before Engaged could not be reached (the profile's share) or was never a
-        real buyer; one lost later draws from the other reasons, as weights.
+        A Lead lost before Engaged could not be reached (the profile's share) or was never a real
+        buyer; one lost later draws from the other reasons, as weights. A real buyer is never
+        "never a real buyer" (ruled on PR #17): lost before Engaged it could not be reached, lost
+        later it draws from the other later reasons. The other Leads take up the difference, so
+        each reason keeps its profile share among the lost wherever the real buyers leave room.
         """
-        if ladder.ENGAGED not in path.stage_times:
-            unreached = self.rng.random() < self.reasons[UNREACHED]
-            return UNREACHED if unreached else NEVER_A_BUYER
-        later = [m for m in self.meanings if m != UNREACHED]
-        return self.rng.choices(later, [self.reasons[m] for m in later])[0]
+        early = ladder.ENGAGED not in path.stage_times
+        real = self.real_share_lost[early]
+        if early:
+            if lead.real_buyer:
+                return UNREACHED
+            unreached = max(0.0, self.reasons[UNREACHED] - real) / (1 - real)
+            return UNREACHED if self.rng.random() < unreached else NEVER_A_BUYER
+        weights = {m: self.reasons[m] for m in self.later}
+        never = weights[NEVER_A_BUYER] / sum(weights.values())
+        others = [m for m in self.later if m != NEVER_A_BUYER]
+        if not lead.real_buyer and self.rng.random() < min(1.0, never / (1 - real)):
+            return NEVER_A_BUYER
+        return self.rng.choices(others, [weights[m] for m in others])[0]
 
     def _recorded_loss_reason(self, true_reason: str) -> str:
         """The Closed Lost Reason the team picks: blank, the true one, or another one."""
@@ -208,3 +234,9 @@ class Recording:
             start = datetime.combine(day, time(review["from_hour"]))
             self.reviews[day] = start + timedelta(minutes=minutes)
         return self.reviews[day]
+
+
+def _real_share(lost: Iterable[Lead]) -> float:
+    """The real buyers' share of these Leads (0 when there are none)."""
+    flags = [lead.real_buyer for lead in lost]
+    return sum(flags) / len(flags) if flags else 0.0

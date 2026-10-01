@@ -1391,7 +1391,10 @@ source = "notes-and-loss-reasons.md §5: HVS on misuse of 'lost to competitor'; 
 # What the Hidden truth says made a lost lead not win follows where it was lost (the user's ruling,
 # 2026-10-01): a Lead lost before Engaged truly could not be reached (could_not_reach_them, a share) or
 # was never a real buyer (the rest); a Lead lost at Engaged or later draws from price, timing,
-# never_a_real_buyer and unknown, as weights normalised to sum to one. The team records one of these values.
+# never_a_real_buyer and unknown, as weights normalised to sum to one. A real buyer (notes.real_buyer_share)
+# is never truly "never a real buyer" (the user's ruling on PR #17): lost before Engaged it could not be
+# reached, lost later it lost on price, timing or unknown; the other lost Leads make up the shares as
+# far as that allows. The team records one of these values.
 [loss.reasons]
 recorded = [
   { recorded = "No response", meaning = "could_not_reach_them" },

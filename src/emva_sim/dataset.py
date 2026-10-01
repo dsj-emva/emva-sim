@@ -77,13 +77,14 @@ def write(
     new_contacts = sum(s.new_contact for s in received)
     contact_ids = iter(hubspot.record_ids(rng, new_contacts, hubspot.CONTACT_RECORD_IDS_FROM))
     contact_of_lead = {}
-    recording = Recording(p, rng)
+    recording = Recording(p, rng, drawn, paths)
     records = []
     for deal_id, s in zip(deal_ids, received, strict=True):
         contact_id = next(contact_ids) if s.new_contact else contact_of_lead[s.index]
         if s.kind == RowKind.LEAD:
             contact_of_lead[s.index] = contact_id
-            owner, recorded = paths[s.index].owner, recording.lead(paths[s.index])
+            path = paths[s.index]
+            owner, recorded = path.owner, recording.lead(s.lead, path)
         else:
             owner, recorded = rng.choice(p["team"]["owners"]), recording.not_a_lead(s.submitted_at)
         records.append(Record(deal_id, contact_id, owner, s, recorded))
