@@ -46,7 +46,7 @@ def rich_sample():
             "process.transition.engaged": 0.8,
             "process.transition.won": 0.6,
         },
-    )
+    ).rows
 
 
 def lead(row):
@@ -278,7 +278,7 @@ CASES = [
 
 @pytest.fixture(scope="module")
 def samples(middle_sample, rich_sample):
-    return {"middle": middle_sample, "rich": rich_sample}
+    return {"middle": middle_sample.rows, "rich": rich_sample}
 
 
 def measured(rows, group, reference, term):
@@ -321,7 +321,7 @@ def test_season_changes_what_a_short_lead_time_does(rich_sample):
 def test_quality_changes_what_a_quick_first_attempt_does(middle_sample):
     # Interaction: within an hour lifts a high-quality lead 4.0 and a low-quality one 1.1.
     difference, se = contrast(
-        middle_sample,
+        middle_sample.rows,
         case("high quality, first attempt within 1 hour"),
         case("low quality, first attempt within 1 hour"),
     )
@@ -354,17 +354,19 @@ def market_b(row):
 def test_the_market_predicts_the_outcome_on_its_own(middle_sample):
     # Only through the budget floor (stated by 45%, felt only below the floor) at the middle: an
     # odds ratio near 1.1, but clear of 1 by more than 3 standard errors.
-    log_or, se = mantel_haenszel(middle_sample, market_a, market_b)
+    log_or, se = mantel_haenszel(middle_sample.rows, market_a, market_b)
     assert log_or > 3 * se, math.exp(log_or)
 
 
 def test_the_market_has_no_effect_once_the_leads_terms_are_held(middle_sample):
     # Strata by the whole win log-odds: budget, lead time, season and every other term held.
-    log_or, se = mantel_haenszel(middle_sample, market_a, market_b, lambda r: stratum(log_odds(r)))
+    log_or, se = mantel_haenszel(
+        middle_sample.rows, market_a, market_b, lambda r: stratum(log_odds(r))
+    )
     assert se <= MAX_SE
     assert abs(log_or) <= 3 * se, math.exp(log_or)
 
 
 def test_the_market_has_no_term_of_its_own(middle_sample):
-    terms = [column for column in middle_sample[0] if column.startswith("term_")]
+    terms = [column for column in middle_sample.rows[0] if column.startswith("term_")]
     assert terms and "term_proxy_trap_country" not in terms

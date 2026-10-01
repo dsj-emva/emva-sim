@@ -4,6 +4,7 @@ samples of genuine Leads, generated once per session, for tests that measure rat
 
 import csv
 import math
+from dataclasses import dataclass
 from functools import cache
 from pathlib import Path
 from random import Random
@@ -90,9 +91,18 @@ def generate(tmp_path_factory):
     return at
 
 
-def large_sample(setting: str, leads_per_month: int, seed: int = 1, **overrides) -> list[dict]:
-    """The true paths of a two-year history of genuine Leads at this volume, as the hidden truth
-    writes them, with the lead and its true path attached to each row.
+@dataclass(frozen=True)
+class Sample:
+    """The resolved profile a sample was drawn from, and its hidden truth with each row's lead
+    and true path attached."""
+
+    p: dict
+    rows: list[dict]
+
+
+def large_sample(setting: str, leads_per_month: int, seed: int = 1, **overrides) -> Sample:
+    """A two-year history of genuine Leads at this volume, as the hidden truth writes their true
+    paths.
 
     overrides replace numbers of the resolved profile, as "section.name": value.
     """
@@ -110,7 +120,7 @@ def large_sample(setting: str, leads_per_month: int, seed: int = 1, **overrides)
         row = hidden_truth.true_path(p, lead, path)
         row["lead"], row["path"] = lead, path
         rows.append(row)
-    return rows
+    return Sample(p, rows)
 
 
 @pytest.fixture(scope="session")
