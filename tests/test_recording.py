@@ -2,7 +2,7 @@
 
 One fixed seed, six months of leads, exported long after the last one so nearly every stage change
 is recorded before the export. Each rate is checked at the middle and at its range's low and high
-ends, within three standard errors at the size measured.
+ends, within STANDARD_ERRORS (conftest) at the size measured.
 """
 
 import math

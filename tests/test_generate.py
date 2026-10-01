@@ -3,10 +3,12 @@ import io
 import re
 from datetime import date
 from pathlib import Path
+from random import Random
 
 import pytest
 
 from emva_sim import dataset, profile
+from emva_sim.logistic import logit
 from emva_sim.process import Process
 
 PROFILE = Path(__file__).parent.parent / "profiles" / "planned-hospitality.toml"
@@ -129,7 +131,7 @@ def test_a_median_delay_that_contradicts_the_late_share_is_refused():
     p = profile.resolve(profile.load(PROFILE), "middle")
     p["handling"]["first_attempt_delay_median_hours"] = 24
     with pytest.raises(ValueError, match="a median of 24"):
-        Process(p)
+        Process(p, date(2024, 1, 1))
 
 
 def test_generating_again_replaces_the_previous_dataset(tmp_path):
@@ -311,6 +313,13 @@ def test_the_hidden_truth_has_one_row_per_deal_keyed_by_both_record_ids(middle):
         "itinerary_versions",
         "cancelled_after_won",
         "call_attempts",
+        "base_log_odds",
+        *(f"term_{name}" for name in TERMS),
+        "high_quality",
+        "budget_per_person_per_night",
+        "message_words",
+        "text_commitment",
+        "real_buyer",
         "true_loss_reason",
         "row_kind",
         "duplicate_of_deal_record_id",
@@ -318,3 +327,39 @@ def test_the_hidden_truth_has_one_row_per_deal_keyed_by_both_record_ids(middle):
         "invalid_phone",
         "fields_missing_or_wrong",
     ]
+
+
+# One term per planted effect, in the profile's order; the confounded proxy trap has none.
+TERMS = [name for name, e in profile.load(PROFILE)["effects"].items() if e["form"] != "confounded"]
+
+
+def test_the_terms_are_the_profiles_effects_but_the_proxy_trap():
+    assert len(TERMS) == 13
+    assert "proxy_trap_country" not in TERMS
+    assert TERMS[6] == "response_speed_by_quality"
+
+
+def test_an_effect_the_generator_cannot_compute_is_refused():
+    p = profile.resolve(profile.load(PROFILE), "middle")
+    p["effects"]["moon_phase"] = {"form": "additive", "visible": "Submitted"}
+    with pytest.raises(ValueError, match="moon_phase"):
+        dataset.leads_and_paths(p, Random(1), SHORT)
+
+
+def genuine_rows(folder):
+    return [row for row in rows(folder / TRUTH) if row["row_kind"] == "lead"]
+
+
+def test_each_leads_win_log_odds_is_the_base_plus_its_terms(middle):
+    for row in genuine_rows(middle):
+        propensity = float(row["win_propensity"])
+        total = float(row["base_log_odds"]) + sum(float(row[f"term_{t}"]) for t in TERMS)
+        assert logit(propensity) == pytest.approx(total, abs=1e-4)
+
+
+def test_a_neglected_lead_has_no_response_speed_term_and_is_never_won(middle):
+    neglected = [row for row in genuine_rows(middle) if row["neglected_lead"] == "yes"]
+    assert neglected
+    for row in neglected:
+        assert float(row["term_response_speed_by_quality"]) == 0.0
+        assert row["outcome"] == "not won"

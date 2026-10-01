@@ -148,6 +148,11 @@ held_at_middle = [
   "mess.missing_rather_than_wrong",
   "mess.wrong_number_one_more",
   "mess.duplicate_name_case_changed",
+  "form.answers.budget_to_style_price",
+  "form.answers.budget_sigma",
+  "form.message.words_sigma",
+  "form.message.dreamer_share",
+  "notes.real_buyer_share",
 ]
 
 # ---------------------------------------------------------------------------------------------------------
@@ -446,6 +451,25 @@ high = 0.6
 confidence = "estimated"
 source = "the user, from a client they have worked with (2026-10-01): luxury operators often make budget mandatory, so upwards of 40%"
 
+# What a lead can spend per person per night, as a share of the price of the style it asks for:
+# lognormal with this median and the sigma below. The median is pooled over the markets;
+# effects.proxy_trap_country moves each market's median apart, keeping the pooled one here. A stated
+# budget is the band holding this times the nights. Added for the planted effects (issue #7), awaiting
+# the user's review.
+[form.answers.budget_to_style_price]
+low = 0.8
+middle = 1.0
+high = 1.2
+confidence = "guessed"
+source = "none; added for the planted effects (issue #7), awaiting the user's review"
+
+[form.answers.budget_sigma]
+low = 0.3
+middle = 0.5
+high = 0.7
+confidence = "guessed"
+source = "none; added for the planted effects (issue #7), awaiting the user's review"
+
 [form.answers.gives_phone_when_optional]
 low = 0.45
 middle = 0.65
@@ -598,6 +622,33 @@ middle = 45
 high = 80
 confidence = "guessed"
 source = "none (enquiry-forms.md §2)"
+
+# The shape of a message: a token is at most this many words; a dreamer (effects.message_length) writes
+# over dreamer_over_words, names over dreamer_over_countries countries and states no budget. Fixed
+# thresholds, from effects.message_length's note (issue #7).
+[form.message.shape]
+token_words_at_most = 3
+dreamer_over_words = 400
+dreamer_over_countries = 3
+
+# Words in a message that is neither blank nor a token are lognormal around median_words with this
+# sigma; a blank or a token is 0 to 3 words. Added for the planted effects (issue #7), awaiting the
+# user's review.
+[form.message.words_sigma]
+low = 0.6
+middle = 0.9
+high = 1.2
+confidence = "guessed"
+source = "none; added for the planted effects (issue #7), awaiting the user's review"
+
+# Leads who are "dreamers" (effects.message_length): over 400 words, over 3 countries named and no
+# budget stated. Added for the planted effects (issue #7), awaiting the user's review.
+[form.message.dreamer_share]
+low = 0.02
+middle = 0.05
+high = 0.08
+confidence = "guessed"
+source = "none; the type is described by practitioners (what-predicts-a-booking.md §5), no number found; added for the planted effects (issue #7), awaiting the user's review"
 
 [form.message.blank_or_token]
 low = 0.10
@@ -1123,6 +1174,15 @@ high = 25
 confidence = "guessed"
 source = "none (notes-and-loss-reasons.md §2)"
 
+# Leads who are real buyers, as the Sales notes will show from Engaged on (effects.notes_real_buyer).
+# Added for the planted effects (issue #7), awaiting the user's review.
+[notes.real_buyer_share]
+low = 0.30
+middle = 0.50
+high = 0.70
+confidence = "guessed"
+source = "none; added for the planted effects (issue #7), awaiting the user's review"
+
 [notes.with_abbreviation]
 low = 0.30
 middle = 0.50
@@ -1214,15 +1274,19 @@ source = "notes-and-loss-reasons.md: HVS, 'other' often the largest value; added
 # ---------------------------------------------------------------------------------------------------------
 
 # 1. Budget floor: stated budget per person per night against the floor of the style asked for (threshold).
-# The floor is 0.7 x the style's middle price per night: for luxury about $900, the practitioners' floor of
-# $800-1,000 (what-predicts-a-booking.md §1, search extract only). "Not sure" style uses Comfortable.
+# The floor is 0.7 x the style's price per night at the setting (deal.price_per_person_per_night): at the
+# middle, for luxury, about $900, the practitioners' floor of
+# $800-1,000 (what-predicts-a-booking.md §1, search extract only). "Not sure" style uses Comfortable (the
+# generator draws no "Not sure" style yet).
 [effects.budget_floor]
 form = "threshold"
 visible = "Submitted"
 floor_share_of_style_price = 0.7
+# "below_half" is a budget under this share of the floor.
+below_half_under = 0.5
 below_half = { low = 0.03, middle = 0.10, high = 0.25, confidence = "guessed", source = "none" }
 half_to_floor = { low = 0.30, middle = 0.50, high = 0.80, confidence = "guessed", source = "none" }
-note = "reference: at or above the floor; no further lift above 1.5x the floor"
+note = "reference: a stated budget at or above the floor, with no lift above it; a missing budget takes effects.no_budget instead"
 
 # 2. No budget stated (additive).
 [effects.no_budget]
@@ -1235,10 +1299,15 @@ note = "reference: a stated budget at or above the floor; missing is not below t
 [effects.lead_time_by_season]
 form = "interaction"
 visible = "Submitted"
+# Months from submission to travel: "under_4_months" is under under_months, "over_18_months" over
+# over_months; "unsure" is a travel date answered "Not sure" or as a year only ("next year sometime",
+# what-predicts-a-booking.md §2). Every other lead time is the reference.
+under_months = 4
+over_months = 18
 peak_under_4_months = { low = 0.20, middle = 0.40, high = 0.70, confidence = "guessed", source = "none; shape from operator lead-time advice (Rhino Africa, Yellow Zebra)" }
 off_peak_under_4_months = { low = 0.8, middle = 1.0, high = 1.2, confidence = "guessed", source = "none" }
 over_18_months_or_unsure = { low = 0.40, middle = 0.60, high = 0.85, confidence = "guessed", source = "none" }
-note = "reference: peak 6-14 months ahead, off-peak 1-8 months ahead; peak is [season].peak_months"
+note = "reference: every lead outside the named bands, i.e. travel from under_months to over_months ahead with dates given as exact or as a month; peak is [season].peak_months"
 
 # 4. Date specificity (ordered, additive).
 [effects.date_specificity]
@@ -1246,7 +1315,7 @@ form = "additive"
 visible = "Submitted"
 no_dates = { low = 0.35, middle = 0.55, high = 0.80, confidence = "guessed", source = "none" }
 month_only = { low = 0.75, middle = 0.90, high = 1.0, confidence = "guessed", source = "none" }
-note = "reference: exact dates"
+note = "reference: exact dates; no_dates is a year only or not sure"
 
 # 5. Lead source (additive).
 [effects.lead_source]
@@ -1268,24 +1337,38 @@ floor_penalty_kept = { low = 0.25, middle = 0.50, high = 0.75, confidence = "gue
 [effects.response_speed_by_quality]
 form = "interaction"
 visible = "Contact attempted"
+# "within_1h" is a first Contact attempt within within_hours of submission: the full lift. The lift
+# falls linearly in log hours to none at no_lift_from_hours, and a first attempt from then on is the
+# reference (ruled 2026-10-01 from the user's "the quicker the contact after the form the better").
+# High quality is this top share of leads by win propensity without this effect.
+within_hours = 1
+no_lift_from_hours = 24
+lift_between = "linear in log hours"
+high_quality_top_share = 0.3333333333333333
 high_quality_within_1h = { low = 2.5, middle = 4.0, high = 6.0, confidence = "estimated", source = "the user, from a client they have worked with (2026-10-01): about 4 times; the quicker after the form the better; direction also from HBR, MIT, Telfer" }
 low_quality_within_1h = { low = 1.0, middle = 1.1, high = 1.3, confidence = "guessed", source = "none" }
-note = "reference: first attempt after 24 h; high quality is the top third of hidden quality"
+note = "reference: first attempt 24 h or more after submission, with the lift falling linearly in log hours between 1 h and 24 h; high quality is the top third of hidden quality"
 
 # 8. Message length and specificity (inverted U).
 [effects.message_length]
 form = "inverted_u"
 visible = "Submitted"
+# "under_15_words" is a message under under_words; a dreamer is as form.message.shape says. Every other
+# message is the reference.
+under_words = 15
 under_15_words = { low = 0.40, middle = 0.60, high = 0.85, confidence = "guessed", source = "none" }
 dreamer = { low = 0.55, middle = 0.75, high = 0.95, confidence = "guessed", source = "none" }
-note = "reference: 40-200 specific words; dreamer: over 400 words, no budget, over 3 countries. Read from meaning, never a giveaway keyword"
+note = "reference: every message of under_words or more that is not a dreamer's; dreamer: over 400 words, no budget, over 3 countries (form.message.shape). Read from meaning, never a giveaway keyword"
 
 # 9. Party size (threshold: large private groups rarely book together).
 [effects.party_size]
 form = "threshold"
 visible = "Submitted"
+# "over_6" is a party of over over_travellers, adults and children together; every other party is the
+# reference.
+over_travellers = 6
 over_6 = { low = 0.50, middle = 0.70, high = 0.90, confidence = "guessed", source = "what-predicts-a-booking.md §6: direction from Runggaldier et al. 2023" }
-note = "reference: a party of 2"
+note = "reference: a party of over_travellers or fewer"
 
 # 10. Phone given (additive; a signal only because phone is optional on this form).
 [effects.phone_given]
@@ -1298,9 +1381,12 @@ odds_ratio_when_optional = { low = 1.2, middle = 1.5, high = 2.0, confidence = "
 form = "time_varying"
 visible = "Submitted"
 at_month_of_history = 14
+# "near_floor_after": a stated budget at or above the risen floor and under near_floor_under times the
+# old floor. A budget the rise puts below the floor takes effects.budget_floor instead.
+near_floor_under = 1.3
 floor_rise = { low = 0.05, middle = 0.10, high = 0.20, confidence = "guessed", source = "what-predicts-a-booking.md §8: Maasai Mara fee rise to $200 (July 2024)" }
 near_floor_after = { low = 0.55, middle = 0.75, high = 0.90, confidence = "guessed", source = "none" }
-note = "after the rise, leads within 1.0-1.3x of the old floor; leads above 1.5x unaffected"
+note = "from the first day of month at_month_of_history the floor is floor_rise higher; a stated budget at or above the new floor and under near_floor_under times the old one takes near_floor_after; one the rise puts below the new floor takes effects.budget_floor instead, never both (ruled 2026-10-01); every other budget, and a missing one, is the reference"
 
 # 12. Planted in text: meaning carries the signal, never a keyword (issue #6).
 [effects.text_commitment]

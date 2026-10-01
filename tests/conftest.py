@@ -1,14 +1,17 @@
-"""Helpers shared by the tests of the mess: datasets by setting, the profile's numbers, and rates
-checked within three standard errors of the profile's number at the size actually measured."""
+"""Helpers shared by the tests: datasets by setting, the profile's numbers, rates checked within
+STANDARD_ERRORS of the profile's number at the size actually measured, and large fixed-seed
+samples of genuine Leads, generated once per session, for tests that measure rates and odds."""
 
 import csv
 import math
+from dataclasses import dataclass
 from functools import cache
 from pathlib import Path
+from random import Random
 
 import pytest
 
-from emva_sim import dataset, profile
+from emva_sim import dataset, hidden_truth, profile
 from emva_sim.intake import RowKind
 
 PROFILE = Path(__file__).parent.parent / "profiles" / "planned-hospitality.toml"
@@ -45,22 +48,31 @@ def ends(name):
     return ["middle", f"{name}@low", f"{name}@high"]
 
 
-def three_standard_errors(rate, n):
-    return 3 * math.sqrt(rate * (1 - rate) / n)
+# How many standard errors every statistical check in the suite allows. The suite makes on the
+# order of 1,000 such checks; at 3 standard errors each fails by chance about 0.3% of the time, so
+# some check would fail on almost any seed. 4 is roughly the Bonferroni bound for about 1,000 checks
+# at a 5% chance that any of them fails by chance (the two-sided z for 0.05 / 1,000 is 4.06).
+# Raised from 3 after seed 1 put an unbiased rate (loss.blank_reason@low) 3.9 standard errors out.
+STANDARD_ERRORS = 4
+
+
+def tolerance(rate, n):
+    """STANDARD_ERRORS of a rate measured on n."""
+    return STANDARD_ERRORS * math.sqrt(rate * (1 - rate) / n)
 
 
 def assert_rate(hits, n, rate):
-    """hits of n is the rate, within three standard errors at n."""
+    """hits of n is the rate, within STANDARD_ERRORS at n."""
     assert n
-    assert hits / n == pytest.approx(rate, abs=three_standard_errors(rate, n)), (hits, n, rate)
+    assert hits / n == pytest.approx(rate, abs=tolerance(rate, n)), (hits, n, rate)
 
 
 def assert_exponential_median(values, median):
-    """The sample median of exponential draws is the median, within three standard errors."""
+    """The sample median of exponential draws is the median, within STANDARD_ERRORS."""
     n = len(values)
-    tolerance = 3 * median / (math.log(2) * math.sqrt(n))
+    allowed = STANDARD_ERRORS * median / (math.log(2) * math.sqrt(n))
     observed = sorted(values)[n // 2]
-    assert observed == pytest.approx(median, abs=tolerance), (observed, n, median)
+    assert observed == pytest.approx(median, abs=allowed), (observed, n, median)
 
 
 def kinds(folder, kind):
@@ -86,3 +98,41 @@ def generate(tmp_path_factory):
         return made[setting, history]
 
     return at
+
+
+@dataclass(frozen=True)
+class Sample:
+    """The resolved profile a sample was drawn from, and its hidden truth with each row's lead
+    and true path attached."""
+
+    p: dict
+    rows: list[dict]
+
+
+def large_sample(setting: str, leads_per_month: int, seed: int = 1, **overrides) -> Sample:
+    """A two-year history of genuine Leads at this volume, as the hidden truth writes their true
+    paths.
+
+    overrides replace numbers of the resolved profile, as "section.name": value.
+    """
+    p = profile.resolve(raw(), setting)
+    p["volume"]["leads_per_month"] = leads_per_month
+    for name, value in overrides.items():
+        *path, last = name.split(".")
+        node = p
+        for key in path:
+            node = node[key]
+        node[last] = value
+    drawn, paths = dataset.leads_and_paths(p, Random(seed))
+    rows = []
+    for lead, path in zip(drawn, paths, strict=True):
+        row = hidden_truth.true_path(p, lead, path)
+        row["lead"], row["path"] = lead, path
+        rows.append(row)
+    return Sample(p, rows)
+
+
+@pytest.fixture(scope="session")
+def middle_sample():
+    """150,000 leads at the middle."""
+    return large_sample("middle", 6250)

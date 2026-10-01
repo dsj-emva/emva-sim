@@ -15,7 +15,8 @@ from random import Random
 from emva_sim import hidden_truth, hubspot, intake, leads, profile
 from emva_sim.hubspot import Record
 from emva_sim.intake import RowKind
-from emva_sim.process import Process
+from emva_sim.leads import Lead
+from emva_sim.process import Process, TruePath
 from emva_sim.recording import Recording
 
 
@@ -33,15 +34,21 @@ def name(p: dict, setting: str, seed: int) -> str:
     return f"{p['name']}-{setting}-seed-{seed}"
 
 
+def leads_and_paths(
+    p: dict, rng: Random, history: History = DEFAULT_HISTORY
+) -> tuple[list[Lead], list[TruePath]]:
+    """Every genuine Lead of the history and its true path, drawn before any mess."""
+    drawn = leads.draw_leads(rng, p, history.start, history.end)
+    return drawn, Process(p, history.start).paths(rng, drawn)
+
+
 def generate(
     profile_path: Path, setting: str, seed: int, out: Path, history: History = DEFAULT_HISTORY
 ) -> Path:
     """Write one dataset, replacing any earlier copy of it, and return its folder."""
     p = profile.resolve(profile.load(profile_path), setting)
     rng = Random(seed)
-    drawn = leads.draw_leads(rng, p, history.start, history.end)
-    process = Process(p)
-    paths = [process.path(rng, lead) for lead in drawn]
+    drawn, paths = leads_and_paths(p, rng, history)
 
     start = datetime.combine(history.start, datetime.min.time())
     after_end = datetime.combine(history.end + timedelta(days=1), datetime.min.time())
@@ -64,5 +71,5 @@ def generate(
     folder = Path(out) / name(p, setting, seed)
     shutil.rmtree(folder, ignore_errors=True)
     hubspot.Export(p, records, history.export).write(folder / "export", rng)
-    hidden_truth.write(folder / "hidden-truth", records, paths)
+    hidden_truth.write(folder / "hidden-truth", p, records, paths)
     return folder
