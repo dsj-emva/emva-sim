@@ -57,15 +57,15 @@ class TruePath:
     cancelled_at: datetime | None = None
 
 
-def _base_log_odds(terms: list[float], target: float) -> float:
+def _base_log_odds(summed_terms: list[float], target: float) -> float:
     """The base whose propensities, with these summed terms, average target (Newton's method)."""
-    counted = Counter(terms)
+    counted = Counter(summed_terms)
     n = sum(counted.values())
     base = logit(target)
     for _ in range(100):
-        chances = {t: sigmoid(base + t) for t in counted}
-        mean = sum(counted[t] * c for t, c in chances.items()) / n
-        slope = sum(counted[t] * c * (1 - c) for t, c in chances.items()) / n
+        chances = {total: sigmoid(base + total) for total in counted}
+        mean = sum(counted[total] * chance for total, chance in chances.items()) / n
+        slope = sum(counted[total] * chance * (1 - chance) for total, chance in chances.items()) / n
         step = (mean - target) / slope
         base -= step
         if abs(step) < 1e-12:
@@ -139,44 +139,52 @@ class Process:
 
     def paths(self, rng: Random, leads: list[Lead]) -> list[TruePath]:
         """Every lead's true path. Quality and neglect are read against the other leads."""
-        terms = [self.effects.of_lead(lead) for lead in leads]
-        speed = self.p["effects"][RESPONSE_SPEED]
-        high = _top(rng, [sum(t.values()) for t in terms], speed["high_quality_top_share"])
-        looks = _mid_ranks([self.effects.apparent(t) for t in terms])
-        starts = [self._start(rng, lead, place) for lead, place in zip(leads, looks, strict=True)]
-        terms = [
-            self.effects.with_response_speed(
-                t,
-                0.0
-                if start.first_attempt_days is None
-                else self.effects.response_speed(24 * start.first_attempt_days, quality),
-            )
-            for t, start, quality in zip(terms, starts, high, strict=True)
+        own_terms = [self.effects.of_lead(lead) for lead in leads]
+        top_share = self.p["effects"][RESPONSE_SPEED]["high_quality_top_share"]
+        high_quality = _top(rng, [sum(terms.values()) for terms in own_terms], top_share)
+        apparent_places = _mid_ranks([self.effects.apparent(terms) for terms in own_terms])
+        starts = [
+            self._start(rng, lead, place)
+            for lead, place in zip(leads, apparent_places, strict=True)
+        ]
+        all_terms = [
+            self.effects.with_response_speed(terms, self._speed_term(start, quality))
+            for terms, start, quality in zip(own_terms, starts, high_quality, strict=True)
         ]
         contacted = [
-            sum(t.values()) for t, s in zip(terms, starts, strict=True) if not s.neglected_lead
+            sum(terms.values())
+            for terms, start in zip(all_terms, starts, strict=True)
+            if not start.neglected_lead
         ]
         base = _base_log_odds(contacted, self.win_rate) if contacted else logit(self.win_rate)
         return [
-            self._path(rng, lead, start, Propensity(base, lead_terms, quality))
-            for lead, start, lead_terms, quality in zip(leads, starts, terms, high, strict=True)
+            self._path(rng, lead, start, Propensity(base, terms, quality))
+            for lead, start, terms, quality in zip(
+                leads, starts, all_terms, high_quality, strict=True
+            )
         ]
 
-    def _start(self, rng: Random, lead: Lead, looks: float) -> _Start:
+    def _speed_term(self, start: _Start, high_quality: bool) -> float:
+        """Response speed's term; a Neglected lead has no first attempt, so none."""
+        if start.first_attempt_days is None:
+            return 0.0
+        return self.effects.response_speed(24 * start.first_attempt_days, high_quality)
+
+    def _start(self, rng: Random, lead: Lead, apparent_place: float) -> _Start:
         """Owner, neglect and the first Contact attempt: the advertiser's handling of the lead.
 
         A share of the neglect decision (neglect_follows_apparent_quality) neglects a lead with a
         chance falling linearly from twice neglected_share for the worst-looking lead to zero for
-        the best (looks is its place among the leads, from 0 to 1, by the terms visible at
-        submission); the rest neglects any lead at neglected_share. A neglected lead keeps its
+        the best (apparent_place is its place among the leads, from 0 to 1, by the terms visible
+        at submission); the rest neglects any lead at neglected_share. A neglected lead keeps its
         propensity.
         """
         handling = self.p["handling"]
         owner = rng.choice(self.p["team"]["owners"])
-        share = handling["neglected_share"]
+        neglect_chance = handling["neglected_share"]
         if rng.random() < handling["neglect_follows_apparent_quality"]:
-            share = min(1.0, 2 * share * (1 - looks))
-        if rng.random() < share:
+            neglect_chance = min(1.0, 2 * handling["neglected_share"] * (1 - apparent_place))
+        if rng.random() < neglect_chance:
             return _Start(owner, True, None)
         return _Start(owner, False, self._first_attempt_days(rng, lead.cycle_days))
 

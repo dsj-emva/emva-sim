@@ -14,13 +14,23 @@ from emva_sim.intake import RowKind
 from emva_sim.leads import Lead
 from emva_sim.process import TruePath
 
-# What the lead is that the exports do not show; issue #6 writes text to match.
-HIDDEN_ATTRIBUTES = [
-    "budget_per_person_per_night",
-    "message_words",
-    "text_commitment",
-    "real_buyer",
-]
+
+def _yes_no(flag: bool) -> str:
+    return "yes" if flag else "no"
+
+
+def _money(amount: float) -> str:
+    return f"{amount:.2f}"
+
+
+# What the lead is that the exports do not show (issue #6 writes text to match), each with how the
+# hidden truth writes it.
+HIDDEN_ATTRIBUTES = {
+    "budget_per_person_per_night": _money,
+    "message_words": str,
+    "text_commitment": _yes_no,
+    "real_buyer": _yes_no,
+}
 
 # A genuine Lead's true path; blank for duplicates and bots, which have none. Between the two
 # parts, one term per planted effect that has one, in profile order (true_path_columns).
@@ -90,19 +100,13 @@ def _true_path(lead: Lead, path: TruePath) -> list[str]:
         f"{path.propensity.base_log_odds:.6f}",
         *(f"{term:.6f}" for term in path.propensity.terms.values()),
         _yes_no(path.propensity.high_quality),
-        *(_attribute(getattr(lead, name)) for name in HIDDEN_ATTRIBUTES),
+        *(write(getattr(lead, name)) for name, write in HIDDEN_ATTRIBUTES.items()),
     ]
 
 
 def true_path(p: dict, lead: Lead, path: TruePath) -> dict[str, str]:
     """A genuine Lead's true-path columns, by name."""
     return dict(zip(true_path_columns(p), _true_path(lead, path), strict=True))
-
-
-def _attribute(value) -> str:
-    if isinstance(value, bool):
-        return _yes_no(value)
-    return f"{value:.2f}" if isinstance(value, float) else str(value)
 
 
 def _rows(p: dict, records: list[Record], paths: list[TruePath]) -> Iterator[list[str]]:
@@ -124,10 +128,6 @@ def _rows(p: dict, records: list[Record], paths: list[TruePath]) -> Iterator[lis
             *((_yes_no(s.invalid_email), _yes_no(s.invalid_phone)) if genuine else ("", "")),
             ";".join(s.missing_or_wrong),
         ]
-
-
-def _yes_no(flag: bool) -> str:
-    return "yes" if flag else "no"
 
 
 def _stage_history(records: list[Record]) -> Iterator[list[str]]:
