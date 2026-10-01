@@ -1,7 +1,7 @@
 .PHONY: install test lint
 
 install:
-	uv sync
+	uv sync --locked
 
 test:
 	uv run pytest
