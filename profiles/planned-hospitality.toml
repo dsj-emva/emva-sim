@@ -164,6 +164,9 @@ held_at_middle = [
   "form.message.mentions.names_of_travellers",
   "mess.bot_spam_message",
   "form.message.shape.partly_to_very_specific",
+  "form.message.imperfect_english",
+  "form.message.casual_casing",
+  "notes.long_discovery_share",
 ]
 
 # ---------------------------------------------------------------------------------------------------------
@@ -703,6 +706,24 @@ middle = 0.25
 high = 0.40
 confidence = "guessed"
 source = "none; leads write in the language of the site, often imperfectly (enquiry-forms.md §2); added for the text (issue #6), awaiting the user's review"
+
+# Of the Leads of [text].imperfect_english_from writing in English, those whose English is imperfect
+# ("Leads write in the language of the site, often in imperfect English for non-UK/US residents",
+# enquiry-forms.md §2). Added for the text (issue #6), awaiting the user's review.
+[form.message.imperfect_english]
+low = 0.2
+middle = 0.4
+high = 0.6
+confidence = "guessed"
+source = "none; described in enquiry-forms.md §2, no number found; added for the text (issue #6), awaiting the user's review"
+
+# Messages typed all in lower case. Added for the text (issue #6), awaiting the user's review.
+[form.message.casual_casing]
+low = 0.03
+middle = 0.08
+high = 0.15
+confidence = "guessed"
+source = "none; added for the text (issue #6), awaiting the user's review"
 
 # Prohibited inputs planted in the text ([prohibited_inputs].in_text): of the messages that are not
 # blank or a token, those that mention each. Added for the text (issue #6), awaiting the user's review.
@@ -1272,6 +1293,9 @@ variations_per_phrase = 4
 model = "claude-haiku-4-5-20251001"
 # The Leads of this country who may write in French (form.message.written_in_french).
 french_from = "France"
+# The Leads of these countries who, writing in English, may write it imperfectly
+# (form.message.imperfect_english): residents outside the UK and the US (enquiry-forms.md §2).
+imperfect_english_from = ["France"]
 # Ages the text gives adult travellers (a prohibited input; nothing reads them).
 adult_ages = { min = 21, max = 85 }
 # A budget the text states is the Lead's budget per person for the trip, rounded to this.
@@ -1283,6 +1307,8 @@ spam_links = ["http://cheap-seo.example/offer", "https://best-deals.example/win"
 # Expressions the team abbreviates in a note (notes-and-loss-reasons.md, abbreviations; generic usage),
 # applied in this order, as whole words, whatever their case.
 abbreviations = [
+  ["per person per night", "pppn"],
+  ["fully inclusive", "FI"],
   ["left a voicemail", "LVM"],
   ["voicemail", "VM"],
   ["left a message", "LM"],
@@ -1302,6 +1328,14 @@ abbreviations = [
   ["with", "w/"],
   ["and", "&"],
 ]
+
+# Shorthand besides the abbreviations above that marks a note as abbreviated.
+shorthand = ["x2", "3rd", "thurs"]
+# How the team writes a budget in a note, from the amount per person (thousands: the amount in
+# thousands), several ways in one export (notes-and-loss-reasons.md §2: $12k, USD12,000, 12K pp).
+note_money = ["${thousands}k pp", "USD{amount} pp", "{thousands}K pp", "${amount} per person", "~${thousands}k each"]
+# Parks as the team sometimes misspells them in notes (notes-and-loss-reasons.md §2).
+park_misspellings = { "Serengeti" = ["Serengetti", "Serengheti"], "Okavango Delta" = ["Okavanga Delta", "Okavango"], "Ngorongoro Crater" = ["Ngorogoro", "Ngorongoro"], "Masai Mara" = ["Maasai Mara", "Mara"], "South Luangwa" = ["S Luangwa"], "Victoria Falls" = ["Vic Falls"], "Sossusvlei" = ["Sossusvlie"] }
 
 # How each language writes the facts the slots carry: months, the joining "and", a number of children
 # (one, many), the budget's money (amount with the thousands separator) and the form's country names.
@@ -1345,6 +1379,16 @@ middle = 0.70
 high = 0.90
 confidence = "guessed"
 source = "none (notes-and-loss-reasons.md §6)"
+
+# Of the notes at Engaged, those written as a long paragraph after the discovery call rather than a
+# short recap (notes-and-loss-reasons.md, numbers: discovery-call notes 40-200 words). Added for the
+# text (issue #6), awaiting the user's review.
+[notes.long_discovery_share]
+low = 0.15
+middle = 0.30
+high = 0.50
+confidence = "guessed"
+source = "none (notes-and-loss-reasons.md §2: a few long notes after the main discovery call); added for the text (issue #6), awaiting the user's review"
 
 [notes.short_note_words]
 low = 2

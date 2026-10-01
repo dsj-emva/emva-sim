@@ -6,6 +6,7 @@ A year of Leads, each message written from the phrase bank with the fake model's
 
 import re
 from collections import Counter
+from dataclasses import replace
 from datetime import date
 from functools import cache
 from random import Random
@@ -14,7 +15,7 @@ import pytest
 from conftest import REAL_PROFILE, assert_rate, number, raw, resolved
 
 from emva_sim import leads, messages, phrases, profile
-from emva_sim.leads import Market
+from emva_sim.leads import DatesGiven, Market
 
 MESSAGE = "Tell us about your dream trip"
 
@@ -101,7 +102,7 @@ def test_a_dreamer_names_every_country_it_chose_and_states_no_budget(written):
     names = p["text"]["languages"]
     for lead, text in dreamers:
         local = names[text.language]["countries"]
-        assert all(local.get(c, c) in text.text for c in lead.destinations), text.text
+        assert all(local.get(c, c).lower() in text.text.lower() for c in lead.destinations)
         assert not any(".budget#" in pid for pid in text.phrase_ids)
 
 
@@ -146,7 +147,7 @@ def test_a_planted_mention_is_written_where_it_says(prose):
             first = lead.answers["First name"]
             pid = next(p for p in text.phrase_ids if ".names_of_travellers#" in p)
             if "{first_name}" in texts_of_bank()[pid]:
-                assert first in text.text
+                assert first.lower() in text.text.lower()
 
 
 @cache
@@ -170,7 +171,47 @@ def test_a_message_that_disagrees_states_another_number_than_the_form(written):
             for phrase_id in text.phrase_ids:
                 template = texts_of_bank()[phrase_id]
                 if template == "Roughly {nights} nights.":
-                    assert f"Roughly {lead.nights} nights" not in text.text
-                    assert re.search(r"Roughly \d+ nights", text.text)
+                    assert f"roughly {lead.nights} nights" not in text.text.lower()
+                    assert re.search(r"roughly \d+ nights", text.text.lower())
                     checked += 1
     assert checked
+
+
+def lead_with(lead, title="Mr", **fields):
+    return replace(lead, answers={**lead.answers, "Title": title}, **fields)
+
+
+def test_a_leads_facts_are_what_its_fields_say(written):
+    lead = written()[1][0][0]
+    solo = lead_with(
+        lead, adults=1, children=0, dates_given=DatesGiven.YEAR, destinations=("Kenya",)
+    )
+    assert messages.facts(raw(), solo) >= {"solo", "undated", "to:Kenya", "male"}
+    assert not messages.facts(raw(), solo) & {"partner", "couple", "two_or_more", "dated"}
+    family = lead_with(lead, "Mrs", adults=2, children=2, dates_given=DatesGiven.EXACT)
+    assert messages.facts(raw(), family) >= {"partner", "two_adults", "children", "dated", "female"}
+    assert "couple" not in messages.facts(raw(), family)
+    friends = lead_with(lead, "Dr", adults=4, children=0, repeat_client=True)
+    assert messages.facts(raw(), friends) >= {"group", "partner", "repeat_client"}
+    assert not messages.facts(raw(), friends) & {"male", "female", "couple", "first_time"}
+
+
+@cache
+def requirements():
+    bank = phrases.load_bank(phrases.paths(REAL_PROFILE, raw())[0])
+    return {p.id: p.requires for p in phrases.bank_phrases(bank)}
+
+
+@pytest.mark.parametrize("setting", ["middle", "all-high"])
+def test_no_message_says_what_the_leads_fields_contradict(written, setting):
+    # Only the profile's share of messages state a fact unlike the form, by a changed number or
+    # date (tested above); no phrase is ever written for a Lead its requirements do not fit.
+    p, found = written(setting)
+    broken = [
+        (pid, sorted(requirements()[pid] - messages.facts(p, lead)), text.text)
+        for lead, text in found
+        for pid in text.phrase_ids
+        if not requirements()[pid] <= messages.facts(p, lead)
+    ]
+    assert broken == []
+    assert sum(bool(requirements()[pid]) for _, text in found for pid in text.phrase_ids) > 100

@@ -13,9 +13,29 @@ import separability
 from conftest import REAL_PROFILE, raw
 from test_text import HISTORY, engaged_notes, written_messages
 
-from emva_sim import dataset, messages, phrases
+from emva_sim import dataset, form, messages, phrases
 
 LANGUAGES = ["en", "fr"]
+# Every fact a phrase may require (messages.facts).
+FACTS = {
+    "solo",
+    "two_or_more",
+    "partner",
+    "couple",
+    "two_adults",
+    "children",
+    "group",
+    "dated",
+    "undated",
+    "budget",
+    "no_budget",
+    "repeat_client",
+    "first_time",
+    "committed",
+    "uncommitted",
+    "male",
+    "female",
+}
 # Every slot the generator fills (messages.Writer.values, and bots' links).
 SLOTS = {
     "adults",
@@ -51,6 +71,12 @@ def groups(prefix):
     return found
 
 
+def test_every_requirement_a_phrase_names_is_a_fact_the_generator_knows():
+    destinations = {o["label"] for o in form.field(raw(), "destinations")["options"]}
+    known = FACTS | {f"to:{d}" for d in destinations}
+    assert {r for p in phrases.bank_phrases(bank()) for r in p.requires} <= known
+
+
 def test_every_slot_a_phrase_names_is_one_the_generator_fills():
     named = {slot for p in phrases.bank_phrases(bank()) for slot in phrases.slots(p.text)}
     assert named <= SLOTS
@@ -58,7 +84,8 @@ def test_every_slot_a_phrase_names_is_one_the_generator_fills():
 
 def test_each_language_has_every_group_a_message_is_written_from():
     english, french = groups("message.en."), groups("message.fr.")
-    assert set(english) == set(french)
+    # Imperfect English is written only in English.
+    assert set(english) - {"imperfect"} == set(french)
     mentions = {f"prohibited.{m}" for m in messages.MENTIONS}
     assert mentions <= set(english)
 
@@ -68,8 +95,12 @@ def test_a_decision_made_fits_the_shortest_written_message(language):
     # A written message has at least one word more than a token; a commitment phrase of two words
     # or fewer fits it, whatever the variations.
     shortest = raw()["form"]["message"]["shape"]["token_words_at_most"] + 1
-    lengths = [phrases.words(t) for t in groups(f"message.{language}.")["commitment"]]
-    assert min(lengths) <= 2 <= shortest
+    fit_anyone = [
+        p
+        for p in phrases.bank_phrases(bank())
+        if p.group == f"message.{language}.commitment" and not p.requires
+    ]
+    assert min(phrases.words(p.text) for p in fit_anyone) <= 2 <= shortest
 
 
 def test_every_recorded_loss_reason_has_its_free_text():
@@ -77,13 +108,17 @@ def test_every_recorded_loss_reason_has_its_free_text():
     assert set(groups("loss_reason.")) == recorded
 
 
-def test_every_note_phrase_holds_an_expression_the_team_abbreviates():
-    patterns = [rf"\b{re.escape(full)}\b" for full, _ in raw()["text"]["abbreviations"]]
+def test_every_note_phrase_holds_an_expression_the_team_abbreviates_or_is_shorthand():
+    abbreviations = raw()["text"]["abbreviations"]
+    patterns = [rf"\b{re.escape(full)}\b" for full, _ in abbreviations]
+    shorthand = [rf"(^|\s){re.escape(short)}(\s|$|[.,])" for _, short in abbreviations]
+    shorthand += [r"\bx\d\b", r"\b\d(st|nd|rd|th)\b", r"\bthurs\b"]
     for group, texts in groups("notes.").items():
         if group.startswith("discovery."):
             continue  # always written after a recap
         for text in texts:
-            assert any(re.search(p, text, re.IGNORECASE) for p in patterns), (group, text)
+            found = [p for p in patterns + shorthand if re.search(p, text, re.IGNORECASE)]
+            assert found, (group, text)
 
 
 @pytest.mark.parametrize("group", ["notes.discovery", "notes.follow_up"])

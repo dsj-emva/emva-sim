@@ -8,12 +8,13 @@ import re
 import shutil
 from collections import defaultdict
 from datetime import date
+from random import Random
 
 import pytest
 import separability
-from conftest import REAL_PROFILE, STAGES, assert_rate, ends, kinds, number, rows
+from conftest import REAL_PROFILE, STAGES, assert_rate, ends, kinds, number, raw, resolved, rows
 
-from emva_sim import dataset, datasets, phrases
+from emva_sim import dataset, datasets, messages, phrases
 from emva_sim.hidden_truth import CALL_NOTES, CLOSED_LOST_REASON, NOTE_BODY
 from emva_sim.hidden_truth import MESSAGE as MESSAGE_TEXT
 from emva_sim.intake import RowKind
@@ -290,3 +291,33 @@ def test_no_word_or_short_phrase_in_the_notes_tells_a_real_buyer_from_the_rest(g
     found = engaged_notes(generated(setting))
     assert sum(flag for _, flag in found) >= 20
     assert separability.separating(found) == [], separability.strongest(found)
+
+
+def leads_of_deals(folder, setting):
+    """Each genuine Lead by its deal Record ID. The Leads are drawn first, from the seed, so
+    drawing them again gives them; the hidden truth lists them in the order they were drawn."""
+    p = resolved(setting)
+    drawn, _ = dataset.leads_and_paths(p, Random(1), HISTORY)
+    rows_of_leads = kinds(folder, RowKind.LEAD)
+    assert len(rows_of_leads) == len(drawn)
+    return {r["deal_record_id"]: lead for r, lead in zip(rows_of_leads, drawn, strict=True)}
+
+
+@pytest.mark.parametrize("setting", ["middle", "all-high"])
+def test_no_message_or_note_says_what_the_leads_fields_contradict(generated, setting):
+    folder = generated(setting)
+    p = resolved(setting)
+    by_deal = leads_of_deals(folder, setting)
+    bank = phrases.load_bank(phrases.paths(REAL_PROFILE, raw())[0])
+    requires = {phrase.id: phrase.requires for phrase in phrases.bank_phrases(bank)}
+    checked = 0
+    for t in texts(folder):
+        lead = by_deal.get(t["deal_record_id"])
+        if lead is None or t["text"] == CLOSED_LOST_REASON:
+            continue
+        known = messages.facts(p, lead)
+        for pid in filter(None, t["phrase_ids"].split(";")):
+            if pid.startswith(("message.", "notes.")):
+                assert requires[pid] <= known, (pid, sorted(requires[pid] - known), t)
+                checked += bool(requires[pid])
+    assert checked > 50

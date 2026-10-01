@@ -6,6 +6,12 @@
 # planned-hospitality.variations.json; generation picks among a phrase and its cached variations and
 # never calls the model. A phrase is named by its group and its place in it, e.g. "message.en.who.couple#2".
 #
+# A phrase written as a table names the facts about the Lead it requires (messages.FACTS), so the
+# text never contradicts the Lead's fields: solo, two_or_more, partner (two adults or more), couple
+# (two adults, no children), two_adults, children, group (three adults or more), dated (exact dates
+# or a month), undated, budget, no_budget, repeat_client, first_time, committed, uncommitted, male
+# and female (by the Title given), and to:<country> for a destination named.
+#
 # Words in braces are slots the generator fills from the Lead ({adults}, {children} ("2 children"), {party},
 # {nights}, {date}, {month}, {year}, {budget}, {countries}, {country}, {park}, {child_ages}) or
 # draws ({age}, {age2}, {companion}, {first_name}, {link}). A phrase is used only where every slot
@@ -73,15 +79,15 @@ closing = [
 ]
 token = ["Call me", "Please call", "See above", "Info please", "Quote please", "Prices?", "Call me please", "Details please"]
 occasion = [
-  "It's our honeymoon!",
-  "We're celebrating a special anniversary.",
+  { text = "It's our honeymoon!", requires = ["couple"] },
+  { text = "We're celebrating a special anniversary.", requires = ["partner"] },
   "This is a celebration trip for us.",
-  "It will be our honeymoon, so something romantic would be lovely.",
+  { text = "It will be our honeymoon, so something romantic would be lovely.", requires = ["couple"] },
 ]
 limits = [
-  "One of us is nervous about small planes.",
+  { text = "One of us is nervous about small planes.", requires = ["two_or_more"] },
   "We're a bit worried about malaria.",
-  "We're both vegetarian.",
+  { text = "We're both vegetarian.", requires = ["two_adults"] },
   "We'd rather avoid very long drives between camps.",
 ]
 style = [
@@ -113,11 +119,11 @@ budget = [
 ]
 question = [
   "Is {month} a good time to go?",
-  "Can we combine it with Zanzibar?",
+  { text = "Can we combine it with Zanzibar?", requires = ["to:Tanzania"] },
   "How far ahead do we need to plan?",
   "Would you recommend a beach extension?",
   "What would you suggest for a first safari?",
-  "Do we need to book flights ourselves?",
+  { text = "Do we need to book flights ourselves?", requires = ["uncommitted"] },
   "Is a deposit needed to hold a camp?",
   "How busy does it get at that time of year?",
 ]
@@ -129,9 +135,9 @@ contact = [
   "Evenings are best to call.",
 ]
 chatter = [
-  "This would be our first safari.",
+  { text = "This would be our first safari.", requires = ["first_time"] },
   "We've been dreaming about this for years.",
-  "We've travelled a fair bit but never to Africa.",
+  { text = "We've travelled a fair bit but never to Africa.", requires = ["first_time"] },
   "We'd love some ideas.",
   "Open to suggestions.",
   "Happy to hear what you think works best.",
@@ -148,47 +154,59 @@ chatter = [
   "We'd like to understand the options before going further.",
   "Thanks for any thoughts.",
 ]
+# English as some Leads from outside the UK and the US write it ([text].imperfect_english_from).
+imperfect = [
+  "We are searching a safari for next year.",
+  "Is possible to see the gorillas?",
+  { text = "We wish to make this travel in family.", requires = ["children"] },
+  "Please can you send me some proposition.",
+  "We are very interesting by the big animals.",
+  "Sorry for my bad english.",
+  "We would like to discover the savannah and the animals.",
+  "Thank you in advance for your answer.",
+]
 # Unsure, unbooked or not agreed yet: written only by Leads who have made no decision.
 undecided = [
   "We haven't booked flights yet.",
   "I still need to check whether work will approve the leave.",
-  "Still need to talk my partner into it!",
-  "We haven't decided whether to go this year or next.",
+  { text = "Still need to talk my partner into it!", requires = ["partner"] },
+  { text = "We haven't decided whether to go this year or next.", requires = ["undated"] },
   "Should we hold flights now or wait for your plan?",
   "Not ready to book anything yet, just gathering ideas.",
-  "Once our dates are confirmed we'll know more.",
+  { text = "Once our dates are confirmed we'll know more.", requires = ["undated"] },
   "Nothing is agreed at home yet.",
   "We might go, we might not, depending on cost.",
   "Just seeing what's possible for now.",
 ]
 # A decision already made (effects.text_commitment): leave booked, flights held, partner agreed.
 commitment = [
-  "Flights booked.",
-  "Leave approved.",
-  "Dates locked in.",
-  "Tickets bought.",
+  "Decision made.",
+  { text = "Flights booked.", requires = ["dated"] },
+  { text = "Leave approved.", requires = ["dated"] },
+  { text = "Dates locked in.", requires = ["dated"] },
+  { text = "Tickets bought.", requires = ["dated"] },
   "Ready to go ahead.",
-  "Our flights are already booked, so the dates are fixed.",
-  "Annual leave is signed off for those weeks.",
-  "My partner has agreed, we just need the plan now.",
+  { text = "Our flights are already booked, so the dates are fixed.", requires = ["dated"] },
+  { text = "Annual leave is signed off for those weeks.", requires = ["dated"] },
+  { text = "My partner has agreed, we just need the plan now.", requires = ["partner"] },
   "We've decided to go, the only question is where to stay.",
-  "We're holding seats on a flight into Nairobi.",
-  "Time off work is already confirmed.",
+  { text = "We're holding seats on a flight into Nairobi.", requires = ["to:Kenya", "dated"] },
+  { text = "Time off work is already confirmed.", requires = ["dated"] },
   "We have the money set aside and are ready to go ahead.",
   "We definitely want to do this; no more putting it off.",
-  "The school holidays are fixed and we've told work.",
-  "We've used our air miles on the outbound already.",
+  { text = "The school holidays are fixed and we've told work.", requires = ["children", "dated"] },
+  { text = "We've used our air miles on the outbound already.", requires = ["dated"] },
   "We're happy to pay a deposit as soon as we like the plan.",
   "The decision's made, this trip is happening.",
-  "We've both cleared our diaries.",
-  "The international legs are paid for.",
-  "Our holiday went in at work last week.",
-  "Everyone in the group has said yes and put money in.",
+  { text = "We've both cleared our diaries.", requires = ["two_adults", "dated"] },
+  { text = "The international legs are paid for.", requires = ["dated"] },
+  { text = "Our holiday went in at work last week.", requires = ["dated"] },
+  { text = "Everyone in the group has said yes and put money in.", requires = ["group"] },
   "We're going; it's just the details now.",
   "It's all agreed at home.",
   "We have the green light from work.",
-  "Passports renewed and holiday booked off.",
-  "We land in Johannesburg on the first morning, so we need to plan from there.",
+  { text = "Passports renewed and holiday booked off.", requires = ["dated"] },
+  { text = "We land in Johannesburg on the first morning, so we need to plan from there.", requires = ["to:South Africa", "dated"] },
   "The beach hotel afterwards is paid for, so this is the last piece.",
   "We'd like to confirm something within the next couple of weeks.",
 ]
@@ -214,7 +232,7 @@ exact = ["We'd like to travel from {date}.", "Our dates are {date} onwards.", "W
 month = ["Thinking of {month} {year}.", "Ideally in {month}.", "We'd like to go in {month} {year}.", "Some time in {month}."]
 year = ["Some time in {year}.", "Probably {year}, dates open.", "In {year} if we can."]
 not_sure = ["We haven't fixed any dates yet.", "Timing is open.", "No dates in mind."]
-vague = ["Maybe next year.", "In a year or two perhaps.", "Some time in {year} probably."]
+vague = [{ text = "Maybe next year.", requires = ["undated"] }, { text = "In a year or two perhaps.", requires = ["undated"] }, "Some time in {year} probably."]
 
 [message.en.where]
 countries = ["We're thinking of {countries}.", "Top of the list: {countries}.", "Interested in {countries}.", "We'd love to visit {countries}."]
@@ -226,21 +244,21 @@ vague = ["Somewhere in Africa.", "East or southern Africa, we're not sure which.
 [message.en.prohibited]
 ages_of_travellers = [
   "I'm {age}, so nothing too strenuous.",
-  "We are {age} and {age2}.",
+  { text = "We are {age} and {age2}.", requires = ["two_adults"] },
   "The children are aged {child_ages}.",
   "Our kids are {child_ages}.",
   "I'm {age} but very fit.",
 ]
 named_birthday = [
   "It's for my 60th birthday.",
-  "We're celebrating my partner's 50th.",
+  { text = "We're celebrating my partner's 50th.", requires = ["partner"] },
   "A trip for my 40th!",
   "My 70th is coming up and this is my treat.",
 ]
 retirement = [
   "I've just retired and want to celebrate.",
   "It's a retirement present to ourselves.",
-  "Now that we've both retired we finally have the time.",
+  { text = "Now that we've both retired we finally have the time.", requires = ["two_adults"] },
 ]
 religious_diet = [
   "We keep kosher, so meals matter.",
@@ -251,26 +269,26 @@ religious_diet = [
 health_or_mobility = [
   "I use a wheelchair, so access matters.",
   "My knee is bad, so no long walks please.",
-  "One of us is diabetic.",
+  { text = "One of us is diabetic.", requires = ["two_or_more"] },
   "I have a heart condition, so high altitude worries me.",
   "We need ground-floor rooms because of mobility issues.",
 ]
 pregnancy = [
-  "I'll be five months pregnant by then.",
-  "We're expecting a baby, so I'd like to avoid malaria areas.",
-  "I'm pregnant, is that a problem on safari?",
+  { text = "I'll be five months pregnant by then.", requires = ["female"] },
+  { text = "We're expecting a baby, so I'd like to avoid malaria areas.", requires = ["partner"] },
+  { text = "I'm pregnant, is that a problem on safari?", requires = ["female"] },
 ]
 sexual_orientation = [
-  "My husband and I are a same-sex couple, so a welcoming camp matters to us.",
-  "We're two women travelling as a couple.",
-  "We're a gay couple; is that ever an issue at the lodges?",
+  { text = "My husband and I are a same-sex couple, so a welcoming camp matters to us.", requires = ["couple", "male"] },
+  { text = "We're two women travelling as a couple.", requires = ["couple", "female"] },
+  { text = "We're a gay couple; is that ever an issue at the lodges?", requires = ["couple"] },
 ]
 names_of_travellers = [
-  "My partner {companion} and I would love to go.",
-  "{companion} is coming with me.",
+  { text = "My partner {companion} and I would love to go.", requires = ["partner"] },
+  { text = "{companion} is coming with me.", requires = ["two_or_more"] },
   "Thanks, {first_name}",
   "Best, {first_name}",
-  "{companion} is the real animal lover of the two of us.",
+  { text = "{companion} is the real animal lover of the two of us.", requires = ["couple"] },
 ]
 
 # ---------------------------------------------------------------------------------------------------------
@@ -294,8 +312,8 @@ dreamer = [
 opening = ["Bonjour,", "Bonjour à vous,", "Madame, Monsieur,", "Salut,"]
 closing = ["Merci !", "Merci beaucoup.", "Cordialement", "Bien à vous", "Merci d'avance.", "Dans l'attente de votre réponse."]
 token = ["Appelez-moi", "Merci de rappeler", "Voir ci-dessus", "Infos svp", "Devis svp", "Tarifs ?"]
-occasion = ["C'est notre voyage de noces !", "Nous fêtons un anniversaire de mariage.", "C'est un voyage pour fêter quelque chose."]
-limits = ["L'un de nous a peur des petits avions.", "Nous nous inquiétons un peu du paludisme.", "Nous sommes végétariens."]
+occasion = [{ text = "C'est notre voyage de noces !", requires = ["couple"] }, { text = "Nous fêtons un anniversaire de mariage.", requires = ["partner"] }, "C'est un voyage pour fêter quelque chose."]
+limits = [{ text = "L'un de nous a peur des petits avions.", requires = ["two_or_more"] }, "Nous nous inquiétons un peu du paludisme.", "Nous sommes végétariens."]
 style = [
   "Luxe mais sans excès.",
   "Plutôt des camps de tentes que de grands lodges.",
@@ -316,17 +334,17 @@ nights = ["Environ {nights} nuits au total.", "À peu près {nights} nuits.", "N
 budget = ["Notre budget est d'environ {budget} par personne.", "Nous pensons à {budget} chacun, avec un peu de souplesse.", "Autour de {budget} par tête, hors vols."]
 question = [
   "Est-ce que {month} est une bonne période ?",
-  "Peut-on combiner avec Zanzibar ?",
+  { text = "Peut-on combiner avec Zanzibar ?", requires = ["to:Tanzania"] },
   "Combien de temps à l'avance faut-il prévoir ?",
   "Que conseillez-vous pour un premier safari ?",
-  "Faut-il réserver les vols nous-mêmes ?",
+  { text = "Faut-il réserver les vols nous-mêmes ?", requires = ["uncommitted"] },
   "Faut-il un acompte pour bloquer un camp ?",
 ]
 contact = ["Merci de me répondre par e-mail plutôt que par téléphone.", "L'e-mail me convient mieux.", "Un appel me va très bien.", "Le soir est le meilleur moment pour appeler."]
 chatter = [
-  "Ce serait notre premier safari.",
+  { text = "Ce serait notre premier safari.", requires = ["first_time"] },
   "Nous en rêvons depuis des années.",
-  "Nous avons beaucoup voyagé mais jamais en Afrique.",
+  { text = "Nous avons beaucoup voyagé mais jamais en Afrique.", requires = ["first_time"] },
   "Nous aimerions quelques idées.",
   "Ouverts à vos suggestions.",
   "Dites-nous ce qui vous semble le mieux.",
@@ -340,23 +358,24 @@ chatter = [
 undecided = [
   "Nous n'avons pas encore réservé les vols.",
   "Je dois encore vérifier si mon employeur accepte les congés.",
-  "Il faut encore convaincre mon conjoint !",
-  "Nous hésitons entre cette année et l'année prochaine.",
+  { text = "Il faut encore convaincre mon conjoint !", requires = ["partner"] },
+  { text = "Nous hésitons entre cette année et l'année prochaine.", requires = ["undated"] },
   "Rien n'est décidé pour l'instant, on se renseigne.",
   "Faut-il bloquer les vols maintenant ou attendre votre proposition ?",
 ]
 commitment = [
-  "Vols réservés.",
-  "Congés posés.",
-  "Dates bloquées.",
-  "Billets achetés.",
-  "Nos vols sont déjà réservés, les dates sont donc fixes.",
-  "Mes congés sont validés pour ces semaines-là.",
-  "Mon conjoint est d'accord, il ne manque plus que le programme.",
+  "C'est décidé.",
+  { text = "Vols réservés.", requires = ["dated"] },
+  { text = "Congés posés.", requires = ["dated"] },
+  { text = "Dates bloquées.", requires = ["dated"] },
+  { text = "Billets achetés.", requires = ["dated"] },
+  { text = "Nos vols sont déjà réservés, les dates sont donc fixes.", requires = ["dated"] },
+  { text = "Mes congés sont validés pour ces semaines-là.", requires = ["dated"] },
+  { text = "Mon conjoint est d'accord, il ne manque plus que le programme.", requires = ["partner"] },
   "C'est décidé, nous partons ; reste à choisir les camps.",
   "Nous avons mis l'argent de côté et sommes prêts à nous lancer.",
   "Nous sommes prêts à verser un acompte dès que le programme nous plaît.",
-  "Tout le groupe a dit oui et a déjà participé.",
+  { text = "Tout le groupe a dit oui et a déjà participé.", requires = ["group"] },
 ]
 
 [message.fr.who]
@@ -370,7 +389,7 @@ exact = ["Nous aimerions partir à partir du {date}.", "Nos dates : à partir du
 month = ["Nous pensons à {month} {year}.", "Idéalement en {month}.", "Nous aimerions partir en {month} {year}."]
 year = ["Courant {year}.", "Probablement en {year}, dates ouvertes."]
 not_sure = ["Pas encore de dates.", "Les dates sont ouvertes."]
-vague = ["Peut-être l'année prochaine.", "D'ici un an ou deux.", "Sans doute en {year}."]
+vague = [{ text = "Peut-être l'année prochaine.", requires = ["undated"] }, { text = "D'ici un an ou deux.", requires = ["undated"] }, "Sans doute en {year}."]
 
 [message.fr.where]
 countries = ["Pays qui nous intéressent : {countries}.", "Nous pensons à : {countries}.", "{countries}, ce serait idéal."]
@@ -379,14 +398,14 @@ vague = ["Quelque part en Afrique.", "Afrique de l'Est ou australe, nous ne savo
 
 
 [message.fr.prohibited]
-ages_of_travellers = ["J'ai {age} ans, donc rien de trop sportif.", "Nous avons {age} et {age2} ans.", "Les enfants ont {child_ages} ans."]
-named_birthday = ["C'est pour mes 60 ans.", "Nous fêtons les 50 ans de mon conjoint.", "Un voyage pour mes 40 ans !"]
+ages_of_travellers = ["J'ai {age} ans, donc rien de trop sportif.", { text = "Nous avons {age} et {age2} ans.", requires = ["two_adults"] }, "Les enfants ont {child_ages} ans."]
+named_birthday = ["C'est pour mes 60 ans.", { text = "Nous fêtons les 50 ans de mon conjoint.", requires = ["partner"] }, "Un voyage pour mes 40 ans !"]
 retirement = ["Je viens de prendre ma retraite et je veux fêter ça.", "C'est un cadeau de départ à la retraite."]
 religious_diet = ["Nous mangeons casher, les repas sont importants.", "Nous mangeons uniquement halal.", "Pas de porc pour raisons religieuses, merci."]
-health_or_mobility = ["Je me déplace en fauteuil roulant, l'accessibilité est importante.", "J'ai un genou fragile, pas de longues marches svp.", "L'un de nous est diabétique."]
-pregnancy = ["Je serai enceinte de cinq mois à ce moment-là.", "Nous attendons un bébé, je voudrais éviter les zones de paludisme."]
-sexual_orientation = ["Mon mari et moi sommes un couple de même sexe, un accueil bienveillant compte pour nous.", "Nous sommes deux femmes en couple."]
-names_of_travellers = ["Mon conjoint {companion} et moi aimerions partir.", "{companion} vient avec moi.", "Merci, {first_name}", "Cordialement, {first_name}"]
+health_or_mobility = ["Je me déplace en fauteuil roulant, l'accessibilité est importante.", "J'ai un genou fragile, pas de longues marches svp.", { text = "L'un de nous est diabétique.", requires = ["two_or_more"] }]
+pregnancy = [{ text = "Je serai enceinte de cinq mois à ce moment-là.", requires = ["female"] }, { text = "Nous attendons un bébé, je voudrais éviter les zones de paludisme.", requires = ["partner"] }]
+sexual_orientation = [{ text = "Mon mari et moi sommes un couple de même sexe, un accueil bienveillant compte pour nous.", requires = ["couple", "male"] }, { text = "Nous sommes deux femmes en couple.", requires = ["couple", "female"] }]
+names_of_travellers = [{ text = "Mon conjoint {companion} et moi aimerions partir.", requires = ["partner"] }, { text = "{companion} vient avec moi.", requires = ["two_or_more"] }, "Merci, {first_name}", "Cordialement, {first_name}"]
 
 # ---------------------------------------------------------------------------------------------------------
 # Sales notes, written by the sales team in English (notes-and-loss-reasons.md §1-2). Every note phrase
@@ -400,18 +419,36 @@ email = [
   "Intro email sent, asked when is best to call back.",
   "Emailed with some first itinerary ideas.",
   "Replied by email with questions about the trip.",
+  "Intro email sent, f/u Fri.",
 ]
 call = [
   "Called, no answer. Will follow up by email.",
   "Tried to call, left a message.",
   "First call: no answer, sent a follow up email.",
   "Called the number on the form, left a voicemail.",
+  "LM. Will try thurs.",
+  "NA, emailed instead.",
 ]
 
 [notes.call]
-no_answer = ["No answer, will try again tomorrow.", "Called, no answer.", "No answer x2, follow up by email.", "No answer, try again after lunch."]
-left_voicemail = ["Left a voicemail, will follow up by email.", "Left a message, try again Thursday.", "Voicemail again, emailed as well."]
-busy = ["Line busy, will call back later.", "Busy, try again tomorrow.", "Engaged tone, call back in an hour."]
+no_answer = [
+  "No answer, will try again tomorrow.",
+  "Called, no answer.",
+  "No answer x2, follow up by email.",
+  "No answer, try again after lunch.",
+  "NA. Will try thurs.",
+  "no reply x2",
+  "NA again, 3rd try.",
+]
+left_voicemail = [
+  "Left a voicemail, will follow up by email.",
+  "Left a message, try again Thursday.",
+  "Voicemail again, emailed as well.",
+  "3rd LM",
+  "VM left",
+  "LVM, f/u Fri",
+]
+busy = ["Line busy, will call back later.", "Busy, try again tomorrow.", "Engaged tone, call back in an hour.", "Busy, CB later"]
 
 # The trip as the first conversation found it: facts only, no judgement.
 [notes]
@@ -421,6 +458,20 @@ recap = [
   "Trip about {nights} nights for {party} people, {countries}.",
   "Discovery call: {party} people, {countries}, around {month}.",
   "Call with lead about {countries}, {party} people, dates {year}.",
+  "{party} pax, {nights}n, {budget}, fully inclusive.",
+  "Budget {budget}, wants fully inclusive camps around {park}.",
+  "About {nights} nights, per person per night rates sent for {park}.",
+  { text = "Anniversary trip for the two of them, {nights} nights.", requires = ["couple"] },
+  { text = "Honeymoon couple, {nights} nights, {countries}.", requires = ["couple"] },
+]
+
+# The note after a long discovery call (notes.long_discovery_share): what was talked through, no
+# judgement.
+discovery_call = [
+  "Long call with them about the trip. {party} people, thinking {countries}, about {nights} nights. Talked through camps versus lodges, fly-in versus road transfers and what a typical day looks like. Explained how the rates work per person per night and what fully inclusive covers. They asked about malaria, visas and the weather, all covered. Sending some first ideas with sample camps and rough costs so they can compare.",
+  "Discovery call, roughly forty minutes. Went through who is travelling ({party} people), how long ({nights} nights) and where ({countries}). Discussed the balance of game drives and down time, private vehicle options and whether to add a beach stay at the end. Covered deposit and balance timings, flights and transfers. Agreed I would put together an itinerary with two options at different price points.",
+  "Good long chat about {countries}. {party} people, {nights} nights. Covered the best areas for the time of year, how busy the parks get, small camps versus bigger lodges and what fully inclusive means at each. They had questions about guiding, vehicle seating and luggage limits on the light aircraft, which I answered. Next step is a draft itinerary with costs per person.",
+  "Call went through everything on the form and more. {party} people, about {nights} nights, destinations still open. We talked about the regions that would suit, the difference between camps and lodges, what a day on safari looks like and how the flights between camps work. Explained pricing per person per night and the deposit. They asked sensible questions about health and insurance. Ideas to follow by email.",
 ]
 
 # What the conversation showed about the Lead (effects.notes_real_buyer), in meaning, not keywords:
@@ -428,33 +479,39 @@ recap = [
 # "will", "next", "asked"), so only what the note says tells them apart.
 [notes.discovery]
 real_buyer = [
-  "No issue with the budget, wants to hold space next week.",
+  "Not price sensitive at all, and it shows: asked for the best camps.",
+  { text = "Budget fine, and realistic for what they want.", requires = ["budget"] },
+  { text = "Wants beach, Mara and gorillas for {party}, and the budget is clearly there for it.", requires = ["to:Kenya"] },
+  { text = "No issue with the budget, wants to hold space next week.", requires = ["budget"] },
   "Said they would rather book with us than go direct.",
   "Still keen after seeing the prices, asked how the deposit works.",
-  "Will discuss with partner tonight and come back tomorrow with dates.",
-  "Wants a call with both of them on Thursday, any time, to go through the options.",
+  { text = "Will discuss with partner tonight and come back tomorrow with dates.", requires = ["partner", "undated"] },
+  { text = "Wants a call with both of them on Thursday, any time, to go through the options.", requires = ["partner"] },
   "Asked for a deposit invoice as soon as the camps confirm.",
-  "Knows the area well from a trip last year, wants the same guide again.",
-  "Happy with the camp style, but needs to pick dates with work first.",
+  { text = "Knows the area well from a trip last year, wants the same guide again.", requires = ["repeat_client"] },
+  { text = "Happy with the camp style, but needs to pick dates with work first.", requires = ["undated"] },
   "Already sent passport names so we can hold the internal flights.",
-  "Lovely couple, very clear about what they want and about the time of year.",
-  "Talked about the budget openly, it fits the trip they are asking for.",
+  { text = "Lovely couple, very clear about what they want and about the time of year.", requires = ["couple"] },
+  { text = "Talked about the budget openly, it fits the trip they are asking for.", requires = ["budget"] },
   "Clear decision-maker, not one to wait, wants to lock in the camps.",
   "Says the price is fine and means it, asked us to start on the itinerary.",
-  "Has been thinking about this for years, partner keen, only checking time off.",
+  { text = "Has been thinking about this for years, partner keen, only checking time off.", requires = ["partner"] },
 ]
 not_real_buyer = [
-  "No budget given, wants to think about it over the next year.",
+  "Price not an issue (apparently), and the camps they want are the cheapest.",
+  { text = "Budget 'fine', and the ask is five-star camps at three-star prices.", requires = ["budget"] },
+  { text = "Wants beach, Mara and gorillas for {party} on a shoestring, lol.", requires = ["to:Kenya"] },
+  { text = "No budget given, wants to think about it over the next year.", requires = ["no_budget"] },
   "Said they are collecting quotes and comparing a few companies first.",
-  "Still not sure about dates after seeing the prices, asked for time.",
-  "Will discuss with partner some time, no rush apparently.",
+  { text = "Still not sure about dates after seeing the prices, asked for time.", requires = ["undated"] },
+  { text = "Will discuss with partner some time, no rush apparently.", requires = ["partner"] },
   "Wants five countries in a week for a fraction of the cost.",
   "Asked us to find the cheapest camps for 'whenever'.",
   "Keen in principle, but said the same about two trips last year.",
   "Hard to pin down, kept saying they would think it over with work.",
   "Only after the sample itinerary to show family so we stop calling.",
-  "Pleasant couple, unclear on what they want or when.",
-  "Vague about the budget, changed the subject when asked about the trip.",
+  { text = "Pleasant couple, unclear on what they want or when.", requires = ["couple"] },
+  { text = "Vague about the budget, changed the subject when asked about the trip.", requires = ["no_budget"] },
   "Seemed to be researching an article, not planning a trip this year.",
   "Says price is no issue, then asked for a cheaper version with the same camps.",
   "Asked about the deposit only to say they never pay one up front.",
@@ -479,13 +536,13 @@ real_buyer = [
   "Still on track, thinking only about which flights; asked for the final itinerary.",
   "Last itinerary version sent, they want to book it the same day.",
   "They asked about a cheaper camp on one night, but otherwise ready.",
-  "Ready now: no more thinking, both like the plan and want the rooms held.",
+  { text = "Ready now: no more thinking, both like the plan and want the rooms held.", requires = ["partner"] },
 ]
 not_real_buyer = [
   "Itinerary version 2 sent; no reply yet, will chase next week.",
   "Follow up call: polite, but they had nothing new on the camps.",
   "No reply by email, and they did not pick up to say why.",
-  "No changes asked for, and no dates coming either.",
+  { text = "No changes asked for, and no dates coming either.", requires = ["undated"] },
   "Still thinking, they asked for more time on the itinerary.",
   "Last itinerary version sent, want to wait and see about it.",
   "They asked about a cheaper version of the whole trip again.",

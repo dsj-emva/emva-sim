@@ -57,6 +57,11 @@ class Lead:
         return self.price_per_person_per_night * self.nights * self.party_size
 
     @property
+    def budget_per_person(self) -> float:
+        """What the Lead can spend per person on the whole trip."""
+        return self.budget_per_person_per_night * self.nights
+
+    @property
     def party_size(self) -> int:
         return self.adults + self.children
 
