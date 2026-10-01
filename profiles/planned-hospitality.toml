@@ -138,6 +138,16 @@ held_at_middle = [
   "deal.nights_sigma",
   "process.booking_lead_time_sigma",
   "process.lost_after_provisional_hold",
+  "mess.duplicate_days_later",
+  "mess.duplicate_or_bot_moved_to_lost",
+  "loss.reasons.unknown",
+  "mess.bot_made_up_name",
+  "mess.bot_throwaway_email",
+  "mess.bot_impossible_party",
+  "mess.duplicate_same_email",
+  "mess.missing_rather_than_wrong",
+  "mess.wrong_number_one_more",
+  "mess.duplicate_name_case_changed",
 ]
 
 # ---------------------------------------------------------------------------------------------------------
@@ -889,6 +899,9 @@ variants = [{ name = "with calls and notes", calls = true }, { name = "deals and
 # HubSpot's own contact property for a form field, where it has one; every other field is a custom contact
 # property under its form label (sales-steps-and-exports.md §3).
 contact_properties = { "First name" = "First Name", "Last name" = "Last Name", "Email" = "Email", "Phone" = "Phone Number", "Country of residence" = "Country/Region", "Tell us about your dream trip" = "Message" }
+# The contact's Recent Conversion, as "Page title: Form name" (sales-steps-and-exports.md §3); the
+# names are guessed. Added for the generator (issue #8), awaiting the user's review.
+form_conversion = "Plan your safari: Safari enquiry form"
 # Form fields a workflow copies onto the deal as custom deal properties (sales-steps-and-exports.md §3).
 deal_properties = ["Where would you like to go?", "When would you like to travel?", "Are your dates flexible?", "Number of nights", "Number of adults", "Number of children", "Accommodation style", "Budget per person (excluding international flights)", "Have you travelled with us before?", "How did you hear about us?"]
 
@@ -902,8 +915,16 @@ owners = ["Amara Okafor", "James Whitfield", "Sofia Marchetti", "Tom Brennan"]
 titles = { female = { mrs = 0.35, ms = 0.35, miss = 0.15, dr = 0.10, mx = 0.05 }, male = { mr = 0.85, dr = 0.10, mx = 0.05 } }
 
 # ---------------------------------------------------------------------------------------------------------
-# How the sales team records stages.
+# How the sales team records stages. Every CRM stage change but the deal's creation at New Enquiry is
+# entered by hand, either late (lag_days_median is the median of an exponential lag) or in the weekly
+# pipeline review (bulk_update_share), where every change made in bulk gets the review's one timestamp.
+# HubSpot sets Close Date when a deal is moved to a closed stage and keeps only the latest Date entered of
+# a stage (sales-steps-and-exports.md §3-4). The review's day and hours were added for the generator
+# (issue #8), awaiting the user's review.
 # ---------------------------------------------------------------------------------------------------------
+
+[recording]
+bulk_review = { weekday = "Friday", from_hour = 16, to_hour = 18, confidence = "guessed", source = "none; weekly updating before pipeline reviews described (sales-steps-and-exports.md §4: cotera, not primary; neglect-and-mess.md §5: Attention); day and hours guessed" }
 
 [recording.skips_a_stage]
 low = 0.35
@@ -912,6 +933,9 @@ high = 0.65
 confidence = "estimated"
 source = "the user, from a client they have worked with (2026-10-01): about 50%"
 
+# Deals moved back to the stage recorded before (and on again, entering both again, which overwrites
+# their Date entered). This is how stages recorded "out of order" (issue #8) show in a HubSpot export:
+# each change is entered at or after the one before it, so lateness alone never reorders them.
 [recording.backward_move]
 low = 0.02
 middle = 0.05
@@ -948,8 +972,21 @@ confidence = "guessed"
 source = "none"
 
 # ---------------------------------------------------------------------------------------------------------
-# Data mess at intake.
+# Data mess at intake. Duplicates and bots are shares of all rows of the export; invalid emails, invalid
+# phones and fields missing or wrong are shares of the genuine Leads (invalid phones of those who give
+# one). A record with a field missing or wrong has one of key_fields (form roles) blank or wrong. Added
+# for the generator (issue #8), awaiting the user's review.
 # ---------------------------------------------------------------------------------------------------------
+
+[mess]
+# The tag a duplicate's alias adds to the address (name+tag@domain).
+email_alias_tag = "travel"
+impossible_party = [
+  { adults = { min = 0, max = 0 }, children = { min = 0, max = 0 } },
+  { adults = { min = 25, max = 99 }, children = { min = 0, max = 0 } },
+  { adults = { min = 1, max = 2 }, children = { min = 13, max = 40 } },
+]
+key_fields = ["first_name", "last_name", "country", "destinations", "travel_date", "nights", "adults", "children", "style", "budget_per_person"]
 
 [mess.duplicate_leads]
 low = 0.02
@@ -957,6 +994,88 @@ middle = 0.08
 high = 0.20
 confidence = "estimated"
 source = "neglect-and-mess.md §5: CRM-wide 10-30% (Landbase, vendor) covers all records; enquiries lower"
+
+# Of the records with a key field missing or wrong, the share where it is blank (the rest hold a
+# wrong value: a slip, another option or country, a travel year off by one, or a number one more or
+# one fewer, one more at wrong_number_one_more and always when one fewer would leave none). Added for
+# the generator (issue #8), awaiting the user's review.
+[mess.missing_rather_than_wrong]
+low = 0.3
+middle = 0.5
+high = 0.7
+confidence = "guessed"
+source = "none; added for the generator (issue #8), awaiting the user's review"
+
+[mess.wrong_number_one_more]
+low = 0.3
+middle = 0.5
+high = 0.7
+confidence = "guessed"
+source = "none; added for the generator (issue #8), awaiting the user's review"
+
+# Share of duplicates that type the name in another case (all lower or all upper). Added for the
+# generator (issue #8), awaiting the user's review.
+[mess.duplicate_name_case_changed]
+low = 0.3
+middle = 0.5
+high = 0.7
+confidence = "guessed"
+source = "none; added for the generator (issue #8), awaiting the user's review"
+
+# Days from a Lead's submission to its duplicate (the same person again, or through a second channel);
+# exponential with this median. Added for the generator (issue #8), awaiting the user's review.
+[mess.duplicate_days_later]
+low = 0.5
+middle = 3
+high = 14
+confidence = "guessed"
+source = "none; added for the generator (issue #8), awaiting the user's review"
+
+# Share of duplicates that give the same email again: HubSpot keeps one contact, so they become a
+# second deal on it (Number of Form Submissions and Recent Conversion updated); the rest give another
+# address and become a second contact. Added for the generator (issue #8), awaiting the user's review.
+[mess.duplicate_same_email]
+low = 0.3
+middle = 0.5
+high = 0.7
+confidence = "guessed"
+source = "none; added for the generator (issue #8), awaiting the user's review"
+
+# Share of duplicate and bot deals the sales team moves to Lost; the rest stay at New Enquiry. Added for
+# the generator (issue #8), awaiting the user's review.
+[mess.duplicate_or_bot_moved_to_lost]
+low = 0.2
+middle = 0.5
+high = 0.8
+confidence = "guessed"
+source = "none; added for the generator (issue #8), awaiting the user's review"
+
+# A bot or spam submission answers the form as a genuine Lead would, by the profile's answer mix,
+# except that a share of bots give a made-up name, a throwaway address, or a party no real enquiry
+# gives (one of impossible_party, adults and children each from min to max; ages are given for the
+# children). Its message is blank as often as a genuine Lead's (until issue #6 writes messages). So no
+# single column tells bots apart (the user's ruling on PR #15). Added for the generator (issue #8),
+# awaiting the user's review.
+[mess.bot_made_up_name]
+low = 0.3
+middle = 0.5
+high = 0.7
+confidence = "guessed"
+source = "none; added for the generator (issue #8), awaiting the user's review"
+
+[mess.bot_throwaway_email]
+low = 0.3
+middle = 0.5
+high = 0.7
+confidence = "guessed"
+source = "none; added for the generator (issue #8), awaiting the user's review"
+
+[mess.bot_impossible_party]
+low = 0.1
+middle = 0.3
+high = 0.5
+confidence = "guessed"
+source = "none; added for the generator (issue #8), awaiting the user's review"
 
 [mess.bot_or_spam]
 low = 0.005
@@ -1032,7 +1151,10 @@ high = 0.60
 confidence = "guessed"
 source = "notes-and-loss-reasons.md §5: HVS on misuse of 'lost to competitor'; Clozd (vendor, unsourced 60%)"
 
-# Shares among lost leads with a reason, by what the Hidden truth says happened ("unknown" is the rest).
+# What the Hidden truth says made a lost lead not win follows where it was lost (the user's ruling,
+# 2026-10-01): a Lead lost before Engaged truly could not be reached (could_not_reach_them, a share) or
+# was never a real buyer (the rest); a Lead lost at Engaged or later draws from price, timing,
+# never_a_real_buyer and unknown, as weights normalised to sum to one. The team records one of these values.
 [loss.reasons]
 recorded = [
   { recorded = "No response", meaning = "could_not_reach_them" },
@@ -1048,12 +1170,14 @@ recorded = [
 ]
 source = "notes-and-loss-reasons.md §3-4: Event Temple lost reasons, HVS, SafariBookings"
 
+# Among Leads lost before Engaged, the share whose truth is could not reach them; the rest were never
+# a real buyer.
 [loss.reasons.could_not_reach_them]
 low = 0.20
 middle = 0.35
 high = 0.50
 confidence = "estimated"
-source = "notes-and-loss-reasons.md: SafariBookings, 1-2 of 4-5 non-bookings never reply (search extract only)"
+source = "notes-and-loss-reasons.md: SafariBookings, 1-2 of 4-5 non-bookings never reply (search extract only); kept as the share among Leads lost before Engaged (the user's ruling, 2026-10-01)"
 
 [loss.reasons.price]
 low = 0.25
@@ -1075,6 +1199,13 @@ middle = 0.15
 high = 0.30
 confidence = "guessed"
 source = "none (notes-and-loss-reasons.md)"
+
+[loss.reasons.unknown]
+low = 0.05
+middle = 0.15
+high = 0.30
+confidence = "guessed"
+source = "notes-and-loss-reasons.md: HVS, 'other' often the largest value; added for the generator (issue #8), awaiting the user's review"
 
 # ---------------------------------------------------------------------------------------------------------
 # Planted effects. Sizes are odds ratios on winning, against the named reference, unless stated. The base

@@ -106,4 +106,4 @@ def test_counts_of_adults_and_children_are_intent_signals(profile):
 def test_loss_reason_meanings_match_their_ranges(profile):
     meanings = {r["meaning"] for r in profile["loss"]["reasons"]["recorded"]}
     shares = {key for key in profile["loss"]["reasons"] if key not in {"recorded", "source"}}
-    assert meanings - {"unknown"} == shares
+    assert meanings == shares

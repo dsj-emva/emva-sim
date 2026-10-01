@@ -31,5 +31,10 @@ def main(argv: list[str] | None = None) -> None:
         parser.error(f"unknown setting {error}")
     with (folder / "hidden-truth" / "hidden-truth.csv").open(newline="", encoding="utf-8") as f:
         truth = list(csv.DictReader(f))
-    won = sum(row["outcome"] == "won" for row in truth)
-    print(f"Wrote {len(truth)} leads, {won} of them won, on simulated data, to {folder}")
+    leads = [row for row in truth if row["row_kind"] == "lead"]
+    won = sum(row["outcome"] == "won" for row in leads)
+    others = len(truth) - len(leads)
+    print(
+        f"Wrote {len(leads)} leads, {won} of them won, and {others} duplicate or bot rows,"
+        f" on simulated data, to {folder}"
+    )

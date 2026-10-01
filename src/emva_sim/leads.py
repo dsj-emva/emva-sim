@@ -171,13 +171,32 @@ def _seasonal_price(p: dict, style: str, travel_month: int) -> float:
     return low * rate if travel_month in peak_months else low
 
 
-def _lead(rng: Random, p: dict, submitted_at: datetime, group: str) -> Lead:
-    deal, process, source = p["deal"], p["process"], p["volume"]["traffic_source"]
-    country = rng.choice(p["markets"]["groups"][group]["countries"])
+def countries(p: dict) -> list[dict]:
+    """Every country of every source market, each with its name and phone formats."""
+    return [c for group in p["markets"]["groups"].values() for c in group["countries"]]
+
+
+def market_group(rng: Random, p: dict) -> str:
+    """A source market drawn from the profile's shares: group A, else group B."""
+    return "a" if rng.random() < p["markets"]["group_a_share"] else "b"
+
+
+def traffic_source(rng: Random, p: dict) -> str:
+    """An Original Traffic Source drawn from the profile's mix."""
+    source = p["volume"]["traffic_source"]
     others = {k: source[k] for k in source["labels"] if k != source["reference"]}
-    traffic_source = _pick(rng, others, source["reference"])
+    return _pick(rng, others, source["reference"])
+
+
+def draw_lead(
+    rng: Random, p: dict, submitted_at: datetime, group: str, party: tuple[int, int] | None = None
+) -> Lead:
+    """One Lead submitted at this moment from this market; party fixes its adults and children."""
+    deal, process = p["deal"], p["process"]
+    country = rng.choice(p["markets"]["groups"][group]["countries"])
+    source = traffic_source(rng, p)
     repeat_client = rng.random() < p["form"]["answers"]["travelled_before"]
-    adults, children = _party(rng, p)
+    adults, children = party or _party(rng, p)
     style = _style(rng, p)
     nights = max(1, round(draws.lognormal(rng, deal["nights"], deal["nights_sigma"])))
     cycle_days = draws.lognormal(rng, process["days_to_won_median"], process["days_to_won_sigma"])
@@ -190,7 +209,7 @@ def _lead(rng: Random, p: dict, submitted_at: datetime, group: str) -> Lead:
         submitted_at=submitted_at,
         market_group=group,
         country=country["name"],
-        traffic_source=traffic_source,
+        traffic_source=source,
         repeat_client=repeat_client,
         style=style,
         nights=nights,
@@ -213,8 +232,8 @@ def draw_leads(rng: Random, p: dict, start: date, end: date) -> list[Lead]:
     count = round(p["volume"]["leads_per_month"] * sum(share for _, _, share in covered))
     arrivals = []
     for _ in range(count):
-        group = "a" if rng.random() < markets["group_a_share"] else "b"
+        group = market_group(rng, p)
         chances = [weights[group][m] * share for _, m, share in covered]
         year, month, _ = rng.choices(covered, chances)[0]
         arrivals.append((_submitted_at(rng, year, month, start, end), group))
-    return [_lead(rng, p, at, group) for at, group in sorted(arrivals)]
+    return [draw_lead(rng, p, at, group) for at, group in sorted(arrivals)]

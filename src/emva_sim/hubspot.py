@@ -15,8 +15,8 @@ from pathlib import Path
 from random import Random
 
 from emva_sim import form, months
-from emva_sim.leads import Lead
-from emva_sim.process import TruePath
+from emva_sim.intake import Submission
+from emva_sim.recording import Change, Recorded, closed_stage
 
 UNCONNECTED_CALL_OUTCOMES = ["No answer", "Left voicemail", "Busy"]
 DEAL_RECORD_IDS_FROM = 10_000_000_000
@@ -35,10 +35,13 @@ def record_ids(rng: Random, count: int, after: int) -> list[int]:
 
 @dataclass(frozen=True)
 class Record:
+    """One deal and its contact, as the sales system holds them."""
+
     deal_id: int
     contact_id: int
-    lead: Lead
-    path: TruePath
+    owner: str
+    submission: Submission
+    recorded: Recorded
 
 
 def stamp(moment: datetime | None) -> str:
@@ -77,11 +80,13 @@ class Export:
         self.export_at = datetime.combine(export_date, datetime.min.time())
         self.pipeline = p["pipeline"]["name"]
         self.stages = p["pipeline"]["stages"]
+        self.lost = closed_stage(p, "lost")
+        self.won = closed_stage(p, "won")
         self.fields = p["form"]["fields"]
 
     def write(self, folder: Path, rng: Random) -> None:
         deals = (self._deals_header(), [self._deal_row(r) for r in self.records])
-        contacts = (self._contacts_header(), [self._contact_row(r) for r in self.records])
+        contacts = (self._contacts_header(), self._contact_rows())
         calls = (self._calls_header(), self._call_rows(rng))
         for variant in self.p["exports"]["variants"]:
             target = folder / slug(variant["name"])
@@ -93,34 +98,31 @@ class Export:
     def _recorded(self, moment: datetime | None) -> datetime | None:
         return moment if moment is not None and moment < self.export_at else None
 
-    def stage_times(self, path: TruePath) -> dict[str, datetime]:
-        """When the deal entered each CRM stage, for the stages entered before the export date."""
-        times = {}
-        for stage in self.stages:
-            if stage.get("milestone"):
-                moment = path.provisional_hold_at
-            elif stage.get("after_won") == "travelled":
-                moment = path.travelled_at
-            elif stage.get("after_won") == "cancelled":
-                moment = path.cancelled_at
-            else:
-                moment = path.stage_times.get(stage["ladder"])
-            if self._recorded(moment):
-                times[stage["name"]] = moment
-        return times
+    def stage_times(self, r: Record) -> dict[str, datetime]:
+        """The latest recorded entry of each CRM stage, for the changes recorded before the export.
 
-    def _answer(self, lead: Lead, form_field: dict) -> str:
-        value = lead.answers[form_field["label"]]
+        HubSpot overwrites a stage's Date entered when a deal enters it again.
+        """
+        return {c.stage: c.recorded_at for c in self._visible(r)}
+
+    def _visible(self, r: Record) -> list[Change]:
+        recorded = [c for c in r.recorded.changes if self._recorded(c.recorded_at)]
+        return sorted(recorded, key=lambda c: c.recorded_at)
+
+    def _answer(self, s: Submission, form_field: dict) -> str:
+        value = s.answers[form_field["label"]]
         return _decimal(float(value)) if form_field["kind"] == "number" and value else value
 
-    def _deal_name(self, lead: Lead) -> str:
-        destination = form.answer(self.p, lead.answers, "destinations").split(";")[0]
-        place = "" if destination == form.unsure(self.p, "destinations") else f" {destination}"
-        return f"{form.answer(self.p, lead.answers, 'last_name')} –{place} {lead.travel_at:%b}"
+    def _deal_name(self, s: Submission) -> str:
+        destination = form.answer(self.p, s.answers, "destinations").split(";")[0]
+        place = (
+            "" if destination in ("", form.unsure(self.p, "destinations")) else f" {destination}"
+        )
+        return f"{form.answer(self.p, s.answers, 'last_name')} –{place} {s.lead.travel_at:%b}"
 
-    def _contact_name(self, lead: Lead) -> str:
-        first = form.answer(self.p, lead.answers, "first_name")
-        return f"{first} {form.answer(self.p, lead.answers, 'last_name')}"
+    def _contact_name(self, s: Submission) -> str:
+        first = form.answer(self.p, s.answers, "first_name")
+        return f"{first} {form.answer(self.p, s.answers, 'last_name')}"
 
     def _closed(self, times: dict[str, datetime]) -> datetime | None:
         for stage in self.stages:
@@ -149,34 +151,30 @@ class Export:
         ]
 
     def _deal_row(self, r: Record) -> list[str]:
-        lead, path = r.lead, r.path
-        times = self.stage_times(path)
-        order = [s["name"] for s in self.stages]
-        current = max(times, key=lambda name: (times[name], order.index(name)))
-        quotes = [amount for at, amount in path.quotes if self._recorded(at)]
-        created = lead.submitted_at
+        s = r.submission
+        times = self.stage_times(r)
+        current = self._visible(r)[-1].stage
+        quotes = [amount for at, amount in r.recorded.quotes if self._recorded(at)]
+        created = s.submitted_at
         month_end = months.last_day(created.year, created.month)
         close = self._closed(times) or datetime.combine(month_end, datetime.min.time())
         by_label = {f["label"]: f for f in self.fields}
         return [
             str(r.deal_id),
-            self._deal_name(lead),
+            self._deal_name(s),
             self.pipeline,
             current,
             _decimal(quotes[-1]) if quotes else "",
             stamp(close),
             stamp(created),
-            path.owner,
-            "Existing Business" if lead.repeat_client else "New Business",
-            "",
-            self.p["volume"]["traffic_source"]["labels"][lead.traffic_source],
+            r.owner,
+            "Existing Business" if s.lead.repeat_client else "New Business",
+            r.recorded.closed_lost_reason if current == self.lost else "",
+            self.p["volume"]["traffic_source"]["labels"][s.traffic_source],
             "Forms",
-            *(stamp(times.get(s["name"])) for s in self.stages),
-            *(
-                self._answer(lead, by_label[label])
-                for label in self.p["exports"]["deal_properties"]
-            ),
-            self._contact_name(lead),
+            *(stamp(times.get(stage["name"])) for stage in self.stages),
+            *(self._answer(s, by_label[label]) for label in self.p["exports"]["deal_properties"]),
+            self._contact_name(s),
             str(r.contact_id),
         ]
 
@@ -189,25 +187,42 @@ class Export:
             "Contact owner",
             "Create Date",
             "Original Traffic Source",
+            "Number of Form Submissions",
+            "Recent Conversion",
+            "Recent Conversion Date",
             *(f["label"] for f in self.fields if f["label"] not in standard),
             "Associated Deal",
             "Associated Deal IDs",
         ]
 
-    def _contact_row(self, r: Record) -> list[str]:
-        lead, path = r.lead, r.path
+    def _contact_rows(self) -> list[list[str]]:
+        """One row per contact, with every deal its form submissions made.
+
+        The contact keeps what its first submission gave; a later one with the same email adds a
+        deal and updates its count of submissions and its Recent Conversion.
+        """
+        deals_of: dict[int, list[Record]] = {}
+        for r in self.records:
+            deals_of.setdefault(r.contact_id, []).append(r)
+        return [self._contact_row(deals) for deals in deals_of.values()]
+
+    def _contact_row(self, deals: list[Record]) -> list[str]:
+        first, s = deals[0], deals[0].submission
         standard = self.p["exports"]["contact_properties"]
-        won = next(s["name"] for s in self.stages if s.get("closed") == "won")
+        won = any(self.won in self.stage_times(r) for r in deals)
         return [
-            str(r.contact_id),
-            *(self._answer(lead, f) for f in self.fields if f["label"] in standard),
-            "Customer" if won in self.stage_times(path) else "Opportunity",
-            path.owner,
-            stamp(lead.submitted_at),
-            self.p["volume"]["traffic_source"]["labels"][lead.traffic_source],
-            *(self._answer(lead, f) for f in self.fields if f["label"] not in standard),
-            self._deal_name(lead),
-            str(r.deal_id),
+            str(first.contact_id),
+            *(self._answer(s, f) for f in self.fields if f["label"] in standard),
+            "Customer" if won else "Opportunity",
+            first.owner,
+            stamp(s.submitted_at),
+            self.p["volume"]["traffic_source"]["labels"][s.traffic_source],
+            str(len(deals)),
+            self.p["exports"]["form_conversion"],
+            stamp(deals[-1].submission.submitted_at),
+            *(self._answer(s, f) for f in self.fields if f["label"] not in standard),
+            ";".join(self._deal_name(r.submission) for r in deals),
+            ";".join(str(r.deal_id) for r in deals),
         ]
 
     def _calls_header(self) -> list[str]:
@@ -229,8 +244,8 @@ class Export:
         calls = sorted(
             (attempt.at, r.deal_id, attempt)
             for r in self.records
-            for attempt in r.path.attempts
-            if attempt.channel == "call" and attempt.logged and self._recorded(attempt.at)
+            for attempt in r.recorded.calls
+            if self._recorded(attempt.at)
         )
         by_deal = {r.deal_id: r for r in self.records}
         rows = []
@@ -242,14 +257,14 @@ class Export:
                 [
                     str(call_id),
                     stamp(at),
-                    f"Call with {self._contact_name(r.lead)}",
+                    f"Call with {self._contact_name(r.submission)}",
                     "",
                     outcome,
                     "Completed",
                     "Outbound",
-                    self._contact_name(r.lead),
+                    self._contact_name(r.submission),
                     str(r.contact_id),
-                    self._deal_name(r.lead),
+                    self._deal_name(r.submission),
                     str(deal_id),
                 ]
             )

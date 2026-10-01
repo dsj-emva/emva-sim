@@ -15,6 +15,7 @@ DEALS = "export/with-calls-and-notes/hubspot-crm-exports-safari-enquiries-2024-0
 CONTACTS = "export/with-calls-and-notes/hubspot-crm-exports-all-contacts-2024-07-05.csv"
 CALLS = "export/with-calls-and-notes/hubspot-crm-exports-all-calls-2024-07-05.csv"
 TRUTH = "hidden-truth/hidden-truth.csv"
+STAGE_HISTORY = "hidden-truth/stage-history.csv"
 
 
 def rows(path):
@@ -33,9 +34,15 @@ def middle(tmp_path_factory):
     return dataset.generate(PROFILE, "middle", seed=1, out=out, history=HISTORY)
 
 
+def genuine(truth_rows):
+    """The hidden truth's rows of genuine Leads, without duplicates and bots."""
+    return [r for r in truth_rows if r["row_kind"] == "lead"]
+
+
 def test_the_deals_export_has_one_deal_per_lead_at_the_profiles_volume(middle):
     deals = rows(middle / DEALS)
-    assert len(deals) == 400 * 6
+    assert len(genuine(rows(middle / TRUTH))) == 400 * 6
+    assert len(deals) == len(rows(middle / TRUTH))
     assert list(deals[0])[0] == "Record ID"
 
 
@@ -50,7 +57,7 @@ def test_the_same_seed_gives_byte_identical_files(tmp_path):
     first = dataset.generate(PROFILE, "middle", seed=7, out=tmp_path / "a", history=SHORT)
     second = dataset.generate(PROFILE, "middle", seed=7, out=tmp_path / "b", history=SHORT)
     assert files(first) == files(second)
-    assert len(files(first)) == 6
+    assert len(files(first)) == 7
 
 
 def sweep_settings(raw):
@@ -94,7 +101,7 @@ LONG_CALLS = "export/with-calls-and-notes/hubspot-crm-exports-all-calls-2025-12-
 
 def logged_share(tmp_path, setting):
     folder = dataset.generate(PROFILE, setting, seed=1, out=tmp_path, history=LONG_AFTER)
-    made = sum(int(r["call_attempts"]) for r in rows(folder / TRUTH))
+    made = sum(int(r["call_attempts"]) for r in genuine(rows(folder / TRUTH)))
     return len(rows(folder / LONG_CALLS)) / made
 
 
@@ -115,7 +122,7 @@ def test_a_partial_month_gets_its_share_of_the_months_volume(tmp_path):
         start=date(2024, 1, 1), end=date(2024, 1, 2), export=date(2024, 3, 1)
     )
     folder = dataset.generate(PROFILE, "middle", seed=1, out=tmp_path, history=two_days)
-    assert len(rows(folder / TRUTH)) == round(400 * 2 / 31)
+    assert len(genuine(rows(folder / TRUTH))) == round(400 * 2 / 31)
 
 
 def test_a_median_delay_that_contradicts_the_late_share_is_refused():
@@ -129,7 +136,7 @@ def test_generating_again_replaces_the_previous_dataset(tmp_path):
     dataset.generate(PROFILE, "middle", seed=7, out=tmp_path, history=SHORT)
     later = dataset.History(start=SHORT.start, end=SHORT.end, export=date(2024, 4, 1))
     folder = dataset.generate(PROFILE, "middle", seed=7, out=tmp_path, history=later)
-    assert len(files(folder)) == 6
+    assert len(files(folder)) == 7
     assert all("2024-04-01" in str(p) for p in files(folder) if "export" in str(p))
 
 
@@ -149,6 +156,7 @@ def test_the_dataset_folder_holds_both_export_variants_and_the_hidden_truth(midd
         DEALS.replace("with-calls-and-notes", "deals-and-contacts-only"),
         CONTACTS.replace("with-calls-and-notes", "deals-and-contacts-only"),
         TRUTH,
+        STAGE_HISTORY,
     }
     assert middle.name == "planned-hospitality-middle-seed-1"
 
@@ -166,7 +174,7 @@ def test_no_hidden_truth_column_appears_in_any_export(middle):
 
 
 def test_every_field_is_double_quoted(middle):
-    for path in [*export_files(middle), middle / TRUTH]:
+    for path in [*export_files(middle), middle / TRUTH, middle / STAGE_HISTORY]:
         with open(path, newline="", encoding="utf-8") as f:
             raw = list(csv.reader(f))
         quoted = io.StringIO(newline="")
@@ -242,9 +250,11 @@ def test_contacts_use_hubspot_labels_and_point_at_their_deals(middle):
     ]:
         assert column in header
     for contact in contacts:
-        deal = deals[contact["Associated Deal IDs"]]
-        assert deal["Associated Contact IDs"] == contact["Record ID"]
-        assert contact["Email"].split("@")[1] in {"example.com", "example.org", "example.net"}
+        # A contact who submitted the form twice with one email has two deals.
+        for deal_id in contact["Associated Deal IDs"].split(";"):
+            assert deals[deal_id]["Associated Contact IDs"] == contact["Record ID"]
+        # Only names reserved for examples (RFC 2606), however mistyped the address is.
+        assert "example" in contact["Email"].rsplit("@")[-1], contact["Email"]
 
 
 def test_calls_are_logged_contact_attempts_on_known_deals(middle):
@@ -257,25 +267,31 @@ def test_calls_are_logged_contact_attempts_on_known_deals(middle):
         "Left voicemail",
         "Busy",
     }
+    truth = {r["deal_record_id"]: r for r in rows(middle / TRUTH)}
     for call in calls:
-        deal = deals[call["Associated Deal IDs"]]
-        assert deal['Date entered "Attempting Contact (Safari Enquiries)"'] <= call["Activity date"]
+        assert call["Associated Deal IDs"] in deals
+        first_attempt = truth[call["Associated Deal IDs"]]["first_contact_attempt_at"]
+        assert first_attempt <= call["Activity date"]
 
 
-def test_stages_are_recorded_in_ladder_order_without_skips(middle, raw):
+def test_the_true_path_enters_stages_in_ladder_order_without_skips(middle, raw):
     ladder = [
         s["name"]
         for s in raw["pipeline"]["stages"]
         if not s.get("milestone") and not s.get("after_won") and s.get("closed") != "lost"
     ]
+    true_times = {}
+    for change in rows(middle / STAGE_HISTORY):
+        if change["true_entered_at"]:
+            true_times[change["deal_record_id"], change["crm_stage"]] = change["true_entered_at"]
     for deal in rows(middle / DEALS):
-        entered = [deal[f'Date entered "{s} (Safari Enquiries)"'] for s in ladder]
+        entered = [true_times.get((deal["Record ID"], s), "") for s in ladder]
         reached = [t for t in entered if t]
         assert entered[: len(reached)] == reached, deal["Record ID"]
         assert reached == sorted(reached), deal["Record ID"]
 
 
-def test_the_hidden_truth_has_one_row_per_lead_keyed_by_both_record_ids(middle):
+def test_the_hidden_truth_has_one_row_per_deal_keyed_by_both_record_ids(middle):
     truth = rows(middle / TRUTH)
     deals = {d["Record ID"]: d for d in rows(middle / DEALS)}
     assert len(truth) == len(deals)
@@ -295,4 +311,10 @@ def test_the_hidden_truth_has_one_row_per_lead_keyed_by_both_record_ids(middle):
         "itinerary_versions",
         "cancelled_after_won",
         "call_attempts",
+        "true_loss_reason",
+        "row_kind",
+        "duplicate_of_deal_record_id",
+        "invalid_email",
+        "invalid_phone",
+        "fields_missing_or_wrong",
     ]
