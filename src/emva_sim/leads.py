@@ -205,6 +205,20 @@ def _party(rng: Random, p: dict) -> tuple[int, int]:
     return 1, 0
 
 
+def _seasonal_price(p: dict, style: str, travel_month: int) -> float:
+    """The style's price per person per night in the travel month.
+
+    The profile's price is the average over the year's travel months, taken as spread evenly over
+    the calendar; peak months pay peak_to_low_season_rate times the rest.
+    """
+    deal = p["deal"]
+    peak_months = p["effects"]["lead_time_by_season"]["peak_months"]
+    rate = deal["peak_to_low_season_rate"]
+    peak_share = len(peak_months) / 12
+    low = deal["price_per_person_per_night"][_key(style)] / (1 - peak_share + peak_share * rate)
+    return low * rate if travel_month in peak_months else low
+
+
 def _lead(rng: Random, p: dict, submitted_at: datetime, group: str) -> Lead:
     deal, process, source = p["deal"], p["process"], p["volume"]["traffic_source"]
     country = rng.choice(p["effects"]["proxy_trap_country"][f"group_{group.lower()}_countries"])
@@ -219,9 +233,7 @@ def _lead(rng: Random, p: dict, submitted_at: datetime, group: str) -> Lead:
         rng, process["booking_lead_time_months"], process["booking_lead_time_sigma"]
     )
     travel_at = submitted_at + timedelta(days=cycle_days + lead_time_days)
-    price = deal["price_per_person_per_night"][_key(style)]
-    if travel_at.month in p["effects"]["lead_time_by_season"]["peak_months"]:
-        price *= deal["peak_to_low_season_rate"]
+    price = _seasonal_price(p, style, travel_at.month)
     lead = Lead(
         submitted_at=submitted_at,
         market_group=group,
