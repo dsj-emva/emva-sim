@@ -9,7 +9,7 @@ drawn, so it has a method of its own.
 import math
 from datetime import date, datetime
 
-from emva_sim import form, ladder
+from emva_sim import form, ladder, leads
 from emva_sim.leads import DatesGiven, Lead
 
 SPEED_LIFT_BETWEEN = "linear in log hours"
@@ -144,15 +144,10 @@ class Effects:
         return _log(self.e["lead_source"][lead.traffic_source])
 
     def _message_length(self, lead: Lead) -> float:
-        effect, shape = self.e["message_length"], self.p["form"]["message"]["shape"]
+        effect = self.e["message_length"]
         if lead.message_words < effect["under_words"]:
             return _log(effect["under_15_words"])
-        dreamer = (
-            lead.message_words > shape["dreamer_over_words"]
-            and len(lead.destinations) > shape["dreamer_over_countries"]
-            and not lead.states_budget
-        )
-        return _log(effect["dreamer"]) if dreamer else 0.0
+        return _log(effect["dreamer"]) if leads.dreamer(self.p, lead) else 0.0
 
     def _party_size(self, lead: Lead) -> float:
         effect = self.e["party_size"]

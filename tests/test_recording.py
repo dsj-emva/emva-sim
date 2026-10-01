@@ -155,7 +155,9 @@ def test_the_profiles_share_of_stage_changes_are_made_in_bulk(generated, setting
 
 
 def test_timestamps_many_changes_share_are_the_weekly_pipeline_reviews(middle):
-    shared = sharing(hand_entered(middle), 3)
+    # Three late entries drawn apart can land in one minute by chance (seed 1 puts three in a
+    # Saturday minute once #6 shifts the draws), so "many" is five.
+    shared = sharing(hand_entered(middle), 5)
     assert shared
     assert all(at_the_review(change) for change in shared)
 

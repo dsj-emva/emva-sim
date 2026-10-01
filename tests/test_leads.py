@@ -282,3 +282,14 @@ def test_pooled_over_both_markets_budgets_and_lead_times_keep_the_profiles_media
         spread = math.hypot(sigma, math.log(trap[gap]) / 2)
         se = MEDIAN_SE * spread / math.sqrt(len(drawn))
         assert abs(math.log(pooled / expected)) <= STANDARD_ERRORS * se, (pooled, expected)
+
+
+@pytest.mark.parametrize("setting", ["middle", "form.message.blank_or_token@high", "all-high"])
+def test_only_a_written_message_can_show_a_decision_already_made(setting):
+    # A blank or token message has no room to carry text_commitment, so the flag falls on the
+    # written messages at a rate that keeps the profile's share of all leads.
+    p, drawn = year_at(setting)
+    token = p["form"]["message"]["shape"]["token_words_at_most"]
+    assert not [lead for lead in drawn if lead.text_commitment and lead.message_words <= token]
+    share = p["effects"]["text_commitment"]["share_of_leads"]
+    assert_share(sum(lead.text_commitment for lead in drawn) / len(drawn), share, len(drawn))

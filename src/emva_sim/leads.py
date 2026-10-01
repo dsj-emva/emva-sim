@@ -156,6 +156,28 @@ def _message_words(rng: Random, p: dict, dreamer: bool) -> int:
     return max(token + 1, round(draws.lognormal(rng, median, sigma)))
 
 
+def _commits(rng: Random, p: dict, message_words: int) -> bool:
+    """Whether the Lead shows a decision already made (effects.text_commitment).
+
+    Only a written message can show it, so the flag falls on Leads whose message is not blank or a
+    token, at the share that keeps the profile's share of all Leads.
+    """
+    message = p["form"]["message"]
+    share = p["effects"]["text_commitment"]["share_of_leads"]
+    chosen = rng.random() < _share_outside(share, message["blank_or_token"])
+    return chosen and message_words > message["shape"]["token_words_at_most"]
+
+
+def dreamer(p: dict, lead: "Lead") -> bool:
+    """A dreamer's message (effects.message_length): long, many countries, no budget stated."""
+    shape = p["form"]["message"]["shape"]
+    return (
+        lead.message_words > shape["dreamer_over_words"]
+        and len(lead.destinations) > shape["dreamer_over_countries"]
+        and not lead.states_budget
+    )
+
+
 def _heard_about(rng: Random, p: dict, lead: Lead) -> str:
     source = p["volume"]["traffic_source"]
     if rng.random() >= p["form"]["answers"]["answers_how_heard"]:
@@ -328,7 +350,7 @@ def draw_lead(
         dates_given=_dates_given(rng, p),
         destinations=_destinations(rng, p, dreamer),
         message_words=message_words,
-        text_commitment=rng.random() < p["effects"]["text_commitment"]["share_of_leads"],
+        text_commitment=_commits(rng, p, message_words),
         real_buyer=rng.random() < p["notes"]["real_buyer_share"],
     )
     person = people.draw(rng, p["people"]["titles"], country["phones"])
