@@ -5,7 +5,9 @@ bot or spam submissions, at the profile's shares of all rows (neglect-and-mess.m
 touches a Lead or its true path: the mess is in the copy the sales system holds.
 """
 
+import calendar
 import math
+import string
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from random import Random
@@ -16,17 +18,26 @@ from emva_sim.people import EMAIL_DOMAINS
 
 LEAD = "lead"
 DUPLICATE = "duplicate"
+BOT = "bot or spam"
+# Throwaway addresses under the TLD reserved for examples (RFC 2606), so none is a real service.
+DISPOSABLE_DOMAINS = ["tempinbox.example", "throwmail.example", "10minutemail.example"]
+SPAM_PITCHES = [
+    "Grow your website traffic fast, first page of search guaranteed",
+    "Cheap backlinks and guest posts for your travel website",
+    "We build apps and websites at low cost, reply for a free quote",
+    "Earn money from home with this investment, returns every week",
+]
 
 
 @dataclass(frozen=True)
 class Submission:
     """One form submission as the sales system holds it: one deal and one contact.
 
-    lead is the index of the Lead it is, or of the Lead a duplicate repeats.
+    lead is the index of the Lead it is, or of the Lead a duplicate repeats; a bot has none.
     """
 
     kind: str
-    lead: int
+    lead: int | None
     submitted_at: datetime
     answers: dict[str, str]
     traffic_source: str
@@ -34,8 +45,10 @@ class Submission:
     travel_month: str
 
 
-def submissions(rng: Random, p: dict, drawn: list[Lead], until: datetime) -> list[Submission]:
-    """Every submission received before until (the end of the history), in order of arrival."""
+def submissions(
+    rng: Random, p: dict, drawn: list[Lead], start: datetime, until: datetime
+) -> list[Submission]:
+    """Every submission received from start to until (the history), in order of arrival."""
     mess = p["mess"]
     genuine_share = 1 - mess["duplicate_leads"] - mess["bot_or_spam"]
     received = []
@@ -45,6 +58,8 @@ def submissions(rng: Random, p: dict, drawn: list[Lead], until: datetime) -> lis
             again = _duplicate(rng, p, i, lead)
             if again.submitted_at < until:
                 received.append(again)
+        if rng.random() < mess["bot_or_spam"] / genuine_share:
+            received.append(_bot(rng, p, start + (until - start) * rng.random()))
     return sorted(received, key=lambda s: s.submitted_at)
 
 
@@ -85,6 +100,57 @@ def _duplicate(rng: Random, p: dict, i: int, lead: Lead) -> Submission:
         lead.repeat_client,
         f"{lead.travel_at:%b}",
     )
+
+
+def _bot(rng: Random, p: dict, at: datetime) -> Submission:
+    """A bot or spam submission: made-up names, a disposable address, junk or no message."""
+    answers = {f["label"]: _bot_answer(rng, p, f, at) for f in p["form"]["fields"]}
+    return Submission(
+        BOT,
+        None,
+        at.replace(second=0, microsecond=0),
+        answers,
+        leads.traffic_source(rng, p),
+        False,
+        calendar.month_abbr[rng.randint(1, 12)],
+    )
+
+
+def _bot_answer(rng: Random, p: dict, form_field: dict, at: datetime) -> str:
+    options = [o["label"] for o in form_field.get("options", [])]
+    match form_field["role"], form_field["kind"]:
+        case (("first_name" | "last_name"), _):
+            return _gibberish(rng).capitalize()
+        case _, "email":
+            return f"{_gibberish(rng)}{rng.randrange(1000)}@{rng.choice(DISPOSABLE_DOMAINS)}"
+        case _, "phone":
+            return rng.choice(["", "1234567890", str(rng.randrange(10**5, 10**6))])
+        case _, "country":
+            countries = [c for g in p["markets"]["groups"].values() for c in g["countries"]]
+            return rng.choice(countries)["name"]
+        case _, "month_year":
+            month = calendar.month_name[rng.randint(1, 12)]
+            return rng.choice([form_field["not_sure_answer"], f"{month} {at.year}"])
+        case "adults", _:
+            return str(rng.choice([0, rng.randint(25, 99), rng.randint(1, 4)]))
+        case "children", _:
+            return rng.choice(["", str(rng.randint(13, 40))])
+        case _, "long_text":
+            return rng.choice(["", _spam(rng), _gibberish(rng)])
+        case _, "checkbox":
+            return rng.choice(["Yes", "No"])
+        case _, ("choice" | "multi"):
+            return rng.choice(options if form_field["required"] else ["", *options])
+    return ""
+
+
+def _gibberish(rng: Random) -> str:
+    return "".join(rng.choice(string.ascii_lowercase) for _ in range(rng.randint(5, 10)))
+
+
+def _spam(rng: Random) -> str:
+    links = " ".join(f"https://{_gibberish(rng)}.example/{_gibberish(rng)}" for _ in range(3))
+    return f"{rng.choice(SPAM_PITCHES)} {links}"
 
 
 def _other_address(rng: Random, email: str) -> str:

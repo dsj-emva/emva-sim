@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 
 from emva_sim import dataset
+from emva_sim.people import FIRST_NAMES
 
 PROFILE = Path(__file__).parent.parent / "profiles" / "planned-hospitality.toml"
 HISTORY = dataset.History(start=date(2024, 1, 1), end=date(2024, 6, 30), export=date(2024, 7, 5))
@@ -89,6 +90,62 @@ def test_duplicates_have_no_outcome_of_their_own_so_grading_can_leave_them_out(m
         assert not row["win_propensity"] and not row["outcome"], row
     for row in kinds(middle, "lead"):
         assert row["win_propensity"] and row["outcome"] and not row["duplicate_of_deal_record_id"]
+
+
+@pytest.mark.parametrize(
+    ("setting", "share", "tolerance"),
+    [
+        ("middle", 0.04, 0.012),
+        ("mess.bot_or_spam@low", 0.005, 0.004),
+        ("mess.bot_or_spam@high", 0.15, 0.02),
+    ],
+)
+def test_the_profiles_share_of_rows_are_bot_or_spam(generated, setting, share, tolerance):
+    folder = generated(setting)
+    deals = rows(folder / DEALS)
+    assert len(kinds(folder, "bot or spam")) / len(deals) == pytest.approx(share, abs=tolerance)
+
+
+def junk_signs(contact):
+    """The patterns of a bot or spam submission this contact shows."""
+    adults = contact["Number of adults"]
+    children = contact["Number of children"]
+    signs = {
+        "made-up name": contact["First Name"].capitalize() not in sum(FIRST_NAMES.values(), []),
+        "disposable email": contact["Email"].endswith(".example"),
+        "links in the message": "http" in contact["Message"],
+        "empty message": not contact["Message"],
+        "impossible party": float(adults) == 0
+        or float(adults) > 20
+        or (children and float(children) > 12),
+    }
+    return {sign for sign, shown in signs.items() if shown}
+
+
+def test_bots_look_like_junk_and_genuine_leads_do_not(middle):
+    contacts = {c["Associated Deal IDs"]: c for c in rows(middle / CONTACTS)}
+    bots = [contacts[r["deal_record_id"]] for r in kinds(middle, "bot or spam")]
+    assert bots
+    seen = set()
+    for bot in bots:
+        signs = junk_signs(bot)
+        assert signs - {"empty message"}, bot
+        seen |= signs
+    assert seen == {
+        "made-up name",
+        "disposable email",
+        "links in the message",
+        "empty message",
+        "impossible party",
+    }
+    for row in kinds(middle, "lead") + kinds(middle, "duplicate"):
+        assert not junk_signs(contacts[row["deal_record_id"]]) - {"empty message"}
+
+
+def test_bots_have_no_outcome_so_grading_can_leave_them_out(middle):
+    for row in kinds(middle, "bot or spam"):
+        assert not row["win_propensity"] and not row["outcome"], row
+        assert not row["duplicate_of_deal_record_id"]
 
 
 def test_the_exports_never_say_which_rows_are_duplicates_or_bots(middle):

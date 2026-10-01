@@ -83,8 +83,9 @@ def generate(
     process = Process(p)
     paths = [process.path(rng, lead) for lead in drawn]
 
+    start = datetime.combine(history.start, datetime.min.time())
     after_end = datetime.combine(history.end + timedelta(days=1), datetime.min.time())
-    received = intake.submissions(rng, p, drawn, after_end)
+    received = intake.submissions(rng, p, drawn, start, after_end)
     deal_ids = hubspot.record_ids(rng, len(received), hubspot.DEAL_RECORD_IDS_FROM)
     contact_ids = hubspot.record_ids(rng, len(received), hubspot.CONTACT_RECORD_IDS_FROM)
     recording = Recording(p, rng)
@@ -125,7 +126,7 @@ def _truth_rows(
             *lead_columns,
             r.recorded.true_loss_reason,
             s.kind,
-            "" if genuine else str(deal_of_lead[s.lead]),
+            str(deal_of_lead[s.lead]) if s.kind == intake.DUPLICATE else "",
         ]
 
 
