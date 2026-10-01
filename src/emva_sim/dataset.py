@@ -30,8 +30,10 @@ class History:
 DEFAULT_HISTORY = History()
 
 
-def name(p: dict, setting: str, seed: int) -> str:
-    return f"{p['name']}-{setting}-seed-{seed}"
+def folder_name(setting: str) -> str:
+    """A dataset's folder: its setting, with "<range name>@<end>" written as the profile key its
+    number is read from."""
+    return setting.replace("@", ".")
 
 
 def leads_and_paths(
@@ -45,8 +47,15 @@ def leads_and_paths(
 def generate(
     profile_path: Path, setting: str, seed: int, out: Path, history: History = DEFAULT_HISTORY
 ) -> Path:
-    """Write one dataset, replacing any earlier copy of it, and return its folder."""
-    p = profile.resolve(profile.load(profile_path), setting)
+    """Write one dataset to the folder of out named for it, and return that folder."""
+    folder = Path(out) / folder_name(setting)
+    write(profile.load(profile_path), setting, seed, folder, history)
+    return folder
+
+
+def write(raw: dict, setting: str, seed: int, folder: Path, history: History) -> None:
+    """Write one dataset into folder, replacing any earlier copy of it."""
+    p = profile.resolve(raw, setting)
     rng = Random(seed)
     drawn, paths = leads_and_paths(p, rng, history)
 
@@ -68,8 +77,6 @@ def generate(
             owner, recorded = rng.choice(p["team"]["owners"]), recording.not_a_lead(s.submitted_at)
         records.append(Record(deal_id, contact_id, owner, s, recorded))
 
-    folder = Path(out) / name(p, setting, seed)
     shutil.rmtree(folder, ignore_errors=True)
     hubspot.Export(p, records, history.export).write(folder / "export", rng)
     hidden_truth.write(folder / "hidden-truth", p, records, paths)
-    return folder

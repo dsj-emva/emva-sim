@@ -1,4 +1,4 @@
-.PHONY: install test lint generate
+.PHONY: install test lint generate datasets
 
 install:
 	uv sync --locked
@@ -12,3 +12,6 @@ lint:
 
 generate:
 	uv run emva-sim generate --profile profiles/planned-hospitality.toml --setting middle --seed 1 --out out/
+
+datasets:
+	uv run emva-sim datasets --profile profiles/planned-hospitality.toml --out out/datasets

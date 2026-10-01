@@ -1,10 +1,11 @@
-"""emva-sim generate: write one dataset from a profile, a setting and a seed."""
+"""emva-sim generate: write one dataset from a profile, a setting and a seed.
+emva-sim datasets: write every dataset of the profile's sweep, from fixed seeds."""
 
 import argparse
 import csv
 from pathlib import Path
 
-from emva_sim import dataset, profile
+from emva_sim import dataset, datasets, profile
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -19,12 +20,24 @@ def _parser() -> argparse.ArgumentParser:
     )
     generate.add_argument("--seed", type=int, default=1)
     generate.add_argument("--out", type=Path, default=Path("out"))
+    sweep = commands.add_parser(
+        "datasets", help="write every dataset of the profile's sweep, each with its manifest"
+    )
+    sweep.add_argument("--profile", type=Path, required=True)
+    sweep.add_argument("--out", type=Path, default=Path("out/datasets"))
     return parser
 
 
 def main(argv: list[str] | None = None) -> None:
     parser = _parser()
     args = parser.parse_args(argv)
+    if args.command == "datasets":
+        try:
+            listed = datasets.write_all(args.profile, args.out)
+        except datasets.NotAnEarlierOutput as error:
+            parser.error(str(error))
+        print(f"Wrote {len(listed)} datasets, on simulated data, to {args.out}")
+        return
     try:
         folder = dataset.generate(args.profile, args.setting, args.seed, args.out)
     except profile.UnknownSetting as error:

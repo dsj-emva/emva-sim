@@ -48,12 +48,26 @@ def _ends(raw: dict, setting: str) -> tuple[str, dict[str, str]]:
     return "middle", {name: end}
 
 
-def resolve(raw: dict, setting: str) -> dict:
+def number(raw: dict, name: str, end: str):
+    """The number a range, by its dotted name, holds at an end ("low", "middle" or "high")."""
+    node = raw
+    for key in name.split("."):
+        node = node[key]
+    return node[end]
+
+
+def ends(raw: dict, setting: str) -> dict[str, str]:
+    """The end ("low", "middle" or "high") each range is at in the setting, by range name."""
     default, exceptions = _ends(raw, setting)
+    return {name: exceptions.get(name, default) for name in range_names(raw)}
+
+
+def resolve(raw: dict, setting: str) -> dict:
+    end_of = ends(raw, setting)
 
     def walk(node, path):
         if _is_range(node):
-            return node[exceptions.get(".".join(path), default)]
+            return node[end_of[".".join(path)]]
         if isinstance(node, dict):
             return {key: walk(value, (*path, key)) for key, value in node.items()}
         return node

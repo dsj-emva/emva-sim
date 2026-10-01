@@ -62,21 +62,6 @@ def test_the_same_seed_gives_byte_identical_files(tmp_path):
     assert len(files(first)) == 7
 
 
-def sweep_settings(raw):
-    one_at_a_time = raw["sweep"]["one_at_a_time"]
-    ends = [f"{name}@{end}" for name in one_at_a_time for end in ("low", "high")]
-    return ["middle", *ends, "all-low", "all-high"]
-
-
-def test_every_dataset_of_the_sweep_generates(raw, tmp_path):
-    tiny = dataset.History(start=date(2024, 1, 1), end=date(2024, 1, 2), export=date(2024, 3, 1))
-    settings = sweep_settings(raw)
-    assert len(settings) == 149
-    for setting in settings:
-        folder = dataset.generate(PROFILE, setting, seed=1, out=tmp_path, history=tiny)
-        assert rows(folder / TRUTH), setting
-
-
 def test_the_hidden_truth_gives_a_deal_value_only_to_quoted_or_won_deals(middle):
     truth = rows(middle / TRUTH)
     for row in truth:
@@ -143,9 +128,8 @@ def test_generating_again_replaces_the_previous_dataset(tmp_path):
 
 
 def test_a_different_seed_gives_different_files(tmp_path):
-    first = dataset.generate(PROFILE, "middle", seed=7, out=tmp_path, history=SHORT)
-    second = dataset.generate(PROFILE, "middle", seed=8, out=tmp_path, history=SHORT)
-    assert first != second
+    first = dataset.generate(PROFILE, "middle", seed=7, out=tmp_path / "a", history=SHORT)
+    second = dataset.generate(PROFILE, "middle", seed=8, out=tmp_path / "b", history=SHORT)
     assert all(a != b for a, b in zip(files(first).values(), files(second).values(), strict=True))
 
 
@@ -160,7 +144,7 @@ def test_the_dataset_folder_holds_both_export_variants_and_the_hidden_truth(midd
         TRUTH,
         STAGE_HISTORY,
     }
-    assert middle.name == "planned-hospitality-middle-seed-1"
+    assert middle.name == "middle"
 
 
 def export_files(folder):

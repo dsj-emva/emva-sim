@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from emva_sim import cli
+from emva_sim import cli, datasets
 
 PROFILE = Path(__file__).parent.parent / "profiles" / "planned-hospitality.toml"
 
@@ -22,7 +22,7 @@ def test_generate_writes_a_dataset_and_labels_its_numbers(tmp_path, capsys):
             str(tmp_path),
         ]
     )
-    folder = tmp_path / "planned-hospitality-middle-seed-3"
+    folder = tmp_path / "middle"
     assert (folder / "hidden-truth" / "hidden-truth.csv").exists()
     printed = capsys.readouterr().out
     assert "9600 leads" in printed
@@ -37,6 +37,34 @@ def test_an_unknown_setting_exits_with_an_error(tmp_path, capsys):
         )
     assert exit_info.value.code == 2
     assert "nope" in capsys.readouterr().err
+
+
+def test_datasets_writes_the_sweep_of_the_profile_to_out_and_labels_its_numbers(
+    tmp_path, capsys, monkeypatch
+):
+    called = []
+
+    def write_all(profile_path, out):
+        called.append((profile_path, out))
+        return [{"folder": "middle"}, {"folder": "all-low"}]
+
+    monkeypatch.setattr(datasets, "write_all", write_all)
+    out = tmp_path / "datasets"
+    cli.main(["datasets", "--profile", str(PROFILE), "--out", str(out)])
+    assert called == [(PROFILE, out)]
+    printed = capsys.readouterr().out
+    assert "2 datasets" in printed
+    assert "on simulated data" in printed
+    assert str(out) in printed
+
+
+def test_datasets_refuses_an_out_folder_that_is_not_an_earlier_output(tmp_path, capsys):
+    (tmp_path / "precious.txt").write_text("keep me")
+    with pytest.raises(SystemExit) as exit_info:
+        cli.main(["datasets", "--profile", str(PROFILE), "--out", str(tmp_path)])
+    assert exit_info.value.code == 2
+    assert "index.json" in capsys.readouterr().err
+    assert (tmp_path / "precious.txt").read_text() == "keep me"
 
 
 def test_the_project_script_runs():
