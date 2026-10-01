@@ -58,6 +58,15 @@ def test_datasets_writes_the_sweep_of_the_profile_to_out_and_labels_its_numbers(
     assert str(out) in printed
 
 
+def test_datasets_refuses_an_out_folder_that_is_not_an_earlier_output(tmp_path, capsys):
+    (tmp_path / "precious.txt").write_text("keep me")
+    with pytest.raises(SystemExit) as exit_info:
+        cli.main(["datasets", "--profile", str(PROFILE), "--out", str(tmp_path)])
+    assert exit_info.value.code == 2
+    assert "index.json" in capsys.readouterr().err
+    assert (tmp_path / "precious.txt").read_text() == "keep me"
+
+
 def test_the_project_script_runs():
     result = subprocess.run(["emva-sim", "--help"], capture_output=True, text=True, check=True)
     assert "generate" in result.stdout

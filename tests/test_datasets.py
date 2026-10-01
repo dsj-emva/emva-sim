@@ -150,6 +150,42 @@ def test_a_dataset_is_the_one_its_seed_generates_alone(written, tmp_path):
     assert swept == files(alone)
 
 
+def test_a_run_leaves_exactly_the_current_sweep_removing_folders_of_earlier_settings(
+    written, tmp_path
+):
+    out = tmp_path / "datasets"
+    datasets.write_all(PROFILE, out, history=TINY)
+    (out / "dropped.range.low").mkdir()
+    (out / "dropped.range.low" / "manifest.json").write_text("{}")
+    datasets.write_all(PROFILE, out, history=TINY)
+    assert files(out) == files(written)
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["datasets"]
+
+
+def test_a_non_empty_folder_without_an_index_is_refused_and_left_untouched(tmp_path):
+    out = tmp_path / "home"
+    out.mkdir()
+    (out / "precious.txt").write_text("keep me")
+    with pytest.raises(datasets.NotAnEarlierOutput):
+        datasets.write_all(PROFILE, out, history=TINY)
+    assert files(out) == {Path("precious.txt"): b"keep me"}
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["home"]
+
+
+def test_a_crash_mid_run_leaves_the_earlier_output_intact(written, tmp_path):
+    out = tmp_path / "datasets"
+    datasets.write_all(PROFILE, out, history=TINY)
+    broken = tmp_path / "broken.toml"
+    text = PROFILE.read_text()
+    leads_per_month = "[volume.leads_per_month]\nlow = 100\nmiddle = 400\nhigh = 1000\n"
+    assert leads_per_month in text
+    broken.write_text(text.replace(leads_per_month, leads_per_month.replace("1000", '"boom"')))
+    with pytest.raises(TypeError):
+        datasets.write_all(broken, out, history=TINY)
+    assert files(out) == files(written)
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["broken.toml", "datasets"]
+
+
 def test_each_manifest_carries_its_setting_and_seed(written):
     for setting in ["middle", "volume.leads_per_month@low", "all-high"]:
         m = manifest(written, setting)

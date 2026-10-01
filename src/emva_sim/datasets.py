@@ -11,6 +11,7 @@ removing a setting never changes another dataset's data.
 
 import hashlib
 import json
+import shutil
 from concurrent.futures import ProcessPoolExecutor
 from functools import partial
 from importlib.metadata import version
@@ -33,8 +34,21 @@ def seed(setting: str) -> int:
     return int(hashlib.sha256(f"{BASE_SEED}/{setting}".encode()).hexdigest()[:8], 16)
 
 
+class NotAnEarlierOutput(ValueError):
+    """The output folder holds something other than an earlier sweep, so it is not replaced."""
+
+
 def write_all(profile_path: Path, out: Path, history: History = DEFAULT_HISTORY) -> list[dict]:
-    """Write every dataset of the sweep and the index, and return the index's datasets."""
+    """Write every dataset of the sweep and the index, and return the index's datasets.
+
+    out ends holding exactly this sweep. It is built in "<out>.partial" beside it, which then
+    replaces out, so a run that fails leaves an earlier output as it was. out and "<out>.partial"
+    are replaced only when empty or holding an index.json of an earlier run.
+    """
+    out = Path(out)
+    staging = out.with_name(out.name + ".partial")
+    for folder in (out, staging):
+        _check_replaceable(folder)
     profile_path = Path(profile_path)
     raw = profile.load(profile_path)
     named = {"file": profile_path.name, "sha256": _sha256(profile_path)}
@@ -42,13 +56,28 @@ def write_all(profile_path: Path, out: Path, history: History = DEFAULT_HISTORY)
     listed = [
         {"folder": dataset.folder_name(s), "setting": s, "seed": seed(s)} for s in settings(raw)
     ]
-    with ProcessPoolExecutor() as pool:
-        list(pool.map(partial(_write_one, raw, named, named_generator, Path(out), history), listed))
-    _write_json(
-        Path(out) / "index.json",
-        {**DATA_SOURCE, "profile": named, "base_seed": BASE_SEED, "datasets": listed},
-    )
+    shutil.rmtree(staging, ignore_errors=True)
+    staging.mkdir(parents=True)
+    try:
+        # The index goes in first, so an unfinished staging folder is known as this command's.
+        _write_json(
+            staging / "index.json",
+            {**DATA_SOURCE, "profile": named, "base_seed": BASE_SEED, "datasets": listed},
+        )
+        with ProcessPoolExecutor() as pool:
+            write_one = partial(_write_one, raw, named, named_generator, staging, history)
+            list(pool.map(write_one, listed))
+    except BaseException:
+        shutil.rmtree(staging)
+        raise
+    shutil.rmtree(out, ignore_errors=True)
+    staging.rename(out)
     return listed
+
+
+def _check_replaceable(folder: Path) -> None:
+    if folder.exists() and any(folder.iterdir()) and not (folder / "index.json").is_file():
+        raise NotAnEarlierOutput(f"{folder} is not empty and holds no index.json of earlier output")
 
 
 def _write_one(

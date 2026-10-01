@@ -32,7 +32,10 @@ def main(argv: list[str] | None = None) -> None:
     parser = _parser()
     args = parser.parse_args(argv)
     if args.command == "datasets":
-        listed = datasets.write_all(args.profile, args.out)
+        try:
+            listed = datasets.write_all(args.profile, args.out)
+        except datasets.NotAnEarlierOutput as error:
+            parser.error(str(error))
         print(f"Wrote {len(listed)} datasets, on simulated data, to {args.out}")
         return
     try:
