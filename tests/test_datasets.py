@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from emva_sim import dataset, datasets
+from emva_sim import dataset, datasets, profile
 
 PROFILE = Path(__file__).parent.parent / "profiles" / "planned-hospitality.toml"
 TINY = dataset.History(start=date(2024, 1, 1), end=date(2024, 1, 2), export=date(2024, 3, 1))
@@ -53,6 +53,35 @@ def test_each_seed_is_the_sha256_of_the_base_seed_and_the_setting_so_others_neve
     assert datasets.BASE_SEED == 1
     assert datasets.seed("middle") == 0xE95D4948
     assert datasets.seed("volume.leads_per_month@low") == 0xB0EB7AC6
+
+
+def test_a_one_at_a_time_manifest_differs_from_the_middles_only_in_its_one_range(written):
+    middle = manifest(written, "middle")["ranges"]
+    assert {r["end"] for r in middle.values()} == {"middle"}
+    raw = profile.load(PROFILE)
+    for name in raw["sweep"]["one_at_a_time"]:
+        for end in ("low", "high"):
+            ranges = manifest(written, f"{name}@{end}")["ranges"]
+            assert ranges.keys() == middle.keys()
+            changed = {n for n in ranges if ranges[n] != middle[n]}
+            assert changed == {name}, (name, end)
+            assert ranges[name]["end"] == end
+
+
+def test_the_extremes_put_every_range_swept_or_held_at_its_end(written):
+    raw = profile.load(PROFILE)
+    swept, held = raw["sweep"]["one_at_a_time"], raw["sweep"]["held_at_middle"]
+    for end in ("low", "high"):
+        ranges = manifest(written, f"all-{end}")["ranges"]
+        assert ranges.keys() == set(swept) | set(held)
+        assert {r["end"] for r in ranges.values()} == {end}
+
+
+def test_a_manifest_carries_each_ranges_resolved_number(written):
+    assert manifest(written, "middle")["ranges"]["volume.leads_per_month"]["value"] == 400
+    assert manifest(written, "all-low")["ranges"]["volume.leads_per_month"]["value"] == 100
+    referral = manifest(written, "effects.lead_source.referral@high")["ranges"]
+    assert referral["effects.lead_source.referral"]["value"] == 6.0
 
 
 def test_each_manifest_carries_its_setting_and_seed(written):

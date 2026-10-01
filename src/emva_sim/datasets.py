@@ -38,5 +38,15 @@ def write_all(profile_path: Path, out: Path, history: History = DEFAULT_HISTORY)
     for setting in settings(raw):
         folder = Path(out) / folder_name(setting)
         dataset.write(raw, setting, seed(setting), folder, history)
-        m = {"setting": setting, "seed": seed(setting)}
+        m = {"setting": setting, "seed": seed(setting), "ranges": _ranges(raw, setting)}
         (folder / "manifest.json").write_text(json.dumps(m))
+
+
+def _ranges(raw: dict, setting: str) -> dict[str, dict]:
+    ranges = {}
+    for name, end in profile.ends(raw, setting).items():
+        node = raw
+        for key in name.split("."):
+            node = node[key]
+        ranges[name] = {"end": end, "value": node[end]}
+    return ranges
