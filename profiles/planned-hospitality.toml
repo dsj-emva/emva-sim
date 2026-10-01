@@ -1,0 +1,846 @@
+# Industry profile: planned hospitality
+#
+# One advertiser: a tailor-made safari operator (East and Southern Africa, selling to travellers in the UK,
+# the US and Europe) that also sells corporate incentive trips and events. Every industry-specific fact the
+# generator and the Lead simulator need lives here (decision 0007).
+#
+# Every uncertain number is a range:
+#   { low, middle, high, confidence, source }
+#   confidence: "sourced"   a cited source states it (or numbers it follows from directly)
+#               "estimated" worked out from cited sources that do not state it
+#               "guessed"   no usable source; a reasoned judgement
+#   source:     the research note it came from (docs/research/planned-hospitality/) and the outside source,
+#               or "none" for a guess.
+# Datasets are generated at the middle, at each range's low and high one at a time, and with every range low
+# together and every range high together. "low" and "high" are the low and high numbers, whatever their effect.
+#
+# Facts that are not uncertain (column names, stage names, field options) are plain values. Money is USD.
+# Rates are shares between 0 and 1. Every number from data generated from this profile is "on simulated data".
+
+name = "planned-hospitality"
+currency = "USD"
+
+# ---------------------------------------------------------------------------------------------------------
+# Segments: the three kinds of enquiry this advertiser receives.
+# ---------------------------------------------------------------------------------------------------------
+
+[segments]
+names = ["safari", "incentive", "event"]
+
+[segments.leads_per_month.safari]
+low = 100
+middle = 400
+high = 1000
+confidence = "estimated"
+source = "cycle-and-deal-size.md §4: from a guessed operator size; no published volume"
+
+[segments.leads_per_month.incentive]
+low = 5
+middle = 20
+high = 60
+confidence = "guessed"
+source = "none (cycle-and-deal-size.md §4)"
+
+[segments.leads_per_month.event]
+low = 10
+middle = 40
+high = 150
+confidence = "guessed"
+source = "none (cycle-and-deal-size.md §4)"
+
+# Safari enquiries by month of submission, as a weight on the average month (1.0 elsewhere).
+[segments.seasonality.january_weight]
+low = 1.3
+middle = 1.6
+high = 2.0
+confidence = "estimated"
+source = "cycle-and-deal-size.md §1a: Aspire Travel Club (Designer Travel 22% of the year in January); Go2Africa State of Safari 2025"
+
+[segments.seasonality.november_december_weight]
+low = 0.6
+middle = 0.7
+high = 0.8
+confidence = "estimated"
+source = "cycle-and-deal-size.md §1a: Go2Africa State of Safari 2025"
+
+# ---------------------------------------------------------------------------------------------------------
+# The enquiry form. Two forms feed the sales system: the safari form and the corporate form.
+# Field labels are what the form shows; the export columns below carry them.
+# ---------------------------------------------------------------------------------------------------------
+
+[form.safari]
+fields = [
+  { label = "Title", kind = "choice", options = ["Mr", "Mrs", "Ms", "Miss", "Dr", "Mx"], required = true },
+  { label = "First name", kind = "text", required = true },
+  { label = "Last name", kind = "text", required = true },
+  { label = "Email", kind = "email", required = true },
+  { label = "Phone", kind = "phone", required = false },
+  { label = "Country of residence", kind = "country", required = true },
+  { label = "Where would you like to go?", kind = "multi", options = ["Kenya", "Tanzania", "Botswana", "South Africa", "Rwanda", "Uganda", "Namibia", "Zambia", "Zimbabwe", "Not sure yet"], required = true },
+  { label = "When would you like to travel?", kind = "month_year", allow = ["exact dates", "month", "year only", "not sure"], required = true },
+  { label = "Are your dates flexible?", kind = "choice", options = ["Fixed", "Flexible", "Not sure"], required = false },
+  { label = "Number of nights", kind = "choice", options = ["Under 5", "5-7", "8-10", "11-14", "15+", "Not sure"], required = false },
+  { label = "Number of adults", kind = "number", required = true },
+  { label = "Number of children", kind = "number", required = false },
+  { label = "Ages of children", kind = "text", required = false },
+  { label = "Accommodation style", kind = "choice", options = ["Comfortable", "Luxury", "Ultra-luxury", "Not sure"], required = false },
+  { label = "Budget per person (excluding international flights)", kind = "choice", options = ["Under $4,000", "$4,000 - $7,000", "$7,000 - $10,000", "$10,000 - $20,000", "$20,000+", "Not sure"], required = false },
+  { label = "Have you travelled with us before?", kind = "choice", options = ["Yes", "I have enquired before", "No"], required = false },
+  { label = "How did you hear about us?", kind = "choice", options = ["Google", "Instagram", "Facebook", "Recommended by a friend", "Travelled with you before", "Magazine", "Travel agent", "ChatGPT or another AI assistant", "Other"], required = false },
+  { label = "Tell us about your dream trip", kind = "long_text", required = false },
+  { label = "Sign me up for the newsletter", kind = "checkbox", required = false },
+]
+source = "enquiry-forms.md §1: fields seen on 12 operator forms (Expert Africa, Go2Africa, Rhino Africa, Steppes, Audley, Scott Dunn, &Beyond, Cazenove+Loyd, Natural Selection, Porini, SafariBookings, Noboru); budget bands after Go2Africa and Scott Dunn"
+
+[form.corporate]
+fields = [
+  { label = "First name", kind = "text", required = true },
+  { label = "Last name", kind = "text", required = true },
+  { label = "Email", kind = "email", required = true },
+  { label = "Phone", kind = "phone", required = true },
+  { label = "Company", kind = "text", required = true },
+  { label = "Job title", kind = "text", required = false },
+  { label = "Are you the decision maker?", kind = "choice", options = ["Yes", "No", "Shared decision"], required = false },
+  { label = "Programme type", kind = "choice", options = ["Incentive", "Meeting", "Conference", "Event", "Product Launch", "Team Retreat", "Other"], required = true },
+  { label = "Expected number of delegates", kind = "text", required = true },
+  { label = "Preferred dates", kind = "text", required = true },
+  { label = "Budget per participant", kind = "text", required = false },
+  { label = "Event vision and support needs", kind = "long_text", required = true },
+]
+source = "enquiry-forms.md §1 corporate: Euromic DMC RFP form, Bespoke Connects form, Cvent RFP guidance"
+
+# How often leads fill what the form allows them to skip, and what they write.
+[form.answers.states_budget]
+low = 0.15
+middle = 0.30
+high = 0.40
+confidence = "guessed"
+source = "none (enquiry-forms.md §3: optional budget field)"
+
+[form.answers.gives_phone_when_optional]
+low = 0.45
+middle = 0.65
+high = 0.85
+confidence = "guessed"
+source = "none"
+
+[form.answers.states_exact_dates]
+low = 0.10
+middle = 0.25
+high = 0.45
+confidence = "guessed"
+source = "none (enquiry-forms.md §3)"
+
+[form.answers.answers_how_heard]
+low = 0.40
+middle = 0.60
+high = 0.80
+confidence = "guessed"
+source = "none"
+
+[form.answers.includes_children]
+low = 0.15
+middle = 0.25
+high = 0.35
+confidence = "guessed"
+source = "none (enquiry-forms.md §3); Go2Africa party mix 28% families"
+
+[form.answers.mentions_occasion]
+low = 0.10
+middle = 0.17
+high = 0.25
+confidence = "guessed"
+source = "none (enquiry-forms.md §3)"
+
+[form.answers.mentions_diet_health_or_mobility]
+low = 0.02
+middle = 0.05
+high = 0.10
+confidence = "guessed"
+source = "none (enquiry-forms.md §3)"
+
+[form.answers.corporate_states_budget]
+low = 0.20
+middle = 0.35
+high = 0.50
+confidence = "guessed"
+source = "none (enquiry-forms.md §3)"
+
+# Party type for safari leads.
+[form.party_mix]
+solo = 0.16
+couple = 0.46
+family = 0.28
+friends = 0.10
+confidence = "sourced"
+source = "cycle-and-deal-size.md §2a: Go2Africa State of Safari 2025"
+
+# The message. Lengths in words.
+[form.message.median_words]
+low = 25
+middle = 45
+high = 80
+confidence = "guessed"
+source = "none (enquiry-forms.md §2)"
+
+[form.message.blank_or_token]
+low = 0.10
+middle = 0.20
+high = 0.35
+confidence = "guessed"
+source = "none; blank requests happen (SafariBookings help centre, enquiry-forms.md §2)"
+
+[form.message.vague_share]
+low = 0.20
+middle = 0.30
+high = 0.40
+confidence = "guessed"
+source = "none (enquiry-forms.md §2); the rest split partly specific and very specific about 2 to 1"
+
+[form.message.facts_disagree_with_fields]
+low = 0.02
+middle = 0.08
+high = 0.15
+confidence = "guessed"
+source = "none; follows from facts given in both fields and text (enquiry-forms.md §2)"
+
+# ---------------------------------------------------------------------------------------------------------
+# Prohibited inputs and Intent signals (decision 0008). The generator plants prohibited inputs in fields and
+# text so the formatter's removal and the proxy check can be tested; none of them affects the hidden truth
+# except through the Intent signals named in the proxy trap.
+# ---------------------------------------------------------------------------------------------------------
+
+[prohibited_inputs]
+fields = ["Title", "First name", "Last name", "Ages of children", "Phone (country code)", "Country of residence", "Email (name part)"]
+in_text = ["ages of travellers", "named birthdays (e.g. 60th)", "retirement", "dietary needs tied to religion", "health, pregnancy and mobility needs", "names of travellers"]
+source = "enquiry-forms.md §4; what-predicts-a-booking.md §9"
+
+[intent_signals]
+fields = ["Where would you like to go?", "When would you like to travel?", "Are your dates flexible?", "Number of nights", "Number of adults", "Number of children", "Accommodation style", "Budget per person (excluding international flights)", "Have you travelled with us before?", "How did you hear about us?", "Programme type", "Expected number of delegates", "Budget per participant", "Are you the decision maker?", "Job title"]
+in_text = ["occasion (honeymoon, anniversary)", "named parks, camps and lodges", "must-dos", "flights already booked", "specificity and length"]
+source = "enquiry-forms.md §4"
+
+# ---------------------------------------------------------------------------------------------------------
+# Deal sizes.
+# ---------------------------------------------------------------------------------------------------------
+
+[deal.safari.price_per_person_per_night.comfortable]
+low = 300
+middle = 550
+high = 900
+confidence = "estimated"
+source = "cycle-and-deal-size.md §2a: Yellow Zebra cost guide; published mid-market camp rates"
+
+[deal.safari.price_per_person_per_night.luxury]
+low = 900
+middle = 1300
+high = 2000
+confidence = "estimated"
+source = "cycle-and-deal-size.md §2a: Yellow Zebra; safari.com Ngorongoro Crater Lodge rates"
+
+[deal.safari.price_per_person_per_night.ultra_luxury]
+low = 2000
+middle = 3000
+high = 5000
+confidence = "estimated"
+source = "cycle-and-deal-size.md §2a, as checked: rack rates $3,075-5,040 (Mombo, Singita Serengeti on safari.com) give the middle and high; the low end is not on those pages"
+
+[deal.safari.peak_to_low_season_rate]
+low = 1.3
+middle = 1.4
+high = 1.55
+confidence = "sourced"
+source = "cycle-and-deal-size.md §2a, as checked: Singita Serengeti 1.40 within each year; Mombo $3,285 and $5,040 (safari.com)"
+
+[deal.safari.nights]
+low = 5
+middle = 7
+high = 10
+confidence = "estimated"
+source = "cycle-and-deal-size.md §2a: Go2Africa State of Safari 2025; safari.com Travel Pulse (spread 3-21)"
+
+# Deal value is price per person per night x nights x paying travellers. At the middle this gives a median
+# near $15,000 and a 5th-95th percentile of about $5k-100k (cycle-and-deal-size.md §2a, from Go2Africa's
+# $8,625 per person sharing, a budget stated in enquiries, not booked spend); the generator's tests check that, rather than the profile setting it twice.
+[deal.safari.style_mix.luxury]
+low = 0.35
+middle = 0.45
+high = 0.55
+confidence = "guessed"
+source = "none; chosen so the middle reproduces Go2Africa's spend per person"
+
+[deal.safari.style_mix.ultra_luxury]
+low = 0.05
+middle = 0.12
+high = 0.20
+confidence = "guessed"
+source = "none; the rest choose Comfortable"
+
+[deal.safari.deposit_share]
+low = 0.25
+middle = 0.30
+high = 0.50
+confidence = "sourced"
+source = "cycle-and-deal-size.md: Go2Africa booking process; African Safari Mag"
+
+[deal.incentive.per_person]
+low = 5000
+middle = 7000
+high = 12000
+confidence = "estimated"
+source = "cycle-and-deal-size.md §2b: Incentive Travel Index 2025 (average $5,100-6,177); Prevue 2024"
+
+[deal.incentive.group_size]
+low = 10
+middle = 40
+high = 150
+confidence = "estimated"
+source = "cycle-and-deal-size.md §2b: Prevue (58% under 200 attendees); Brightspot; DMC GO"
+
+[deal.event.per_attendee_per_day]
+low = 169
+middle = 400
+high = 600
+confidence = "estimated"
+source = "cycle-and-deal-size.md §2c: Skift / CWT-GBTA 2025 forecast $169 (low end); higher ends estimated"
+
+[deal.event.attendees]
+low = 25
+middle = 55
+high = 200
+confidence = "estimated"
+source = "cycle-and-deal-size.md §2c: Cvent/HSMAI 2025 RFP size distribution"
+
+[deal.event.days]
+low = 1
+middle = 2
+high = 3
+confidence = "guessed"
+source = "none"
+
+[deal.corporate_deal_value_lognormal_sigma]
+low = 1.0
+middle = 1.3
+high = 1.5
+confidence = "estimated"
+source = "cycle-and-deal-size.md §2c: Cvent, 24% of RFPs hold 81% of value"
+
+# Quoted value drifts across itinerary versions; the export's Amount is the latest version.
+[deal.final_to_first_quote]
+low = 0.9
+middle = 1.1
+high = 1.3
+confidence = "guessed"
+source = "none (cycle-and-deal-size.md open question 2)"
+
+# ---------------------------------------------------------------------------------------------------------
+# The sales process: the business's own steps, mapped onto the Canonical ladder.
+# Won is the deposit paid (sales-steps-and-exports.md §2: SafariOffice and Tripleseat count the deposit).
+# ---------------------------------------------------------------------------------------------------------
+
+[[pipelines]]
+name = "Safari Enquiries"
+segments = ["safari"]
+stages = [
+  { name = "New Enquiry", ladder = "Submitted" },
+  { name = "Attempting Contact", ladder = "Contact attempted" },
+  { name = "In Discussion", ladder = "Engaged" },
+  { name = "Planning", ladder = "Qualified" },
+  { name = "Itinerary Sent", ladder = "Proposal" },
+  { name = "Provisional Hold", ladder = "Proposal", milestone = true },
+  { name = "Deposit Paid", ladder = "Won", closed = "won" },
+  { name = "Travelled", ladder = "Won", after_won = true },
+  { name = "Lost", ladder = "Lost", closed = "lost" },
+]
+source = "sales-steps-and-exports.md §2: Safari Portal, SafariOffice, TripCreator, Zoho travel templates"
+
+[[pipelines]]
+name = "Corporate & Events"
+segments = ["incentive", "event"]
+stages = [
+  { name = "New Request", ladder = "Submitted" },
+  { name = "Brief Call", ladder = "Engaged" },
+  { name = "Qualified", ladder = "Qualified" },
+  { name = "Proposal Sent", ladder = "Proposal" },
+  { name = "Contract Out", ladder = "Proposal", milestone = true },
+  { name = "Contract Signed", ladder = "Won", closed = "won" },
+  { name = "Closed Lost", ladder = "Lost", closed = "lost" },
+]
+source = "sales-steps-and-exports.md §2: Tripleseat statuses, HubSpot default pipeline"
+
+# Transition rates (share of leads at a stage that reach the next), for leads that receive a Contact attempt.
+# Submitted -> Contact attempted is set by neglect below.
+[process.safari.transition.engaged]
+low = 0.55
+middle = 0.70
+high = 0.80
+confidence = "guessed"
+source = "cycle-and-deal-size.md §3a; SafariBookings: 1-2 in 5-6 never reply (search extract only)"
+
+[process.safari.transition.qualified]
+low = 0.65
+middle = 0.75
+high = 0.85
+confidence = "guessed"
+source = "none (cycle-and-deal-size.md §3a)"
+
+[process.safari.transition.proposal]
+low = 0.80
+middle = 0.85
+high = 0.90
+confidence = "guessed"
+source = "none (cycle-and-deal-size.md §3a)"
+
+[process.safari.transition.won]
+low = 0.25
+middle = 0.33
+high = 0.45
+confidence = "estimated"
+source = "cycle-and-deal-size.md §3a: consistent with Submitted -> Won 6-27% and SafariBookings about 1 in 6"
+
+[process.incentive.submitted_to_won]
+low = 0.04
+middle = 0.10
+high = 0.20
+confidence = "guessed"
+source = "none (cycle-and-deal-size.md §3b); Proposal -> Won 15-35% from the IRF DMC study (snippet only)"
+
+[process.event.submitted_to_won]
+low = 0.04
+middle = 0.12
+high = 0.25
+confidence = "guessed"
+source = "cycle-and-deal-size.md §3c; multi-bid venue floor 3-7% (Hospitality Net / Groups360)"
+
+# Days from Submitted to Won, median of won leads; lognormal.
+[process.safari.days_to_won_median]
+low = 14
+middle = 21
+high = 35
+confidence = "estimated"
+source = "cycle-and-deal-size.md §1a: safari.com Travel Pulse 14.9 days (2024), 22.4 days (2025), bookings within 90 days only"
+
+[process.safari.days_to_won_sigma]
+low = 0.8
+middle = 1.0
+high = 1.2
+confidence = "estimated"
+source = "cycle-and-deal-size.md §1a: p90 about 60-180 days"
+
+[process.incentive.days_to_won_median]
+low = 28
+middle = 42
+high = 90
+confidence = "guessed"
+source = "none"
+
+[process.event.days_to_won_median]
+low = 21
+middle = 42
+high = 61
+confidence = "estimated"
+source = "README.md check: Cvent/HSMAI 2025 deck, planners take 61 days on average to award an RFP (Singapore); lower ends guessed"
+
+# Months from deposit to travel, median.
+[process.safari.booking_lead_time_months]
+low = 4
+middle = 6
+high = 9
+confidence = "estimated"
+source = "cycle-and-deal-size.md §1a: Rhino Africa average 186-190 days; Tourism Update"
+
+[process.incentive.booking_lead_time_months]
+low = 3
+middle = 9
+high = 18
+confidence = "estimated"
+source = "cycle-and-deal-size.md §1b: DMC GO"
+
+[process.event.booking_lead_time_months]
+low = 1
+middle = 4
+high = 9
+confidence = "estimated"
+source = "cycle-and-deal-size.md §1c: Cvent/HSMAI 2025 (Asia-Pacific data)"
+
+[process.safari.itinerary_versions_per_won]
+low = 1
+middle = 2
+high = 4
+confidence = "estimated"
+source = "cycle-and-deal-size.md §3a: safari.com interactions before deposit 2.2-3.8"
+
+[process.won_then_cancelled]
+low = 0.0
+middle = 0.04
+high = 0.10
+confidence = "guessed"
+source = "none (sales-steps-and-exports.md open question 3); the Outcome stays Won, the export shows Lost"
+
+# ---------------------------------------------------------------------------------------------------------
+# Neglect and Contact attempts. Neglect is mostly the advertiser's behaviour (workload, weekends, staff), so
+# good leads are neglected too.
+# ---------------------------------------------------------------------------------------------------------
+
+[handling.neglected_share]
+low = 0.03
+middle = 0.15
+high = 0.45
+confidence = "estimated"
+source = "neglect-and-mess.md §1: general audits 23-55% (HBR 2011, InsideSales, Drift); hotel sales over 25%"
+
+[handling.neglected_share_corporate]
+low = 0.25
+middle = 0.40
+high = 0.55
+confidence = "estimated"
+source = "neglect-and-mess.md §1: Hospitality Upgrade; Hospitality Net (55% of RFPs ignored, vendor); includes deliberate declines"
+
+# Share of the neglect decision that follows how good the lead looks; the rest is independent of quality.
+[handling.neglect_follows_apparent_quality]
+low = 0.0
+middle = 0.10
+high = 0.25
+confidence = "guessed"
+source = "none (neglect-and-mess.md open question 1)"
+
+[handling.first_attempt_delay_median_hours]
+low = 0.5
+middle = 4
+high = 24
+confidence = "estimated"
+source = "neglect-and-mess.md §2: median 39 min (real estate audit); 48% of HBR responders within 1 h"
+
+[handling.first_attempt_after_24h]
+low = 0.10
+middle = 0.30
+high = 0.45
+confidence = "estimated"
+source = "neglect-and-mess.md §2: 24/77 = 31% of HBR responders"
+
+[handling.attempts_before_giving_up]
+low = 1
+middle = 2
+high = 5
+confidence = "estimated"
+source = "neglect-and-mess.md §3: InsideSales mean 1.3; Velocify (vendor)"
+
+[handling.first_attempt_by_email]
+low = 0.60
+middle = 0.80
+high = 0.95
+confidence = "estimated"
+source = "neglect-and-mess.md §3: InsideSales 87% by email (general)"
+
+# Where attempts are logged, the share of real attempts that appear in the export.
+[handling.attempts_logged]
+low = 0.25
+middle = 0.50
+high = 0.80
+confidence = "estimated"
+source = "neglect-and-mess.md §4: 24-52% with manual add-ins (Weflow, vendor)"
+
+# Every dataset is written twice: once with the calls and notes exports and once without, because many
+# advertisers' exports carry no record of Contact attempts (neglect-and-mess.md §4: guessed 15-70% do).
+
+# ---------------------------------------------------------------------------------------------------------
+# How the sales team records stages.
+# ---------------------------------------------------------------------------------------------------------
+
+[recording.skips_a_stage]
+low = 0.20
+middle = 0.40
+high = 0.70
+confidence = "guessed"
+source = "none; skipping allowed by default (HubSpot pipeline rules)"
+
+[recording.backward_move]
+low = 0.02
+middle = 0.05
+high = 0.10
+confidence = "guessed"
+source = "none; re-entry supported (HubSpot stage calculated properties)"
+
+[recording.lag_days_median]
+low = 0
+middle = 2
+high = 14
+confidence = "guessed"
+source = "none; weekly updating described (cotera, not primary)"
+
+[recording.bulk_update_share]
+low = 0.05
+middle = 0.20
+high = 0.40
+confidence = "guessed"
+source = "none"
+
+[recording.dead_left_open]
+low = 0.10
+middle = 0.30
+high = 0.60
+confidence = "guessed"
+source = "none; stale pipelines described (Coffee/Fullcast, vendor)"
+
+[recording.won_without_amount]
+low = 0.02
+middle = 0.10
+high = 0.30
+confidence = "guessed"
+source = "none"
+
+# ---------------------------------------------------------------------------------------------------------
+# Data mess at intake.
+# ---------------------------------------------------------------------------------------------------------
+
+[mess.duplicate_leads]
+low = 0.02
+middle = 0.08
+high = 0.20
+confidence = "estimated"
+source = "neglect-and-mess.md §5: CRM-wide 10-30% (Landbase, vendor) covers all records; enquiries lower"
+
+[mess.bot_or_spam]
+low = 0.005
+middle = 0.04
+high = 0.15
+confidence = "estimated"
+source = "neglect-and-mess.md §5: invalid traffic 18-45% before filtering (CHEQ, Imperva) as upper bound; 5-10% fake data after submission"
+
+[mess.invalid_email]
+low = 0.01
+middle = 0.03
+high = 0.08
+confidence = "estimated"
+source = "neglect-and-mess.md §5: Contact State 5-10% fake data (Financial Reporter)"
+
+[mess.invalid_phone]
+low = 0.02
+middle = 0.06
+high = 0.15
+confidence = "guessed"
+source = "none; informed by Contact State 5-10%"
+
+[mess.field_missing_or_wrong]
+low = 0.15
+middle = 0.30
+high = 0.50
+confidence = "estimated"
+source = "neglect-and-mess.md §5: 32% by sales professionals' own estimate (Firmable, B2B)"
+
+# ---------------------------------------------------------------------------------------------------------
+# Sales notes and Loss reasons. Phrase banks are added with issue #6.
+# ---------------------------------------------------------------------------------------------------------
+
+[notes.attempted_with_any_note]
+low = 0.50
+middle = 0.70
+high = 0.90
+confidence = "guessed"
+source = "none (notes-and-loss-reasons.md §6)"
+
+[notes.short_note_words]
+low = 2
+middle = 10
+high = 25
+confidence = "guessed"
+source = "none (notes-and-loss-reasons.md §2)"
+
+[notes.with_abbreviation]
+low = 0.30
+middle = 0.50
+high = 0.70
+confidence = "guessed"
+source = "none; abbreviations listed in notes-and-loss-reasons.md (pax, pppn, FI, LM, VM, f/u)"
+
+[notes.with_typo]
+low = 0.05
+middle = 0.12
+high = 0.20
+confidence = "guessed"
+source = "none"
+
+[loss.blank_reason]
+low = 0.15
+middle = 0.35
+high = 0.50
+confidence = "guessed"
+source = "none; Closed Lost Reason is free text and optional in HubSpot (sales-steps-and-exports.md §3)"
+
+[loss.recorded_differs_from_truth]
+low = 0.20
+middle = 0.40
+high = 0.60
+confidence = "guessed"
+source = "notes-and-loss-reasons.md §5: HVS on misuse of 'lost to competitor'; Clozd (vendor, unsourced 60%)"
+
+# Shares among lost leads with a reason, by what the Hidden truth says happened. Normalised by the generator.
+[loss.reasons]
+labels = [
+  { recorded = "No response", meaning = "could not reach them" },
+  { recorded = "Too expensive", meaning = "price" },
+  { recorded = "Booked with another operator", meaning = "price" },
+  { recorded = "Booked direct", meaning = "price" },
+  { recorded = "Postponed", meaning = "timing" },
+  { recorded = "Dates not available", meaning = "timing" },
+  { recorded = "Just browsing", meaning = "never a real buyer" },
+  { recorded = "Not the right fit", meaning = "never a real buyer" },
+  { recorded = "Destination concerns", meaning = "timing" },
+  { recorded = "Project cancelled", meaning = "timing" },
+  { recorded = "Other", meaning = "unknown" },
+]
+source = "notes-and-loss-reasons.md §3-4: Event Temple lost reasons, HVS, SafariBookings"
+
+[loss.reasons.no_response]
+low = 0.20
+middle = 0.35
+high = 0.50
+confidence = "estimated"
+source = "notes-and-loss-reasons.md: SafariBookings, 1-2 of 4-5 non-bookings never reply (search extract only)"
+
+[loss.reasons.price]
+low = 0.25
+middle = 0.40
+high = 0.60
+confidence = "guessed"
+source = "none; sum of too expensive, another operator, booked direct (notes-and-loss-reasons.md)"
+
+[loss.reasons.timing]
+low = 0.15
+middle = 0.25
+high = 0.40
+confidence = "guessed"
+source = "none (notes-and-loss-reasons.md)"
+
+[loss.reasons.never_a_real_buyer]
+low = 0.07
+middle = 0.15
+high = 0.30
+confidence = "guessed"
+source = "none (notes-and-loss-reasons.md)"
+
+# ---------------------------------------------------------------------------------------------------------
+# Planted effects. Sizes are odds ratios on winning, against the named reference, unless stated. The base
+# odds are set so the transition rates above hold on average. "visible" says whether a lead carries the
+# signal at submission or only at a later Stage.
+# ---------------------------------------------------------------------------------------------------------
+
+# 1. Budget floor: stated budget per person per night against the floor of the style asked for (threshold).
+[effects.budget_floor]
+form = "threshold"
+visible = "submission"
+floor_luxury_per_night = { low = 800, middle = 900, high = 1000, confidence = "estimated", source = "what-predicts-a-booking.md §1: practitioner floor for luxury (Travel Market Report, search extract only)" }
+below_half = { low = 0.03, middle = 0.10, high = 0.25, confidence = "guessed", source = "none" }
+half_to_floor = { low = 0.30, middle = 0.50, high = 0.80, confidence = "guessed", source = "none" }
+note = "reference: at or above the floor; no further lift above 1.5x the floor; repeat clients feel half the penalty"
+
+# 2. No budget stated (additive).
+[effects.no_budget]
+form = "additive"
+visible = "submission"
+odds_ratio = { low = 0.50, middle = 0.70, high = 0.90, confidence = "guessed", source = "none" }
+note = "reference: a stated budget at or above the floor; missing is not below the floor"
+
+# 3. Lead time x travel season (interaction, inverted U).
+[effects.lead_time_by_season]
+form = "interaction"
+visible = "submission"
+peak_months = [7, 8, 9, 10]
+peak_under_4_months = { low = 0.20, middle = 0.40, high = 0.70, confidence = "guessed", source = "none; shape from operator lead-time advice (Rhino Africa, Yellow Zebra)" }
+off_peak_under_4_months = { low = 0.8, middle = 1.0, high = 1.2, confidence = "guessed", source = "none" }
+over_18_months_or_unsure = { low = 0.40, middle = 0.60, high = 0.85, confidence = "guessed", source = "none" }
+note = "reference: peak 6-14 months ahead, off-peak 1-8 months ahead"
+
+# 4. Date specificity (ordered, additive).
+[effects.date_specificity]
+form = "additive"
+visible = "submission"
+no_dates = { low = 0.35, middle = 0.55, high = 0.80, confidence = "guessed", source = "none" }
+month_only = { low = 0.75, middle = 0.90, high = 1.0, confidence = "guessed", source = "none" }
+note = "reference: exact dates"
+
+# 5. Lead source (additive).
+[effects.lead_source]
+form = "additive"
+visible = "submission"
+referral = { low = 1.5, middle = 2.5, high = 4.0, confidence = "guessed", source = "what-predicts-a-booking.md §3: vendor ranges, unsourced; Runggaldier et al. 2023 spread by source 1-91%" }
+paid_social = { low = 0.4, middle = 0.6, high = 0.9, confidence = "guessed", source = "none" }
+organic = { low = 1.0, middle = 1.4, high = 2.0, confidence = "guessed", source = "none" }
+note = "reference: paid search"
+
+# 6. Repeat client (additive, and halves the budget-floor penalty).
+[effects.repeat_client]
+form = "additive"
+visible = "submission"
+odds_ratio = { low = 2.0, middle = 3.5, high = 6.0, confidence = "guessed", source = "what-predicts-a-booking.md §3 (60-70% vs 5-20% claim untraced)" }
+share_of_leads = { low = 0.03, middle = 0.08, high = 0.15, confidence = "guessed", source = "none" }
+
+# 7. Response speed x lead quality: advertiser behaviour, not a property of the lead (interaction).
+[effects.response_speed_by_quality]
+form = "interaction"
+visible = "contact attempted"
+high_quality_within_1h = { low = 1.5, middle = 2.5, high = 4.0, confidence = "guessed", source = "what-predicts-a-booking.md §4: direction from HBR, MIT, Telfer (contact and qualification, not bookings)" }
+low_quality_within_1h = { low = 1.0, middle = 1.1, high = 1.3, confidence = "guessed", source = "none" }
+note = "reference: first attempt after 24 h; high quality is the top third of hidden quality"
+
+# 8. Message length and specificity (inverted U).
+[effects.message_length]
+form = "inverted_u"
+visible = "submission"
+under_15_words = { low = 0.40, middle = 0.60, high = 0.85, confidence = "guessed", source = "none" }
+dreamer = { low = 0.55, middle = 0.75, high = 0.95, confidence = "guessed", source = "none" }
+note = "reference: 40-200 specific words; dreamer: over 400 words, no budget, over 3 countries. Read from meaning, never a giveaway keyword"
+
+# 9. Party size x trip type (interaction).
+[effects.party_size_by_segment]
+form = "interaction"
+visible = "submission"
+safari_over_6 = { low = 0.50, middle = 0.70, high = 0.90, confidence = "guessed", source = "what-predicts-a-booking.md §6: direction from Runggaldier et al. 2023" }
+note = "reference: a safari party of 2; no effect for corporate segments, where size goes to Deal value"
+
+# 10. Phone given, only where phone is optional (context-dependent).
+[effects.phone_given]
+form = "context"
+visible = "submission"
+odds_ratio_when_optional = { low = 1.2, middle = 1.5, high = 2.0, confidence = "guessed", source = "what-predicts-a-booking.md: form-field case studies (Vital Design, Disruptive Advertising)" }
+note = "no effect on the corporate form, where phone is required"
+
+# 11. Corporate: broadcast request vs direct, by decision maker (interaction).
+[effects.corporate_broadcast_by_decision_maker]
+form = "interaction"
+visible = "submission"
+broadcast_share = { low = 0.30, middle = 0.50, high = 0.70, confidence = "guessed", source = "none" }
+broadcast_vs_direct = { low = 0.15, middle = 0.30, high = 0.50, confidence = "estimated", source = "what-predicts-a-booking.md §7: broadcast win 4-15% vs direct 15-40%" }
+decision_maker_direct = { low = 1.5, middle = 2.0, high = 3.0, confidence = "guessed", source = "none" }
+decision_maker_broadcast = { low = 1.0, middle = 1.3, high = 1.6, confidence = "guessed", source = "none" }
+
+# 12. A dated price rise x budget (changes over time).
+[effects.price_rise]
+form = "time_varying"
+visible = "submission"
+at_month_of_history = 14
+floor_rise = { low = 0.05, middle = 0.10, high = 0.20, confidence = "guessed", source = "what-predicts-a-booking.md §8: Maasai Mara fee rise to $200 (July 2024)" }
+near_floor_after = { low = 0.55, middle = 0.75, high = 0.90, confidence = "guessed", source = "none" }
+note = "after the rise, leads within 1.0-1.3x of the old floor; leads above 1.5x unaffected"
+
+# 13. Planted in text: meaning carries the signal, never a keyword (issue #6).
+[effects.text_commitment]
+form = "text"
+visible = "submission"
+odds_ratio = { low = 1.3, middle = 1.8, high = 2.5, confidence = "guessed", source = "none; notes-and-loss-reasons.md §2 on meaning over keywords" }
+note = "the enquiry shows a decision already made (leave booked, flights held, partner agreed) in varied words"
+
+# 14. Planted in Sales notes after contact: a real buyer vs one who is not.
+[effects.notes_real_buyer]
+form = "text"
+visible = "engaged"
+odds_ratio = { low = 2.0, middle = 3.0, high = 5.0, confidence = "guessed", source = "none (notes-and-loss-reasons.md illustrative notes)" }
+
+# T. Proxy trap: country-of-residence group shifts budget and lead time, and has no effect of its own.
+[effects.proxy_trap_country]
+form = "confounded"
+visible = "submission"
+group_a_share = { low = 0.30, middle = 0.50, high = 0.70, confidence = "guessed", source = "none" }
+budget_multiplier = { low = 1.3, middle = 1.6, high = 2.0, confidence = "guessed", source = "what-predicts-a-booking.md §9: origin predicts strongly (Runggaldier et al. 2023); Go2Africa spend by country" }
+lead_time_multiplier = { low = 1.2, middle = 1.5, high = 2.0, confidence = "guessed", source = "none" }
+note = "direct effect on the Outcome is zero at every end; carried by Country of residence, phone country code and enquiry language"
