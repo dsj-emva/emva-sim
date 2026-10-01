@@ -221,7 +221,7 @@ class Export:
             (attempt.at, r.deal_id, attempt)
             for r in self.records
             for attempt in r.path.attempts
-            if attempt.channel == "call" and self._recorded(attempt.at)
+            if attempt.channel == "call" and attempt.logged and self._recorded(attempt.at)
         )
         by_deal = {r.deal_id: r for r in self.records}
         rows, call_id = [], 30_000_000_000

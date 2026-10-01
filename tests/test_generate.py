@@ -68,6 +68,30 @@ def test_every_dataset_of_the_sweep_generates(raw, tmp_path):
         assert rows(folder / TRUTH), setting
 
 
+LONG_AFTER = dataset.History(
+    start=date(2024, 1, 1), end=date(2024, 3, 31), export=date(2025, 12, 31)
+)
+LONG_CALLS = "export/with-calls-and-notes/hubspot-crm-exports-all-calls-2025-12-31.csv"
+
+
+def logged_share(tmp_path, setting):
+    folder = dataset.generate(PROFILE, setting, seed=1, out=tmp_path, history=LONG_AFTER)
+    made = sum(int(r["call_attempts"]) for r in rows(folder / TRUTH))
+    return len(rows(folder / LONG_CALLS)) / made
+
+
+@pytest.mark.parametrize(
+    ("setting", "share"),
+    [
+        ("middle", 0.50),
+        ("handling.attempts_logged@low", 0.25),
+        ("handling.attempts_logged@high", 0.80),
+    ],
+)
+def test_the_calls_export_logs_the_profiles_share_of_call_attempts(tmp_path, setting, share):
+    assert logged_share(tmp_path, setting) == pytest.approx(share, abs=0.06)
+
+
 def test_a_partial_month_gets_its_share_of_the_months_volume(tmp_path):
     two_days = dataset.History(
         start=date(2024, 1, 1), end=date(2024, 1, 2), export=date(2024, 3, 1)
@@ -252,4 +276,5 @@ def test_the_hidden_truth_has_one_row_per_lead_keyed_by_both_record_ids(middle):
         "deal_value",
         "itinerary_versions",
         "cancelled_after_won",
+        "call_attempts",
     ]

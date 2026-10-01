@@ -23,6 +23,7 @@ class ContactAttempt:
     at: datetime
     channel: str
     connected: bool
+    logged: bool
 
 
 @dataclass(frozen=True)
@@ -123,7 +124,7 @@ class Process:
         engaged_at = at.get("Engaged")
         attempts = self._attempts(rng, at["Contact attempted"], engaged_at or at["Lost"])
         if engaged_at and rng.random() >= p["handling"]["attempt_by_email"]:
-            attempts.append(ContactAttempt(engaged_at, "call", True))
+            attempts.append(ContactAttempt(engaged_at, "call", True, self._logged(rng)))
 
         quotes, hold, travelled, cancelled = [], None, None, None
         if "Proposal" in at:
@@ -157,8 +158,15 @@ class Process:
         times = [first, *_between(rng, count - 1, first, until)]
         by_email = handling["attempt_by_email"]
         return [
-            ContactAttempt(t, "email" if rng.random() < by_email else "call", False) for t in times
+            ContactAttempt(
+                t, "email" if rng.random() < by_email else "call", False, self._logged(rng)
+            )
+            for t in times
         ]
+
+    def _logged(self, rng: Random) -> bool:
+        """Whether the sales team logs this Contact attempt in its sales system."""
+        return rng.random() < self.p["handling"]["attempts_logged"]
 
     def _quotes(
         self, rng: Random, lead: Lead, first: datetime, end: datetime

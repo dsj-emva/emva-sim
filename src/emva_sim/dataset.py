@@ -29,6 +29,7 @@ HIDDEN_TRUTH_COLUMNS = [
     "deal_value",
     "itinerary_versions",
     "cancelled_after_won",
+    "call_attempts",
 ]
 
 
@@ -65,6 +66,7 @@ def _truth_row(r: Record) -> list[str]:
         f"{r.lead.deal_value:.2f}",
         str(len(path.quotes)),
         "yes" if path.cancelled_at else "no",
+        str(sum(attempt.channel == "call" for attempt in path.attempts)),
     ]
 
 
