@@ -84,11 +84,12 @@ def _mid_ranks(values: list[float]) -> list[float]:
     return [place[v] for v in values]
 
 
-def _top(values: list[float], share: float) -> list[bool]:
-    """Whether each value is among the top share of them, ties at the edge included."""
-    ordered = sorted(values, reverse=True)
-    edge = ordered[max(1, round(share * len(values))) - 1]
-    return [v >= edge for v in values]
+def _top(rng: Random, values: list[float], share: float) -> list[bool]:
+    """Whether each value is among the top share of them, ties at the edge broken at random."""
+    tie_breaks = [rng.random() for _ in values]
+    ranked = sorted(range(len(values)), key=lambda i: (values[i], tie_breaks[i]), reverse=True)
+    top = set(ranked[: round(share * len(values))])
+    return [i in top for i in range(len(values))]
 
 
 @dataclass(frozen=True)
@@ -141,7 +142,7 @@ class Process:
         """Every lead's true path. Quality and neglect are read against the other leads."""
         terms = [self.effects.of_lead(lead) for lead in leads]
         speed = self.p["effects"][RESPONSE_SPEED]
-        high = _top([sum(t.values()) for t in terms], speed["high_quality_top_share"])
+        high = _top(rng, [sum(t.values()) for t in terms], speed["high_quality_top_share"])
         looks = _mid_ranks([self.effects.apparent(t) for t in terms])
         starts = [self._start(rng, lead, place) for lead, place in zip(leads, looks, strict=True)]
         for t, start, quality in zip(terms, starts, high, strict=True):

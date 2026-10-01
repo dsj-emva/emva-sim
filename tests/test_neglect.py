@@ -9,7 +9,6 @@ is only part of its quality, so the top third's rate lies between that and s.
 
 import math
 
-import pytest
 from conftest import large_sample
 
 
@@ -40,11 +39,13 @@ def test_good_leads_are_neglected_at_about_the_profiles_rate(middle_sample):
     assert neglected(top) > 300
 
 
-def test_the_top_third_by_hidden_quality_is_the_high_quality_third(middle_sample):
-    _, top = thirds(middle_sample)
-    flagged = [r for r in middle_sample if r["high_quality"] == "yes"]
-    assert len(flagged) == pytest.approx(len(middle_sample) / 3, rel=0.02)
-    assert {r["high_quality"] for r in top} == {"yes"}
+def test_high_quality_is_exactly_the_top_third_by_hidden_quality(middle_sample):
+    # Ties at the edge are broken at random, so the group is a third exactly.
+    flagged = [quality(r) for r in middle_sample if r["high_quality"] == "yes"]
+    others = [quality(r) for r in middle_sample if r["high_quality"] == "no"]
+    assert len(flagged) == round(len(middle_sample) / 3)
+    # the hidden truth is written to about 6 decimals
+    assert min(flagged) >= max(others) - 1e-5
 
 
 def log_ratio_bottom_to_top(setting):
