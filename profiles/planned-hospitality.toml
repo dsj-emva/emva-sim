@@ -124,6 +124,16 @@ held_at_middle = [
   "process.itinerary_versions_per_won",
   "handling.first_attempt_by_email",
   "notes.short_note_words",
+  "volume.traffic_source.organic",
+  "volume.traffic_source.paid_social",
+  "volume.traffic_source.referral",
+  "form.answers.month_when_no_exact_dates",
+  "form.answers.year_when_no_month",
+  "form.party_size.family_children",
+  "form.party_size.friends_adults",
+  "deal.nights_sigma",
+  "process.booking_lead_time_sigma",
+  "process.lost_after_provisional_hold",
 ]
 
 # ---------------------------------------------------------------------------------------------------------
@@ -159,6 +169,37 @@ middle = 1.4
 high = 1.7
 confidence = "estimated"
 source = "the user, from experience (2026-10-01): the key booking cycle for the US is November to March; size guessed"
+
+# Original Traffic Source of each lead (HubSpot's labels); paid search is the rest. The names match
+# effects.lead_source. Added for the generator (issue #5), awaiting the user's review.
+[volume.traffic_source]
+reference = "paid_search"
+labels = { paid_search = "Paid Search", organic = "Organic Search", paid_social = "Paid Social", referral = "Referrals" }
+# What a lead answers to "How did you hear about us?" for each source (one option at random); a repeat client
+# answers heard_as_repeat_client.
+heard_as = { paid_search = ["Google"], organic = ["Google", "ChatGPT or another AI assistant", "Magazine", "Other"], paid_social = ["Instagram", "Facebook"], referral = ["Recommended by a friend", "Travel agent"] }
+heard_as_repeat_client = "Travelled with you before"
+
+[volume.traffic_source.organic]
+low = 0.15
+middle = 0.25
+high = 0.35
+confidence = "guessed"
+source = "none; added for the generator (issue #5), awaiting the user's review"
+
+[volume.traffic_source.paid_social]
+low = 0.15
+middle = 0.25
+high = 0.35
+confidence = "guessed"
+source = "none; added for the generator (issue #5), awaiting the user's review"
+
+[volume.traffic_source.referral]
+low = 0.05
+middle = 0.10
+high = 0.15
+confidence = "guessed"
+source = "none; added for the generator (issue #5), awaiting the user's review"
 
 # ---------------------------------------------------------------------------------------------------------
 # The enquiry form.
@@ -239,6 +280,22 @@ high = 0.10
 confidence = "guessed"
 source = "none (enquiry-forms.md §3)"
 
+# How leads that give no exact dates answer "When would you like to travel?": a month, else a year only,
+# else "not sure". Added for the generator (issue #5), awaiting the user's review.
+[form.answers.month_when_no_exact_dates]
+low = 0.45
+middle = 0.60
+high = 0.75
+confidence = "guessed"
+source = "none; added for the generator (issue #5), awaiting the user's review"
+
+[form.answers.year_when_no_month]
+low = 0.30
+middle = 0.50
+high = 0.70
+confidence = "guessed"
+source = "none; added for the generator (issue #5), awaiting the user's review"
+
 # Party type; solo is the rest. Middles are Go2Africa's shares of enquiries (16% solo).
 [form.party_mix.couple]
 low = 0.40
@@ -260,6 +317,23 @@ middle = 0.10
 high = 0.14
 confidence = "estimated"
 source = "cycle-and-deal-size.md §2a: Go2Africa State of Safari 2025 (middle); ends estimated"
+
+# Party sizes (means). A solo party is 1 adult and a couple 2. A family is 2 adults and 1 or more children
+# (1 plus a Poisson number); a friends party is 2 or more adults (2 plus a Poisson number). Children come only
+# with families. Added for the generator (issue #5), awaiting the user's review.
+[form.party_size.family_children]
+low = 1.5
+middle = 2.0
+high = 2.5
+confidence = "guessed"
+source = "cycle-and-deal-size.md §2a: a family of 4, guessed at 3-6; added for the generator (issue #5), awaiting the user's review"
+
+[form.party_size.friends_adults]
+low = 3.0
+middle = 4.0
+high = 5.0
+confidence = "guessed"
+source = "cycle-and-deal-size.md §2a: a friends group of 4, guessed at 3-6; added for the generator (issue #5), awaiting the user's review"
 
 # The message. Lengths in words.
 [form.message.median_words]
@@ -347,6 +421,16 @@ high = 10
 confidence = "estimated"
 source = "cycle-and-deal-size.md §2a: Go2Africa State of Safari 2025; safari.com Travel Pulse (spread 3-21)"
 
+# Nights are lognormal around deal.nights (their median) with this sigma, at least 1.
+[deal.nights_sigma]
+low = 0.30
+middle = 0.45
+high = 0.60
+confidence = "guessed"
+source = "cycle-and-deal-size.md §2a: spread 3-21 nights; added for the generator (issue #5), awaiting the user's review"
+
+# The prices above are low-season rates; a trip travelling in effects.lead_time_by_season.peak_months pays
+# deal.peak_to_low_season_rate times them (issue #5, awaiting the user's review).
 # Deal value is price per person per night x nights x paying travellers. At the middle this gives a median
 # near $15,000 and a 5th-95th percentile of about $5k-100k (cycle-and-deal-size.md §2a, from Go2Africa's
 # $8,625 per person sharing, a budget stated in enquiries, not booked spend). The generator's tests check
@@ -454,6 +538,22 @@ high = 9
 confidence = "estimated"
 source = "cycle-and-deal-size.md §1a: Rhino Africa average 186-190 days; Tourism Update"
 
+# Months from deposit to travel are lognormal around the median above with this sigma.
+[process.booking_lead_time_sigma]
+low = 0.4
+middle = 0.6
+high = 0.8
+confidence = "guessed"
+source = "cycle-and-deal-size.md §1a: range 1-18 months, right-skewed; added for the generator (issue #5), awaiting the user's review"
+
+# Share of leads lost at Proposal that had reached Provisional Hold (every Won lead passes through it).
+[process.lost_after_provisional_hold]
+low = 0.05
+middle = 0.15
+high = 0.30
+confidence = "guessed"
+source = "none; added for the generator (issue #5), awaiting the user's review"
+
 [process.itinerary_versions_per_won]
 low = 1
 middle = 2
@@ -528,6 +628,15 @@ source = "neglect-and-mess.md §4: 24-52% with manual add-ins (Weflow, vendor)"
 # attempts (neglect-and-mess.md §4).
 [exports]
 variants = ["with calls and notes", "deals and contacts only"]
+# HubSpot's own contact property for a form field, where it has one; every other field is a custom contact
+# property under its form label (sales-steps-and-exports.md §3).
+contact_properties = { "First name" = "First Name", "Last name" = "Last Name", "Email" = "Email", "Phone" = "Phone Number", "Country of residence" = "Country/Region", "Tell us about your dream trip" = "Message" }
+# Form fields a workflow copies onto the deal as custom deal properties (sales-steps-and-exports.md §3).
+deal_properties = ["Where would you like to go?", "When would you like to travel?", "Are your dates flexible?", "Number of nights", "Number of adults", "Number of children", "Accommodation style", "Budget per person (excluding international flights)", "Have you travelled with us before?", "How did you hear about us?"]
+
+# The sales team, as HubSpot exports owners (made-up names). Added for the generator (issue #5).
+[team]
+owners = ["Amara Okafor", "James Whitfield", "Sofia Marchetti", "Tom Brennan"]
 
 # ---------------------------------------------------------------------------------------------------------
 # How the sales team records stages.
@@ -822,4 +931,6 @@ visible = "Submitted"
 group_a_share = { low = 0.30, middle = 0.50, high = 0.70, confidence = "guessed", source = "none" }
 budget_multiplier = { low = 1.3, middle = 1.6, high = 2.0, confidence = "guessed", source = "what-predicts-a-booking.md §9: origin predicts strongly (Runggaldier et al. 2023); Go2Africa spend by country" }
 lead_time_multiplier = { low = 1.2, middle = 1.5, high = 2.0, confidence = "guessed", source = "none" }
+group_a_countries = ["United States"]
+group_b_countries = ["United Kingdom", "France"]
 note = "group A is the US, group B the UK and Europe; direct effect on the Outcome is zero at every end; carried by Country of residence, phone country code, enquiry language and, through the booking cycle, the month of the enquiry"
