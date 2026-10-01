@@ -678,10 +678,11 @@ source = "cycle-and-deal-size.md §2a: spread 3-21 nights; added for the generat
 # The prices above are season averages (the user's ruling, 2026-10-01): a trip in
 # effects.lead_time_by_season.peak_months pays deal.peak_to_low_season_rate times the low-season rate, and
 # the average over the calendar's travel months (taken as spread evenly) is the price above.
-# Deal value is price per person per night x nights x paying travellers. At the middle this gives a median
+# Deal value is price per person per night x nights x paying travellers. The research expected a median
 # near $15,000 and a 5th-95th percentile of about $5k-100k (cycle-and-deal-size.md §2a, from Go2Africa's
-# $8,625 per person sharing, a budget stated in enquiries, not booked spend). The generator's tests check
-# that, rather than the profile setting it twice.
+# $8,625 per person sharing, a budget stated in enquiries, not booked spend). At the middle the generator
+# produces, on simulated data, a median of about $16,000 and a 5th-95th percentile of about $4k-72k for
+# quoted deals (issue #5); its tests hold it there, rather than the profile setting it twice.
 [deal.style_mix.luxury]
 low = 0.35
 middle = 0.45

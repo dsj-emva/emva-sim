@@ -93,12 +93,12 @@ def test_first_contact_attempts_follow_the_profiles_delay(leads):
     assert sum(h > 24 for h in hours) / len(hours) == pytest.approx(0.30, abs=0.03)
 
 
-def test_deal_values_have_a_median_near_15000_and_span_5k_to_100k(leads):
+def test_quoted_deal_values_have_a_median_near_16000_and_span_4k_to_72k(leads):
     values = sorted(float(r["deal_value"]) for r in leads if r["deal_value"])
     n = len(values)
-    assert 10_000 <= statistics.median(values) <= 20_000
-    assert 2_500 <= values[n // 20] <= 10_000
-    assert 50_000 <= values[19 * n // 20] <= 200_000
+    assert 13_000 <= statistics.median(values) <= 19_000
+    assert 3_000 <= values[n // 20] <= 6_000
+    assert 55_000 <= values[19 * n // 20] <= 95_000
 
 
 def test_half_the_leads_come_from_each_market(leads):
