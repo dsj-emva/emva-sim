@@ -5,9 +5,10 @@ the team enters and when. It never changes the true path; what the export shows 
 and hubspot.py shows only what was recorded before the export date.
 """
 
+import calendar
 import math
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from random import Random
 
 from emva_sim.leads import Lead
@@ -38,6 +39,7 @@ class Recording:
     def __init__(self, p: dict, rng: Random):
         self.p = p
         self.rng = rng
+        self.reviews: dict[date, datetime] = {}
         self.stages = p["pipeline"]["stages"]
         self.order = {s["name"]: i for i, s in enumerate(self.stages)}
 
@@ -70,8 +72,28 @@ class Recording:
         """When the team records a change that truly happened at this moment.
 
         The deal's creation at its first stage is the form's; every later change is entered by
-        hand, an exponential lag after the event with the profile's median.
+        hand: in bulk at the next weekly pipeline review, or an exponential lag after the event
+        with the profile's median.
         """
+        if self.rng.random() < self.p["recording"]["bulk_update_share"]:
+            return self._review_after(at)
         median = self.p["recording"]["lag_days_median"]
         lag = self.rng.expovariate(math.log(2) / median) if median else 0.0
         return at + timedelta(days=lag)
+
+    def _review_after(self, at: datetime) -> datetime:
+        """The first weekly pipeline review after this moment: one timestamp for its bulk edit."""
+        review = self.p["recording"]["bulk_review"]
+        ahead = (list(calendar.day_name).index(review["weekday"]) - at.weekday()) % 7
+        day = at.date() + timedelta(days=ahead)
+        while (moment := self._review_on(day)) <= at:
+            day += timedelta(days=7)
+        return moment
+
+    def _review_on(self, day: date) -> datetime:
+        if day not in self.reviews:
+            review = self.p["recording"]["bulk_review"]
+            minutes = self.rng.randrange((review["to_hour"] - review["from_hour"]) * 60)
+            start = datetime.combine(day, time(review["from_hour"]))
+            self.reviews[day] = start + timedelta(minutes=minutes)
+        return self.reviews[day]

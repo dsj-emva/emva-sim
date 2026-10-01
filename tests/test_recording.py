@@ -7,8 +7,8 @@ written before the numbers were looked at.
 
 import csv
 import statistics
-from collections import defaultdict
-from datetime import date, datetime
+from collections import Counter, defaultdict
+from datetime import date, datetime, time
 from pathlib import Path
 
 import pytest
@@ -86,12 +86,16 @@ def days(start, end):
 
 
 def first_lags(folder):
-    """Days from each deal's first true change after New Enquiry to when it was recorded."""
+    """Days from each deal's first true change after New Enquiry to when it was recorded.
+
+    Changes made in bulk are left out: they wait for the weekly review instead.
+    """
+    bulk = {c["recorded_entered_at"] for c in in_bulk(hand_entered(folder))}
     lags = []
     for changes in history_by_deal(folder).values():
         true = [c for c in changes if c["true_entered_at"] and c["crm_stage"] != "New Enquiry"]
         first = min(true, key=lambda c: c["true_entered_at"], default=None)
-        if first and first["recorded_entered_at"]:
+        if first and first["recorded_entered_at"] and first["recorded_entered_at"] not in bulk:
             lags.append(days(first["true_entered_at"], first["recorded_entered_at"]))
     return lags
 
@@ -109,6 +113,40 @@ def test_stage_changes_are_recorded_late_by_the_profiles_median_lag(
 ):
     lags = first_lags(generated(setting))
     assert statistics.median(lags) == pytest.approx(median, abs=tolerance)
+
+
+def hand_entered(folder):
+    """Every recorded change but the deals' creation at New Enquiry."""
+    changes = rows(folder / STAGES)
+    return [c for c in changes if c["recorded_entered_at"] and c["crm_stage"] != "New Enquiry"]
+
+
+def in_bulk(changes):
+    """The changes whose timestamp at least two other changes share."""
+    stamps = Counter(c["recorded_entered_at"] for c in changes)
+    return [c for c in changes if stamps[c["recorded_entered_at"]] >= 3]
+
+
+@pytest.mark.parametrize(
+    ("setting", "share"),
+    [
+        ("middle", 0.20),
+        ("recording.bulk_update_share@low", 0.05),
+        ("recording.bulk_update_share@high", 0.40),
+    ],
+)
+def test_the_profiles_share_of_stage_changes_are_made_in_bulk(generated, setting, share):
+    changes = hand_entered(generated(setting))
+    assert len(in_bulk(changes)) / len(changes) == pytest.approx(share, abs=0.03)
+
+
+def test_bulk_updates_happen_in_the_weekly_pipeline_review(middle):
+    bulk = in_bulk(hand_entered(middle))
+    assert bulk
+    # A deal moved through two stages at one review gets the second a minute after the first.
+    for change in bulk:
+        at = moment(change["recorded_entered_at"])
+        assert at.strftime("%A") == "Friday" and time(16) <= at.time() <= time(18, 5), at
 
 
 def test_close_date_follows_the_recorded_close_not_the_true_one(middle):
