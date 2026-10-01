@@ -6,8 +6,9 @@ written before the numbers were looked at.
 """
 
 import csv
+import statistics
 from collections import defaultdict
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 
 import pytest
@@ -61,3 +62,63 @@ def test_the_export_shows_the_latest_recorded_entry_of_each_stage_before_the_exp
             if column.startswith("Date entered") and at
         }
         assert shown == {entered(stage): at for stage, at in latest.items()}, deal_id
+
+
+@pytest.fixture(scope="module")
+def generated(tmp_path_factory, middle):
+    made = {"middle": middle}
+
+    def at(setting):
+        if setting not in made:
+            out = tmp_path_factory.mktemp("out")
+            made[setting] = dataset.generate(PROFILE, setting, seed=1, out=out, history=HISTORY)
+        return made[setting]
+
+    return at
+
+
+def moment(text):
+    return datetime.strptime(text, "%Y-%m-%d %H:%M")
+
+
+def days(start, end):
+    return (moment(end) - moment(start)).total_seconds() / 86400
+
+
+def first_lags(folder):
+    """Days from each deal's first true change after New Enquiry to when it was recorded."""
+    lags = []
+    for changes in history_by_deal(folder).values():
+        true = [c for c in changes if c["true_entered_at"] and c["crm_stage"] != "New Enquiry"]
+        first = min(true, key=lambda c: c["true_entered_at"], default=None)
+        if first and first["recorded_entered_at"]:
+            lags.append(days(first["true_entered_at"], first["recorded_entered_at"]))
+    return lags
+
+
+@pytest.mark.parametrize(
+    ("setting", "median", "tolerance"),
+    [
+        ("middle", 2, 0.2),
+        ("recording.lag_days_median@low", 0, 0),
+        ("recording.lag_days_median@high", 14, 1.3),
+    ],
+)
+def test_stage_changes_are_recorded_late_by_the_profiles_median_lag(
+    generated, setting, median, tolerance
+):
+    lags = first_lags(generated(setting))
+    assert statistics.median(lags) == pytest.approx(median, abs=tolerance)
+
+
+def test_close_date_follows_the_recorded_close_not_the_true_one(middle):
+    by_deal = history_by_deal(middle)
+    closed = [d for d in rows(middle / DEALS) if d["Deal Stage"] in {"Deposit Paid", "Lost"}]
+    assert closed
+    late = 0
+    for deal in closed:
+        stage = deal["Deal Stage"]
+        assert deal["Close Date"] == deal[entered(stage)], deal["Record ID"]
+        change = next(c for c in by_deal[deal["Record ID"]] if c["crm_stage"] == stage)
+        late += change["recorded_entered_at"] > change["true_entered_at"]
+    assert late / len(closed) > 0.9

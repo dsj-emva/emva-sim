@@ -79,7 +79,7 @@ def generate(
     paths = [process.path(rng, lead) for lead in drawn]
     deal_ids = hubspot.record_ids(rng, len(drawn), hubspot.DEAL_RECORD_IDS_FROM)
     contact_ids = hubspot.record_ids(rng, len(drawn), hubspot.CONTACT_RECORD_IDS_FROM)
-    recording = Recording(p)
+    recording = Recording(p, rng)
     recorded = [recording.lead(lead, path) for lead, path in zip(drawn, paths, strict=True)]
     records = [
         Record(*row) for row in zip(deal_ids, contact_ids, drawn, paths, recorded, strict=True)

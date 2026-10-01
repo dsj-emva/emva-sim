@@ -5,11 +5,15 @@ the team enters and when. It never changes the true path; what the export shows 
 and hubspot.py shows only what was recorded before the export date.
 """
 
+import math
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
+from random import Random
 
 from emva_sim.leads import Lead
 from emva_sim.process import TruePath
+
+MINUTE = timedelta(minutes=1)
 
 
 @dataclass(frozen=True)
@@ -31,7 +35,9 @@ class Recorded:
 
 
 class Recording:
-    def __init__(self, p: dict):
+    def __init__(self, p: dict, rng: Random):
+        self.p = p
+        self.rng = rng
         self.stages = p["pipeline"]["stages"]
         self.order = {s["name"]: i for i, s in enumerate(self.stages)}
 
@@ -52,4 +58,20 @@ class Recording:
         return sorted(events, key=lambda event: (event[1], self.order[event[0]]))
 
     def lead(self, lead: Lead, path: TruePath) -> Recorded:
-        return Recorded([Change(stage, at, at) for stage, at in self.true_events(path)])
+        events = self.true_events(path)
+        first_stage, created = events[0]
+        changes = [Change(first_stage, created, created)]
+        for stage, at in events[1:]:
+            entered = max(self._entered(at), changes[-1].recorded_at + MINUTE)
+            changes.append(Change(stage, at, entered))
+        return Recorded(changes)
+
+    def _entered(self, at: datetime) -> datetime:
+        """When the team records a change that truly happened at this moment.
+
+        The deal's creation at its first stage is the form's; every later change is entered by
+        hand, an exponential lag after the event with the profile's median.
+        """
+        median = self.p["recording"]["lag_days_median"]
+        lag = self.rng.expovariate(math.log(2) / median) if median else 0.0
+        return at + timedelta(days=lag)

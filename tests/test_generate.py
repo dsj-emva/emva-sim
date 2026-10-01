@@ -259,9 +259,11 @@ def test_calls_are_logged_contact_attempts_on_known_deals(middle):
         "Left voicemail",
         "Busy",
     }
+    truth = {r["deal_record_id"]: r for r in rows(middle / TRUTH)}
     for call in calls:
-        deal = deals[call["Associated Deal IDs"]]
-        assert deal['Date entered "Attempting Contact (Safari Enquiries)"'] <= call["Activity date"]
+        assert call["Associated Deal IDs"] in deals
+        first_attempt = truth[call["Associated Deal IDs"]]["first_contact_attempt_at"]
+        assert first_attempt <= call["Activity date"]
 
 
 def test_stages_are_recorded_in_ladder_order_without_skips(middle, raw):
