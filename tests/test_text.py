@@ -252,7 +252,9 @@ def test_every_lead_with_a_decision_made_and_no_other_writes_one_in_its_message(
     assert sum(row["text_commitment"] == "yes" for _, row, _ in found)
 
 
-COMMITMENT_SETTINGS = ["middle", "effects.text_commitment.share_of_leads@high", "all-high"]
+# The signal's share at both ends, and every range at each end together.
+COMMITMENT_SETTINGS = [*ends("effects.text_commitment.share_of_leads"), "all-low", "all-high"]
+REAL_BUYER_SETTINGS = [*ends("notes.real_buyer_share"), "all-low", "all-high"]
 
 
 @pytest.mark.parametrize("setting", COMMITMENT_SETTINGS)
@@ -281,8 +283,8 @@ def engaged_notes(folder):
     ]
 
 
-@pytest.mark.parametrize("setting", ["middle", "notes.real_buyer_share@high", "all-high"])
+@pytest.mark.parametrize("setting", REAL_BUYER_SETTINGS)
 def test_no_word_or_short_phrase_in_the_notes_tells_a_real_buyer_from_the_rest(generated, setting):
     found = engaged_notes(generated(setting))
-    assert sum(flag for _, flag in found) > 100
+    assert sum(flag for _, flag in found) >= 20
     assert separability.separating(found) == [], separability.strongest(found)

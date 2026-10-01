@@ -1332,8 +1332,9 @@ Zambia = ["South Luangwa", "Lower Zambezi"]
 Zimbabwe = ["Hwange", "Mana Pools", "Victoria Falls"]
 
 # ---------------------------------------------------------------------------------------------------------
-# Sales notes and Loss reasons. Their phrases are in the phrase bank ([text]); a Lead with any note has one at its
-# first Contact attempt, one at Engaged and one per itinerary version, and a note on each logged call.
+# Sales notes and Loss reasons. Their phrases are in the phrase bank ([text]). A Lead with any note has
+# one at its first Contact attempt, one at Engaged and one per itinerary version, and notes on each
+# logged call (issue #6).
 # ---------------------------------------------------------------------------------------------------------
 
 [notes.attempted_with_any_note]
