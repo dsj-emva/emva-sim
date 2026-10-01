@@ -207,6 +207,46 @@ def test_the_profiles_share_of_records_skip_a_stage(generated, setting, share):
     assert len(skipping) / len(passing) == pytest.approx(share, abs=0.04)
 
 
+def moved_back(changes):
+    """The recorded changes with no true event behind them: a deal moved back and on again."""
+    return [c for c in changes if not c["true_entered_at"]]
+
+
+def can_move_back(changes):
+    return any(
+        c["true_entered_at"] and c["recorded_entered_at"] and c["crm_stage"] in OPEN_AFTER_CREATION
+        for c in changes
+    )
+
+
+@pytest.mark.parametrize(
+    ("setting", "share"),
+    [
+        ("middle", 0.05),
+        ("recording.backward_move@low", 0.02),
+        ("recording.backward_move@high", 0.10),
+    ],
+)
+def test_the_profiles_share_of_deals_move_backward(generated, setting, share):
+    deals = [c for c in history_by_deal(generated(setting)).values() if can_move_back(c)]
+    backward = [c for c in deals if moved_back(c)]
+    assert len(backward) / len(deals) == pytest.approx(share, abs=0.015)
+
+
+def test_moving_back_overwrites_the_date_entered_of_the_stage_entered_again(middle):
+    deals = {d["Record ID"]: d for d in rows(middle / DEALS)}
+    overwritten = 0
+    for deal_id, changes in history_by_deal(middle).items():
+        for again in moved_back(changes):
+            first = next(c for c in changes if c["crm_stage"] == again["crm_stage"])
+            assert first["recorded_entered_at"] < again["recorded_entered_at"]
+            if again["recorded_entered_at"] < EXPORT:
+                shown = deals[deal_id][entered(again["crm_stage"])]
+                assert shown >= again["recorded_entered_at"] > first["recorded_entered_at"]
+                overwritten += 1
+    assert overwritten
+
+
 def test_close_date_follows_the_recorded_close_not_the_true_one(middle):
     by_deal = history_by_deal(middle)
     closed = [d for d in rows(middle / DEALS) if d["Deal Stage"] in {"Deposit Paid", "Lost"}]

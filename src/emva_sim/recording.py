@@ -80,7 +80,36 @@ class Recording:
                 continue
             last = max(self._entered(at), last + MINUTE)
             changes.append(Change(stage, at, last))
+        if self.rng.random() < self.p["recording"]["backward_move"]:
+            changes = self._move_back(changes)
         return Recorded(changes)
+
+    def _move_back(self, changes: list[Change]) -> list[Change]:
+        """Move the deal back from one open stage to the stage it was recorded at before.
+
+        If the deal later moves on, it enters that open stage again first; HubSpot overwrites the
+        Date entered of both stages entered again. A deal moved back from its last recorded
+        stage stays where it was moved back to.
+        """
+        recorded = [i for i, c in enumerate(changes) if c.recorded_at]
+        candidates = []
+        for n, k in enumerate(recorded[1:], start=1):
+            later = recorded[n + 1] if n + 1 < len(recorded) else None
+            gap = changes[later].recorded_at - changes[k].recorded_at if later else None
+            if changes[k].stage in self.open and (gap is None or gap >= 3 * MINUTE):
+                candidates.append((recorded[n - 1], k, later))
+        if not candidates:
+            return changes
+        before, k, later = self.rng.choice(candidates)
+        at = changes[k].recorded_at
+        if later is None:
+            back = max(self._entered(at), at + MINUTE)
+            return [*changes, Change(changes[before].stage, None, back)]
+        until = changes[later].recorded_at
+        back = at + MINUTE + (until - at - 3 * MINUTE) * self.rng.random()
+        again = back + MINUTE + (until - back - 2 * MINUTE) * self.rng.random()
+        moves = [Change(changes[before].stage, None, back), Change(changes[k].stage, None, again)]
+        return [*changes[: k + 1], *moves, *changes[k + 1 :]]
 
     def _entered(self, at: datetime) -> datetime:
         """When the team records a change that truly happened at this moment.
