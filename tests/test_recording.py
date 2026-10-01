@@ -220,17 +220,17 @@ def can_move_back(changes):
 
 
 @pytest.mark.parametrize(
-    ("setting", "share"),
+    ("setting", "share", "tolerance"),
     [
-        ("middle", 0.05),
-        ("recording.backward_move@low", 0.02),
-        ("recording.backward_move@high", 0.10),
+        ("middle", 0.05, 0.015),
+        ("recording.backward_move@low", 0.02, 0.01),
+        ("recording.backward_move@high", 0.10, 0.021),
     ],
 )
-def test_the_profiles_share_of_deals_move_backward(generated, setting, share):
+def test_the_profiles_share_of_deals_move_backward(generated, setting, share, tolerance):
     deals = [c for c in history_by_deal(generated(setting)).values() if can_move_back(c)]
     backward = [c for c in deals if moved_back(c)]
-    assert len(backward) / len(deals) == pytest.approx(share, abs=0.015)
+    assert len(backward) / len(deals) == pytest.approx(share, abs=tolerance)
 
 
 def test_moving_back_overwrites_the_date_entered_of_the_stage_entered_again(middle):

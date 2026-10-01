@@ -7,7 +7,7 @@ and hubspot.py shows only what was recorded before the export date.
 
 import calendar
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, datetime, time, timedelta
 from random import Random
 
@@ -94,12 +94,11 @@ class Recording:
         stage stays where it was moved back to.
         """
         recorded = [i for i, c in enumerate(changes) if c.recorded_at]
-        candidates = []
-        for n, k in enumerate(recorded[1:], start=1):
-            later = recorded[n + 1] if n + 1 < len(recorded) else None
-            gap = changes[later].recorded_at - changes[k].recorded_at if later else None
-            if changes[k].stage in self.open and (gap is None or gap >= 3 * MINUTE):
-                candidates.append((recorded[n - 1], k, later))
+        candidates = [
+            (recorded[n - 1], k, recorded[n + 1] if n + 1 < len(recorded) else None)
+            for n, k in enumerate(recorded[1:], start=1)
+            if changes[k].stage in self.open
+        ]
         if not candidates:
             return changes
         before, k, later = self.rng.choice(candidates)
@@ -107,11 +106,18 @@ class Recording:
         if later is None:
             back = max(self._entered(at), at + MINUTE)
             return [*changes, Change(changes[before].stage, None, back)]
-        until = changes[later].recorded_at
+        # The two moves need a minute each before the next change; a later change pushed by
+        # them keeps its order.
+        until = max(changes[later].recorded_at, at + 3 * MINUTE)
+        shift = until - changes[later].recorded_at
         back = at + MINUTE + (until - at - 3 * MINUTE) * self.rng.random()
         again = back + MINUTE + (until - back - 2 * MINUTE) * self.rng.random()
         moves = [Change(changes[before].stage, None, back), Change(changes[k].stage, None, again)]
-        return [*changes[: k + 1], *moves, *changes[k + 1 :]]
+        rest = [
+            replace(c, recorded_at=c.recorded_at + shift) if c.recorded_at else c
+            for c in changes[k + 1 :]
+        ]
+        return [*changes[: k + 1], *moves, *rest]
 
     def _entered(self, at: datetime) -> datetime:
         """When the team records a change that truly happened at this moment.
