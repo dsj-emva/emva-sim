@@ -46,6 +46,16 @@ def history_by_deal(folder):
     return by_deal
 
 
+def genuine(folder):
+    """The deal Record IDs of genuine Leads, without duplicates and bots."""
+    return {r["deal_record_id"] for r in rows(folder / TRUTH) if r["row_kind"] == "lead"}
+
+
+def lead_histories(folder):
+    leads = genuine(folder)
+    return [changes for deal, changes in history_by_deal(folder).items() if deal in leads]
+
+
 def test_the_export_shows_the_latest_recorded_entry_of_each_stage_before_the_export(middle):
     deals = {d["Record ID"]: d for d in rows(middle / DEALS)}
     by_deal = history_by_deal(middle)
@@ -93,7 +103,7 @@ def first_lags(folder):
     """
     bulk = {c["recorded_entered_at"] for c in in_bulk(hand_entered(folder))}
     lags = []
-    for changes in history_by_deal(folder).values():
+    for changes in lead_histories(folder):
         true = [c for c in changes if c["true_entered_at"] and c["crm_stage"] != "New Enquiry"]
         first = min(true, key=lambda c: c["true_entered_at"], default=None)
         if first and first["recorded_entered_at"] and first["recorded_entered_at"] not in bulk:
@@ -203,7 +213,7 @@ def skippable(changes):
     ],
 )
 def test_the_profiles_share_of_records_skip_a_stage(generated, setting, share):
-    passing = [s for s in map(skippable, history_by_deal(generated(setting)).values()) if s]
+    passing = [s for s in map(skippable, lead_histories(generated(setting))) if s]
     skipping = [s for s in passing if any(not c["recorded_entered_at"] for c in s)]
     assert len(skipping) / len(passing) == pytest.approx(share, abs=0.04)
 
@@ -229,7 +239,7 @@ def can_move_back(changes):
     ],
 )
 def test_the_profiles_share_of_deals_move_backward(generated, setting, share, tolerance):
-    deals = [c for c in history_by_deal(generated(setting)).values() if can_move_back(c)]
+    deals = [c for c in lead_histories(generated(setting)) if can_move_back(c)]
     backward = [c for c in deals if moved_back(c)]
     assert len(backward) / len(deals) == pytest.approx(share, abs=tolerance)
 
@@ -237,7 +247,8 @@ def test_the_profiles_share_of_deals_move_backward(generated, setting, share, to
 def test_moving_back_overwrites_the_date_entered_of_the_stage_entered_again(middle):
     deals = {d["Record ID"]: d for d in rows(middle / DEALS)}
     overwritten = 0
-    for deal_id, changes in history_by_deal(middle).items():
+    for changes in lead_histories(middle):
+        deal_id = changes[0]["deal_record_id"]
         for again in moved_back(changes):
             first = next(c for c in changes if c["crm_stage"] == again["crm_stage"])
             assert first["recorded_entered_at"] < again["recorded_entered_at"]
@@ -270,8 +281,10 @@ MEANINGS = {
 
 
 def lost_with_truth(folder):
-    truth = {r["deal_record_id"]: r for r in rows(folder / TRUTH)}
-    deals = [d for d in rows(folder / DEALS) if d["Deal Stage"] == "Lost"]
+    truth = {r["deal_record_id"]: r for r in rows(folder / TRUTH) if r["row_kind"] == "lead"}
+    deals = [
+        d for d in rows(folder / DEALS) if d["Deal Stage"] == "Lost" and d["Record ID"] in truth
+    ]
     return [(d, truth[d["Record ID"]]) for d in deals]
 
 
@@ -300,7 +313,11 @@ def test_the_profiles_share_of_recorded_reasons_differ_from_the_true_one(generat
 
 
 def test_every_lost_lead_and_no_other_has_a_true_loss_reason_drawn_from_the_profile(middle):
-    lost = {c["deal_record_id"] for c in rows(middle / STAGES) if c["crm_stage"] == "Lost"}
+    lost = {
+        c["deal_record_id"]
+        for c in rows(middle / STAGES)
+        if c["crm_stage"] == "Lost" and c["true_entered_at"]
+    }
     truth = rows(middle / TRUTH)
     for row in truth:
         assert bool(row["true_loss_reason"]) == (row["deal_record_id"] in lost), row

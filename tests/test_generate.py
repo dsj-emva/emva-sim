@@ -34,9 +34,15 @@ def middle(tmp_path_factory):
     return dataset.generate(PROFILE, "middle", seed=1, out=out, history=HISTORY)
 
 
+def genuine(truth_rows):
+    """The hidden truth's rows of genuine Leads, without duplicates and bots."""
+    return [r for r in truth_rows if r["row_kind"] == "lead"]
+
+
 def test_the_deals_export_has_one_deal_per_lead_at_the_profiles_volume(middle):
     deals = rows(middle / DEALS)
-    assert len(deals) == 400 * 6
+    assert len(genuine(rows(middle / TRUTH))) == 400 * 6
+    assert len(deals) == len(rows(middle / TRUTH))
     assert list(deals[0])[0] == "Record ID"
 
 
@@ -95,7 +101,7 @@ LONG_CALLS = "export/with-calls-and-notes/hubspot-crm-exports-all-calls-2025-12-
 
 def logged_share(tmp_path, setting):
     folder = dataset.generate(PROFILE, setting, seed=1, out=tmp_path, history=LONG_AFTER)
-    made = sum(int(r["call_attempts"]) for r in rows(folder / TRUTH))
+    made = sum(int(r["call_attempts"]) for r in genuine(rows(folder / TRUTH)))
     return len(rows(folder / LONG_CALLS)) / made
 
 
@@ -116,7 +122,7 @@ def test_a_partial_month_gets_its_share_of_the_months_volume(tmp_path):
         start=date(2024, 1, 1), end=date(2024, 1, 2), export=date(2024, 3, 1)
     )
     folder = dataset.generate(PROFILE, "middle", seed=1, out=tmp_path, history=two_days)
-    assert len(rows(folder / TRUTH)) == round(400 * 2 / 31)
+    assert len(genuine(rows(folder / TRUTH))) == round(400 * 2 / 31)
 
 
 def test_a_median_delay_that_contradicts_the_late_share_is_refused():
@@ -283,7 +289,7 @@ def test_the_true_path_enters_stages_in_ladder_order_without_skips(middle, raw):
         assert reached == sorted(reached), deal["Record ID"]
 
 
-def test_the_hidden_truth_has_one_row_per_lead_keyed_by_both_record_ids(middle):
+def test_the_hidden_truth_has_one_row_per_deal_keyed_by_both_record_ids(middle):
     truth = rows(middle / TRUTH)
     deals = {d["Record ID"]: d for d in rows(middle / DEALS)}
     assert len(truth) == len(deals)
@@ -304,4 +310,6 @@ def test_the_hidden_truth_has_one_row_per_lead_keyed_by_both_record_ids(middle):
         "cancelled_after_won",
         "call_attempts",
         "true_loss_reason",
+        "row_kind",
+        "duplicate_of_deal_record_id",
     ]

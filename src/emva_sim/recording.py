@@ -12,7 +12,7 @@ from datetime import date, datetime, time, timedelta
 from random import Random
 
 from emva_sim.leads import Lead
-from emva_sim.process import TruePath
+from emva_sim.process import ContactAttempt, TruePath
 
 MINUTE = timedelta(minutes=1)
 UNKNOWN = "unknown"
@@ -37,6 +37,7 @@ class Recorded:
     quotes: list[tuple[datetime, float]]  # each itinerary version's Amount and when it was sent
     closed_lost_reason: str
     true_loss_reason: str  # Hidden truth: what truly made a lost lead not win
+    calls: list[ContactAttempt]  # the call attempts the team logged
 
 
 class Recording:
@@ -94,7 +95,21 @@ class Recording:
         true_reason = self._true_loss_reason() if events[-1][0] == self.lost else ""
         recorded_lost = any(c.stage == self.lost and c.recorded_at for c in changes)
         reason = self._recorded_loss_reason(true_reason) if recorded_lost else ""
-        return Recorded(changes, [] if no_amount else path.quotes, reason, true_reason)
+        calls = [a for a in path.attempts if a.channel == "call" and a.logged]
+        return Recorded(changes, [] if no_amount else path.quotes, reason, true_reason, calls)
+
+    def not_a_lead(self, submitted_at: datetime) -> Recorded:
+        """A duplicate or bot deal: left at its first stage, or moved to Lost.
+
+        No true path lies behind it, so none of its changes has a true time.
+        """
+        changes = [Change(self.stages[0]["name"], None, submitted_at)]
+        reason = ""
+        if self.rng.random() < self.p["mess"]["duplicate_or_bot_moved_to_lost"]:
+            lost_at = max(self._entered(submitted_at), submitted_at + MINUTE)
+            changes.append(Change(self.lost, None, lost_at))
+            reason = self._recorded_loss_reason(UNKNOWN)
+        return Recorded(changes, [], reason, "", [])
 
     def _true_loss_reason(self) -> str:
         """What truly made a lost lead not win, drawn from the profile's shares.

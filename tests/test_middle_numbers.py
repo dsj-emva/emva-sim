@@ -35,6 +35,7 @@ def leads(tmp_path_factory):
     )
     created = {d["Record ID"]: moment(d["Create Date"]) for d in rows(folder / DEALS)}
     truth = rows(folder / "hidden-truth" / "hidden-truth.csv")
+    truth = [row for row in truth if row["row_kind"] == "lead"]
     for row in truth:
         row["created"] = created[row["deal_record_id"]]
     return truth

@@ -171,11 +171,17 @@ def _seasonal_price(p: dict, style: str, travel_month: int) -> float:
     return low * rate if travel_month in peak_months else low
 
 
-def _lead(rng: Random, p: dict, submitted_at: datetime, group: str) -> Lead:
-    deal, process, source = p["deal"], p["process"], p["volume"]["traffic_source"]
-    country = rng.choice(p["markets"]["groups"][group]["countries"])
+def traffic_source(rng: Random, p: dict) -> str:
+    """An Original Traffic Source drawn from the profile's mix."""
+    source = p["volume"]["traffic_source"]
     others = {k: source[k] for k in source["labels"] if k != source["reference"]}
-    traffic_source = _pick(rng, others, source["reference"])
+    return _pick(rng, others, source["reference"])
+
+
+def _lead(rng: Random, p: dict, submitted_at: datetime, group: str) -> Lead:
+    deal, process = p["deal"], p["process"]
+    country = rng.choice(p["markets"]["groups"][group]["countries"])
+    source = traffic_source(rng, p)
     repeat_client = rng.random() < p["form"]["answers"]["travelled_before"]
     adults, children = _party(rng, p)
     style = _style(rng, p)
@@ -190,7 +196,7 @@ def _lead(rng: Random, p: dict, submitted_at: datetime, group: str) -> Lead:
         submitted_at=submitted_at,
         market_group=group,
         country=country["name"],
-        traffic_source=traffic_source,
+        traffic_source=source,
         repeat_client=repeat_client,
         style=style,
         nights=nights,
