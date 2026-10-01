@@ -26,7 +26,8 @@ def test_every_dataset_of_the_sweep_is_written_with_its_exports_hidden_truth_and
             "with-calls-and-notes",
             "deals-and-contacts-only",
         }
-        assert (folder / "hidden-truth" / "hidden-truth.csv").exists()
+        truth = (folder / "hidden-truth" / "hidden-truth.csv").read_text().splitlines()
+        assert len(truth) > 1, folder.name
         assert (folder / "manifest.json").exists()
 
 
@@ -108,6 +109,23 @@ def test_the_index_lists_every_dataset_its_setting_and_its_seed(written):
     assert {d["folder"] for d in listed} == {p.name for p in written.iterdir() if p.is_dir()}
     for d in listed:
         assert manifest(written, d["setting"])["seed"] == d["seed"]
+
+
+def files(folder):
+    return {p.relative_to(folder): p.read_bytes() for p in sorted(folder.rglob("*")) if p.is_file()}
+
+
+def test_writing_twice_gives_byte_identical_output(written, tmp_path):
+    datasets.write_all(PROFILE, tmp_path, history=TINY)
+    assert files(tmp_path) == files(written)
+
+
+def test_a_dataset_is_the_one_its_seed_generates_alone(written, tmp_path):
+    setting = "volume.leads_per_month@high"
+    alone = dataset.generate(PROFILE, setting, datasets.seed(setting), tmp_path, history=TINY)
+    swept = files(written / datasets.folder_name(setting))
+    del swept[Path("manifest.json")]
+    assert swept == files(alone)
 
 
 def test_each_manifest_carries_its_setting_and_seed(written):
