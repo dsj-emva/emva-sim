@@ -19,9 +19,18 @@ def written(tmp_path_factory):
     return out
 
 
+def sweep_size():
+    """The middle, each one-at-a-time range at its low and its high, and the two extremes."""
+    return 1 + 2 * len(profile.load(PROFILE)["sweep"]["one_at_a_time"]) + 2
+
+
+def test_the_planned_hospitality_sweep_is_149_datasets_as_the_user_ruled():
+    assert len(datasets.settings(profile.load(PROFILE))) == sweep_size() == 149
+
+
 def test_every_dataset_of_the_sweep_is_written_with_its_exports_hidden_truth_and_manifest(written):
     folders = sorted(p for p in written.iterdir() if p.is_dir())
-    assert len(folders) == 1 + 2 * 73 + 2
+    assert len(folders) == sweep_size()
     for folder in folders:
         assert {p.name for p in (folder / "export").iterdir()} == {
             "with-calls-and-notes",
@@ -117,7 +126,7 @@ def test_the_index_lists_every_dataset_its_setting_and_its_seed(written):
     assert (index["data_source"], index["label"]) == ("simulated data", "on simulated data")
     assert index["base_seed"] == 1
     listed = index["datasets"]
-    assert len(listed) == 149
+    assert len(listed) == sweep_size()
     assert listed[0] == {"folder": "middle", "setting": "middle", "seed": 0xE95D4948}
     assert {d["folder"] for d in listed} == {p.name for p in written.iterdir() if p.is_dir()}
     for d in listed:
