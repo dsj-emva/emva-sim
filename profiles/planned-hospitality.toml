@@ -121,7 +121,7 @@ held_at_middle = [
   "deal.deposit_share",
   "deal.final_to_first_quote",
   "process.itinerary_versions_per_won",
-  "handling.first_attempt_by_email",
+  "handling.attempt_by_email",
   "notes.short_note_words",
   "volume.traffic_source.organic",
   "volume.traffic_source.paid_social",
@@ -865,7 +865,8 @@ high = 5
 confidence = "estimated"
 source = "neglect-and-mess.md §3: InsideSales mean 1.3; Velocify (vendor)"
 
-[handling.first_attempt_by_email]
+# Share of Contact attempts made by email (the rest are calls, the only attempts a calls export shows).
+[handling.attempt_by_email]
 low = 0.60
 middle = 0.80
 high = 0.95

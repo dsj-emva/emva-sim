@@ -37,6 +37,11 @@ def test_one_range_at_its_high(raw):
     assert resolved["effects"]["lead_source"]["organic"] == 1.4
 
 
+def test_the_email_share_covers_every_contact_attempt(raw):
+    resolved = profile.resolve(raw, "handling.attempt_by_email@low")
+    assert resolved["handling"]["attempt_by_email"] == 0.6
+
+
 def test_all_low_and_all_high(raw):
     low = profile.resolve(raw, "all-low")
     high = profile.resolve(raw, "all-high")

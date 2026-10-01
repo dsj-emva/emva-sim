@@ -122,7 +122,7 @@ class Process:
 
         engaged_at = at.get("Engaged")
         attempts = self._attempts(rng, at["Contact attempted"], engaged_at or at["Lost"])
-        if engaged_at and rng.random() >= p["handling"]["first_attempt_by_email"]:
+        if engaged_at and rng.random() >= p["handling"]["attempt_by_email"]:
             attempts.append(ContactAttempt(engaged_at, "call", True))
 
         quotes, hold, travelled, cancelled = [], None, None, None
@@ -155,7 +155,7 @@ class Process:
         handling = self.p["handling"]
         count = 1 + draws.poisson(rng, handling["attempts_before_giving_up"] - 1)
         times = [first, *_between(rng, count - 1, first, until)]
-        by_email = handling["first_attempt_by_email"]
+        by_email = handling["attempt_by_email"]
         return [
             ContactAttempt(t, "email" if rng.random() < by_email else "call", False) for t in times
         ]
