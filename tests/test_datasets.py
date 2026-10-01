@@ -33,7 +33,7 @@ def test_every_dataset_of_the_sweep_is_written_with_its_exports_hidden_truth_and
 
 
 def manifest(written, setting):
-    return json.loads((written / datasets.folder_name(setting) / "manifest.json").read_text())
+    return json.loads((written / dataset.folder_name(setting) / "manifest.json").read_text())
 
 
 @pytest.mark.parametrize(
@@ -48,7 +48,7 @@ def manifest(written, setting):
 def test_a_folder_is_named_for_its_setting_by_the_profile_key_its_range_is_read_from(
     setting, folder
 ):
-    assert datasets.folder_name(setting) == folder
+    assert dataset.folder_name(setting) == folder
 
 
 def test_each_seed_is_the_sha256_of_the_base_seed_and_the_setting_so_others_never_shift():
@@ -136,7 +136,7 @@ def test_writing_twice_gives_byte_identical_output(written, tmp_path):
 def test_a_dataset_is_the_one_its_seed_generates_alone(written, tmp_path):
     setting = "volume.leads_per_month@high"
     alone = dataset.generate(PROFILE, setting, datasets.seed(setting), tmp_path, history=TINY)
-    swept = files(written / datasets.folder_name(setting))
+    swept = files(written / dataset.folder_name(setting))
     del swept[Path("manifest.json")]
     assert swept == files(alone)
 

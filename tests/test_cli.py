@@ -25,7 +25,7 @@ def test_generate_writes_a_dataset_and_labels_its_numbers(tmp_path, capsys):
             str(tmp_path),
         ]
     )
-    folder = tmp_path / "planned-hospitality-middle-seed-3"
+    folder = tmp_path / "middle"
     assert (folder / "hidden-truth" / "hidden-truth.csv").exists()
     printed = capsys.readouterr().out
     assert "9600 leads" in printed

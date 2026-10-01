@@ -30,8 +30,10 @@ class History:
 DEFAULT_HISTORY = History()
 
 
-def name(p: dict, setting: str, seed: int) -> str:
-    return f"{p['name']}-{setting}-seed-{seed}"
+def folder_name(setting: str) -> str:
+    """A dataset's folder: its setting, with "<range name>@<end>" written as the profile key its
+    number is read from."""
+    return setting.replace("@", ".")
 
 
 def leads_and_paths(
@@ -46,9 +48,8 @@ def generate(
     profile_path: Path, setting: str, seed: int, out: Path, history: History = DEFAULT_HISTORY
 ) -> Path:
     """Write one dataset to the folder of out named for it, and return that folder."""
-    raw = profile.load(profile_path)
-    folder = Path(out) / name(raw, setting, seed)
-    write(raw, setting, seed, folder, history)
+    folder = Path(out) / folder_name(setting)
+    write(profile.load(profile_path), setting, seed, folder, history)
     return folder
 
 

@@ -33,18 +33,15 @@ def seed(setting: str) -> int:
     return int(hashlib.sha256(f"{BASE_SEED}/{setting}".encode()).hexdigest()[:8], 16)
 
 
-def folder_name(setting: str) -> str:
-    """The setting, with "<range name>@<end>" written as the profile key its number is read from."""
-    return setting.replace("@", ".")
-
-
 def write_all(profile_path: Path, out: Path, history: History = DEFAULT_HISTORY) -> list[dict]:
     """Write every dataset of the sweep and the index, and return the index's datasets."""
     profile_path = Path(profile_path)
     raw = profile.load(profile_path)
     named = {"file": profile_path.name, "sha256": _sha256(profile_path)}
     named_generator = {"version": version("emva-sim"), "sha256": _generator_sha256()}
-    listed = [{"folder": folder_name(s), "setting": s, "seed": seed(s)} for s in settings(raw)]
+    listed = [
+        {"folder": dataset.folder_name(s), "setting": s, "seed": seed(s)} for s in settings(raw)
+    ]
     with ProcessPoolExecutor() as pool:
         list(pool.map(partial(_write_one, raw, named, named_generator, Path(out), history), listed))
     _write_json(

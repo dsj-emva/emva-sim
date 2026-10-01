@@ -128,9 +128,8 @@ def test_generating_again_replaces_the_previous_dataset(tmp_path):
 
 
 def test_a_different_seed_gives_different_files(tmp_path):
-    first = dataset.generate(PROFILE, "middle", seed=7, out=tmp_path, history=SHORT)
-    second = dataset.generate(PROFILE, "middle", seed=8, out=tmp_path, history=SHORT)
-    assert first != second
+    first = dataset.generate(PROFILE, "middle", seed=7, out=tmp_path / "a", history=SHORT)
+    second = dataset.generate(PROFILE, "middle", seed=8, out=tmp_path / "b", history=SHORT)
     assert all(a != b for a, b in zip(files(first).values(), files(second).values(), strict=True))
 
 
@@ -145,7 +144,7 @@ def test_the_dataset_folder_holds_both_export_variants_and_the_hidden_truth(midd
         TRUTH,
         STAGE_HISTORY,
     }
-    assert middle.name == "planned-hospitality-middle-seed-1"
+    assert middle.name == "middle"
 
 
 def export_files(folder):
