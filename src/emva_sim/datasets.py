@@ -34,12 +34,27 @@ def folder_name(setting: str) -> str:
 
 
 def write_all(profile_path: Path, out: Path, history: History = DEFAULT_HISTORY) -> None:
+    profile_path = Path(profile_path)
     raw = profile.load(profile_path)
+    named = {"file": profile_path.name, "sha256": _sha256(profile_path)}
     for setting in settings(raw):
         folder = Path(out) / folder_name(setting)
         dataset.write(raw, setting, seed(setting), folder, history)
-        m = {"setting": setting, "seed": seed(setting), "ranges": _ranges(raw, setting)}
-        (folder / "manifest.json").write_text(json.dumps(m))
+        m = {
+            "data_source": "on simulated data",
+            "profile": named,
+            "setting": setting,
+            "seed": seed(setting),
+            "history": {"start": history.start.isoformat(), "end": history.end.isoformat()},
+            "export_date": history.export.isoformat(),
+            "ranges": _ranges(raw, setting),
+        }
+        (folder / "manifest.json").write_text(json.dumps(m, indent=2) + "\n", encoding="utf-8")
+
+
+def _sha256(path: Path) -> str:
+    """The SHA-256 of the file's bytes, as `shasum -a 256` prints it."""
+    return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 def _ranges(raw: dict, setting: str) -> dict[str, dict]:

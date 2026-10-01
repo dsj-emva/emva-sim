@@ -1,3 +1,4 @@
+import hashlib
 import json
 from datetime import date
 from pathlib import Path
@@ -82,6 +83,19 @@ def test_a_manifest_carries_each_ranges_resolved_number(written):
     assert manifest(written, "all-low")["ranges"]["volume.leads_per_month"]["value"] == 100
     referral = manifest(written, "effects.lead_source.referral@high")["ranges"]
     assert referral["effects.lead_source.referral"]["value"] == 6.0
+
+
+def test_a_manifest_names_its_profile_its_dates_and_that_its_numbers_are_on_simulated_data(
+    written,
+):
+    m = manifest(written, "middle")
+    assert m["data_source"] == "on simulated data"
+    assert m["profile"] == {
+        "file": "planned-hospitality.toml",
+        "sha256": hashlib.sha256(PROFILE.read_bytes()).hexdigest(),
+    }
+    assert m["history"] == {"start": "2024-01-01", "end": "2024-01-02"}
+    assert m["export_date"] == "2024-03-01"
 
 
 def test_each_manifest_carries_its_setting_and_seed(written):
