@@ -129,6 +129,49 @@ def year_of_leads():
     return p, leads.draw_leads(Random(2), p, date(2024, 1, 1), date(2024, 12, 31))
 
 
+def year_at(setting):
+    p = profile.resolve(profile.load(PROFILE), setting)
+    return p, leads.draw_leads(Random(2), p, date(2024, 1, 1), date(2024, 12, 31))
+
+
+def market_ratio(p, drawn, measure):
+    by_group = {g: [lead for lead in drawn if lead.market_group == g] for g in "ab"}
+    medians = {g: statistics.median(measure(p, x) for x in by_group[g]) for g in "ab"}
+    return medians["a"] / medians["b"]
+
+
+def lead_time_months(_, lead):
+    return booking_lead_time_months(lead)
+
+
+TRAP = "effects.proxy_trap_country"
+
+
+@pytest.mark.parametrize(
+    ("setting", "budget", "lead_time"),
+    [
+        (f"{TRAP}.budget_multiplier@low", 1.3, 1.5),
+        (f"{TRAP}.budget_multiplier@high", 2.0, 1.5),
+        (f"{TRAP}.lead_time_multiplier@low", 1.6, 1.2),
+        (f"{TRAP}.lead_time_multiplier@high", 1.6, 2.0),
+    ],
+)
+def test_the_trap_moves_the_markets_apart_by_its_multipliers_at_each_end(
+    setting, budget, lead_time
+):
+    p, drawn = year_at(setting)
+    assert market_ratio(p, drawn, budget_to_style_price) == pytest.approx(budget, rel=0.06)
+    assert market_ratio(p, drawn, lead_time_months) == pytest.approx(lead_time, rel=0.06)
+
+
+@pytest.mark.parametrize(("end", "share"), [("low", 0.10), ("high", 0.30)])
+def test_the_text_commitment_share_follows_its_ends(end, share):
+    _, drawn = year_at(f"effects.text_commitment.share_of_leads@{end}")
+    assert sum(lead.text_commitment for lead in drawn) / len(drawn) == pytest.approx(
+        share, abs=0.02
+    )
+
+
 def test_market_a_states_budgets_1_6_times_and_books_1_5_times_as_far_ahead_as_market_b(
     year_of_leads,
 ):
