@@ -11,6 +11,8 @@ removing a setting never changes another dataset's data.
 
 import hashlib
 import json
+from concurrent.futures import ProcessPoolExecutor
+from functools import partial
 from pathlib import Path
 
 from emva_sim import dataset, profile
@@ -39,28 +41,33 @@ def write_all(profile_path: Path, out: Path, history: History = DEFAULT_HISTORY)
     profile_path = Path(profile_path)
     raw = profile.load(profile_path)
     named = {"file": profile_path.name, "sha256": _sha256(profile_path)}
-    listed = []
-    for setting in settings(raw):
-        folder = Path(out) / folder_name(setting)
-        dataset.write(raw, setting, seed(setting), folder, history)
-        _write_json(
-            folder / "manifest.json",
-            {
-                "data_source": DATA_SOURCE,
-                "profile": named,
-                "setting": setting,
-                "seed": seed(setting),
-                "history": {"start": history.start.isoformat(), "end": history.end.isoformat()},
-                "export_date": history.export.isoformat(),
-                "ranges": _ranges(raw, setting),
-            },
-        )
-        listed.append({"folder": folder.name, "setting": setting, "seed": seed(setting)})
+    swept = settings(raw)
+    with ProcessPoolExecutor() as pool:
+        list(pool.map(partial(_write_one, raw, named, Path(out), history), swept))
+    listed = [{"folder": folder_name(s), "setting": s, "seed": seed(s)} for s in swept]
     _write_json(
         Path(out) / "index.json",
         {"data_source": DATA_SOURCE, "profile": named, "base_seed": BASE_SEED, "datasets": listed},
     )
     return listed
+
+
+def _write_one(raw: dict, named: dict, out: Path, history: History, setting: str) -> None:
+    """One dataset and its manifest; each depends only on its setting, so they run in parallel."""
+    folder = out / folder_name(setting)
+    dataset.write(raw, setting, seed(setting), folder, history)
+    _write_json(
+        folder / "manifest.json",
+        {
+            "data_source": DATA_SOURCE,
+            "profile": named,
+            "setting": setting,
+            "seed": seed(setting),
+            "history": {"start": history.start.isoformat(), "end": history.end.isoformat()},
+            "export_date": history.export.isoformat(),
+            "ranges": _ranges(raw, setting),
+        },
+    )
 
 
 def _write_json(path: Path, content: dict) -> None:
