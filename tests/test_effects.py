@@ -2,7 +2,8 @@
 
 Hand-made leads at the edges of each effect's groups, at the middle and at each end of the effect's
 range (that range at its end, every other at its middle). Expected values are the profile's own
-numbers.
+numbers; the thresholds that put a lead at an edge (floors, bands, dates, sizes) are read from the
+profile at its middle, not restated here.
 """
 
 import math
@@ -13,21 +14,55 @@ from random import Random
 
 import pytest
 
-from emva_sim import leads, profile
+from emva_sim import form, leads, profile
 from emva_sim.effects import Effects
 from emva_sim.leads import DatesGiven
 
 PROFILE = Path(__file__).parent.parent / "profiles" / "planned-hospitality.toml"
 RAW = profile.load(PROFILE)
 HISTORY_START = date(2024, 1, 1)
-# Month 14 of a history that starts in January 2024.
-RISE = datetime(2025, 2, 1)
-# Luxury's middle price is $1,300 a night; the floor is 0.7 of it.
-LUXURY_FLOOR = 0.7 * 1300
 
 
 def resolved(setting="middle"):
     return profile.resolve(RAW, setting)
+
+
+MIDDLE = resolved()
+EFFECTS = MIDDLE["effects"]
+FLOOR = EFFECTS["budget_floor"]
+RISE_EFFECT = EFFECTS["price_rise"]
+UNDER_MONTHS = EFFECTS["lead_time_by_season"]["under_months"]
+OVER_MONTHS = EFFECTS["lead_time_by_season"]["over_months"]
+UNDER_WORDS = EFFECTS["message_length"]["under_words"]
+SHAPE = MIDDLE["form"]["message"]["shape"]
+OVER_TRAVELLERS = EFFECTS["party_size"]["over_travellers"]
+PEAK_MONTH = MIDDLE["season"]["peak_months"][0]
+OFF_PEAK_MONTH = next(m for m in range(1, 13) if m not in MIDDLE["season"]["peak_months"])
+COUNTRIES = [
+    o["label"] for o in form.field(MIDDLE, "destinations")["options"] if "not_sure" not in o
+]
+
+
+def floor_of(style):
+    return FLOOR["floor_share_of_style_price"] * MIDDLE["deal"]["price_per_person_per_night"][style]
+
+
+LUXURY_FLOOR = floor_of("luxury")
+HALF = FLOOR["below_half_under"]
+# The first day of the rise's month of the history.
+_MONTHS_IN = HISTORY_START.month - 1 + RISE_EFFECT["at_month_of_history"] - 1
+RISE = datetime(HISTORY_START.year + _MONTHS_IN // 12, _MONTHS_IN % 12 + 1, 1)
+RISE_SHARE = RISE_EFFECT["floor_rise"]
+NEAR = RISE_EFFECT["near_floor_under"]
+
+
+def trip(months, month):
+    """Travel in this calendar month, submitted this many months before, well before the rise."""
+    travel = datetime(2024, month, 15, 12)
+    return {
+        "submitted_at": travel - timedelta(days=leads.DAYS_PER_MONTH * months),
+        "travel_at": travel,
+    }
 
 
 def at(name, end):
@@ -40,23 +75,21 @@ def at(name, end):
 
 def reference_lead():
     """A lead in every effect's reference group: each term is zero."""
-    drawn = leads.draw_leads(Random(1), resolved(), date(2024, 1, 1), date(2024, 1, 1))[0]
-    submitted = datetime(2024, 6, 1, 12)
+    drawn = leads.draw_leads(Random(1), MIDDLE, date(2024, 1, 1), date(2024, 1, 1))[0]
     return replace(
         drawn,
-        submitted_at=submitted,
-        travel_at=submitted + timedelta(days=183),  # December: off-peak, 6 months ahead
-        traffic_source="paid_search",
+        **trip((UNDER_MONTHS + OVER_MONTHS) / 2, OFF_PEAK_MONTH),
+        traffic_source=MIDDLE["volume"]["traffic_source"]["reference"],
         repeat_client=False,
         style="luxury",
-        adults=2,
+        adults=OVER_TRAVELLERS - 1,
         children=0,
         budget_per_person_per_night=1.2 * LUXURY_FLOOR,
         states_budget=True,
         gives_phone=False,
         dates_given=DatesGiven.EXACT,
-        destinations=("Kenya", "Tanzania"),
-        message_words=100,
+        destinations=tuple(COUNTRIES[:2]),
+        message_words=UNDER_WORDS * 4,
         text_commitment=False,
         real_buyer=False,
     )
@@ -88,16 +121,9 @@ def test_a_lead_in_every_reference_group_has_no_term():
     assert set(found.values()) == {0.0}
 
 
-def months_ahead(submitted, months):
-    return {
-        "submitted_at": submitted,
-        "travel_at": submitted + timedelta(days=leads.DAYS_PER_MONTH * months),
-    }
-
-
 DREAMER = {
-    "message_words": 500,
-    "destinations": ("Kenya", "Tanzania", "Botswana", "Rwanda"),
+    "message_words": SHAPE["dreamer_over_words"] + 1,
+    "destinations": tuple(COUNTRIES[: SHAPE["dreamer_over_countries"] + 1]),
     "states_budget": False,
 }
 
@@ -105,12 +131,12 @@ DREAMER = {
 CASES = [
     (
         "effects.budget_floor.below_half",
-        {"budget_per_person_per_night": 0.49 * LUXURY_FLOOR},
+        {"budget_per_person_per_night": 0.99 * HALF * LUXURY_FLOOR},
         "budget_floor",
     ),
     (
         "effects.budget_floor.half_to_floor",
-        {"budget_per_person_per_night": 0.5 * LUXURY_FLOOR},
+        {"budget_per_person_per_night": HALF * LUXURY_FLOOR},
         "budget_floor",
     ),
     (
@@ -121,17 +147,17 @@ CASES = [
     ("effects.no_budget.odds_ratio", {"states_budget": False}, "no_budget"),
     (
         "effects.lead_time_by_season.peak_under_4_months",
-        months_ahead(datetime(2024, 5, 1), 3.5),
+        trip(0.9 * UNDER_MONTHS, PEAK_MONTH),
         "lead_time_by_season",
     ),
     (
         "effects.lead_time_by_season.off_peak_under_4_months",
-        months_ahead(datetime(2024, 1, 1), 2.5),
+        trip(0.9 * UNDER_MONTHS, OFF_PEAK_MONTH),
         "lead_time_by_season",
     ),
     (
         "effects.lead_time_by_season.over_18_months_or_unsure",
-        months_ahead(datetime(2024, 1, 1), 19),
+        trip(1.05 * OVER_MONTHS, PEAK_MONTH),
         "lead_time_by_season",
     ),
     (
@@ -152,17 +178,17 @@ CASES = [
     ("effects.lead_source.paid_social", {"traffic_source": "paid_social"}, "lead_source"),
     ("effects.lead_source.organic", {"traffic_source": "organic"}, "lead_source"),
     ("effects.repeat_client.odds_ratio", {"repeat_client": True}, "repeat_client"),
-    ("effects.message_length.under_15_words", {"message_words": 14}, "message_length"),
+    ("effects.message_length.under_15_words", {"message_words": UNDER_WORDS - 1}, "message_length"),
     ("effects.message_length.under_15_words", {"message_words": 0}, "message_length"),
     ("effects.message_length.dreamer", DREAMER, "message_length"),
-    ("effects.party_size.over_6", {"adults": 5, "children": 2}, "party_size"),
+    ("effects.party_size.over_6", {"adults": OVER_TRAVELLERS - 1, "children": 2}, "party_size"),
     ("effects.phone_given.odds_ratio_when_optional", {"gives_phone": True}, "phone_given"),
     (
         "effects.price_rise.near_floor_after",
         {
             "submitted_at": RISE,
             "travel_at": RISE + timedelta(days=183),
-            "budget_per_person_per_night": 1.29 * LUXURY_FLOOR,
+            "budget_per_person_per_night": 0.99 * NEAR * LUXURY_FLOOR,
         },
         "price_rise",
     ),
@@ -191,12 +217,14 @@ def test_the_ends_of_every_effect_give_different_terms():
     [
         {"budget_per_person_per_night": 1.0 * LUXURY_FLOOR},
         {"budget_per_person_per_night": 5.0 * LUXURY_FLOOR},
-        months_ahead(datetime(2024, 1, 1), 18),  # travel in July, peak, 18 months ahead
-        months_ahead(datetime(2024, 3, 1), 6),  # travel in September, peak, 6 months ahead
-        months_ahead(datetime(2024, 4, 1), 4),  # travel in August, peak, 4 months ahead
-        {"message_words": 15},
-        {"message_words": 900},  # long, but names 2 countries and states a budget
-        {"adults": 4, "children": 2},
+        # just inside the reference band, at each of its edges
+        trip(0.99 * OVER_MONTHS, PEAK_MONTH),
+        trip(1.01 * UNDER_MONTHS, PEAK_MONTH),
+        trip(1.01 * UNDER_MONTHS, OFF_PEAK_MONTH),
+        {"message_words": UNDER_WORDS},
+        # long, but names few countries and states a budget
+        {"message_words": SHAPE["dreamer_over_words"] * 2},
+        {"adults": OVER_TRAVELLERS - 2, "children": 2},
         {"adults": 1},
         {"traffic_source": "paid_search", "dates_given": DatesGiven.EXACT},
     ],
@@ -206,27 +234,27 @@ def test_the_edges_of_the_reference_groups_carry_no_term(changes):
     assert set(found.values()) == {0.0}, found
 
 
-def test_a_long_message_naming_3_countries_is_no_dreamer():
-    found = terms(
-        replace(REFERENCE, **{**DREAMER, "destinations": ("Kenya", "Tanzania", "Botswana")})
-    )
+def test_a_long_message_naming_only_the_dreamers_count_of_countries_is_no_dreamer():
+    named = tuple(COUNTRIES[: SHAPE["dreamer_over_countries"]])
+    found = terms(replace(REFERENCE, **{**DREAMER, "destinations": named}))
     assert found["message_length"] == 0.0
 
 
 def test_a_stated_budget_below_the_floor_takes_no_no_budget_term_and_a_missing_one_no_floor_term():
-    below = terms(replace(REFERENCE, budget_per_person_per_night=0.4 * LUXURY_FLOOR))
-    missing = terms(
-        replace(REFERENCE, budget_per_person_per_night=0.4 * LUXURY_FLOOR, states_budget=False)
-    )
+    low_budget = 0.8 * HALF * LUXURY_FLOOR
+    below = terms(replace(REFERENCE, budget_per_person_per_night=low_budget))
+    missing = terms(replace(REFERENCE, budget_per_person_per_night=low_budget, states_budget=False))
     assert below["no_budget"] == 0.0 and below["budget_floor"] == pytest.approx(math.log(0.10))
     assert missing["budget_floor"] == 0.0 and missing["no_budget"] == pytest.approx(math.log(0.70))
 
 
 def test_the_floor_follows_the_style_asked_for():
-    # Comfortable's middle price is $550 a night: its floor is $385.
-    comfortable = replace(REFERENCE, style="comfortable", budget_per_person_per_night=0.99 * 385)
+    floor = floor_of("comfortable")
+    assert floor < LUXURY_FLOOR
+    comfortable = replace(REFERENCE, style="comfortable", budget_per_person_per_night=0.99 * floor)
     assert terms(comfortable)["budget_floor"] == pytest.approx(math.log(0.50))
-    assert terms(replace(comfortable, budget_per_person_per_night=386))["budget_floor"] == 0.0
+    at_floor = replace(comfortable, budget_per_person_per_night=1.01 * floor)
+    assert terms(at_floor)["budget_floor"] == 0.0
 
 
 @pytest.mark.parametrize(
@@ -239,7 +267,7 @@ def test_the_floor_follows_the_style_asked_for():
 )
 def test_a_repeat_client_feels_only_the_kept_share_of_the_floor_penalty(setting, kept):
     repeat_below = replace(
-        REFERENCE, repeat_client=True, budget_per_person_per_night=0.8 * LUXURY_FLOOR
+        REFERENCE, repeat_client=True, budget_per_person_per_night=(1 + HALF) / 2 * LUXURY_FLOOR
     )
     found = terms(repeat_below, setting)
     assert found["budget_floor"] == pytest.approx(kept * math.log(0.50))
@@ -255,25 +283,30 @@ def at_rise(budget_share_of_old_floor, submitted=RISE):
     )
 
 
-def test_before_month_14_there_is_no_price_rise():
-    before = terms(at_rise(1.05, submitted=RISE - timedelta(minutes=1)))
+def test_before_the_rise_month_there_is_no_price_rise():
+    before = terms(at_rise(1 + RISE_SHARE / 2, submitted=RISE - timedelta(minutes=1)))
     assert before["budget_floor"] == 0.0 and before["price_rise"] == 0.0
+
+
+RISE_LOW = at("effects.price_rise.floor_rise", "low")
+RISE_HIGH = at("effects.price_rise.floor_rise", "high")
+BETWEEN_ENDS = 1 + (RISE_LOW + RISE_HIGH) / 2
 
 
 @pytest.mark.parametrize(
     ("setting", "share_of_old_floor", "budget_floor", "price_rise"),
     [
-        # the floor rises 10% at the middle: 1.05 x the old floor is now below it
-        ("middle", 1.05, math.log(0.50), 0.0),
-        ("middle", 1.11, 0.0, math.log(0.75)),
-        ("middle", 1.31, 0.0, 0.0),
-        # 5% at the low end, 20% at the high end
-        ("effects.price_rise.floor_rise@low", 1.08, 0.0, math.log(0.75)),
-        ("effects.price_rise.floor_rise@high", 1.08, math.log(0.50), 0.0),
-        ("effects.price_rise.floor_rise@high", 1.21, 0.0, math.log(0.75)),
+        # at the middle: halfway up the rise is now below the floor, just above it is near it
+        ("middle", 1 + RISE_SHARE / 2, math.log(0.50), 0.0),
+        ("middle", 1.01 * (1 + RISE_SHARE), 0.0, math.log(0.75)),
+        ("middle", 1.01 * NEAR, 0.0, 0.0),
+        # a budget between the two ends' risen floors: above the low end's, below the high end's
+        ("effects.price_rise.floor_rise@low", BETWEEN_ENDS, 0.0, math.log(0.75)),
+        ("effects.price_rise.floor_rise@high", BETWEEN_ENDS, math.log(0.50), 0.0),
+        ("effects.price_rise.floor_rise@high", 1.01 * (1 + RISE_HIGH), 0.0, math.log(0.75)),
     ],
 )
-def test_after_month_14_the_floor_rises_and_budgets_just_above_it_lose_odds(
+def test_after_the_rise_the_floor_is_higher_and_budgets_just_above_it_lose_odds(
     setting, share_of_old_floor, budget_floor, price_rise
 ):
     found = terms(at_rise(share_of_old_floor), setting)
@@ -282,7 +315,8 @@ def test_after_month_14_the_floor_rises_and_budgets_just_above_it_lose_odds(
 
 
 def test_a_missing_budget_takes_no_price_rise():
-    assert terms(replace(at_rise(1.2), states_budget=False))["price_rise"] == 0.0
+    near_floor = (1 + RISE_SHARE + NEAR) / 2
+    assert terms(replace(at_rise(near_floor), states_budget=False))["price_rise"] == 0.0
 
 
 @pytest.mark.parametrize("end", ["middle", "low", "high"])
@@ -329,4 +363,5 @@ def test_the_lift_of_a_quick_first_attempt_falls_linearly_in_log_hours(quality):
 def test_only_effects_visible_at_submission_count_towards_how_good_a_lead_looks():
     effects = Effects(resolved(), HISTORY_START)
     lead = replace(REFERENCE, real_buyer=True, traffic_source="referral")
+    assert EFFECTS["notes_real_buyer"]["visible"] != "Submitted"
     assert effects.apparent(effects.of_lead(lead)) == pytest.approx(math.log(4.0))
