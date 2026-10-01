@@ -18,7 +18,6 @@ from emva_sim.process import TruePath
 HIDDEN_ATTRIBUTES = [
     "budget_per_person_per_night",
     "message_words",
-    "message_specificity",
     "text_commitment",
     "real_buyer",
 ]

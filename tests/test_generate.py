@@ -318,7 +318,6 @@ def test_the_hidden_truth_has_one_row_per_deal_keyed_by_both_record_ids(middle):
         "high_quality",
         "budget_per_person_per_night",
         "message_words",
-        "message_specificity",
         "text_commitment",
         "real_buyer",
         "true_loss_reason",

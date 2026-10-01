@@ -189,18 +189,11 @@ def shares(values):
     return {key: n / sum(counted.values()) for key, n in counted.items()}
 
 
-def test_messages_are_blank_vague_or_specific_at_the_profiles_shares(year_of_leads):
-    # form.message middles: 20% blank or a token, 30% vague, the rest partly and very
-    # specific 2 to 1. Tolerances in these tests are about 3 standard errors at 4,800 leads.
+def test_a_fifth_of_messages_are_blank_or_a_token(year_of_leads):
+    # form.message.blank_or_token at its middle; a token is at most 3 words.
     _, drawn = year_of_leads
-    found = shares(lead.message_specificity for lead in drawn)
-    assert found["blank_or_token"] == pytest.approx(0.20, abs=0.02)
-    assert found["vague"] == pytest.approx(0.30, abs=0.02)
-    assert found["partly_specific"] == pytest.approx(0.50 * 2 / 3, abs=0.02)
-    assert found["very_specific"] == pytest.approx(0.50 / 3, abs=0.02)
-    assert all(
-        lead.message_words <= 3 for lead in drawn if lead.message_specificity == "blank_or_token"
-    )
+    blank = sum(lead.message_words <= 3 for lead in drawn) / len(drawn)
+    assert blank == pytest.approx(0.20, abs=0.02)
 
 
 def test_dreamers_write_over_400_words_name_over_3_countries_and_state_no_budget(year_of_leads):
@@ -216,7 +209,7 @@ def test_dreamers_write_over_400_words_name_over_3_countries_and_state_no_budget
 
 def test_most_messages_run_near_the_profiles_median_length(year_of_leads):
     _, drawn = year_of_leads
-    written = [lead.message_words for lead in drawn if lead.message_specificity != "blank_or_token"]
+    written = [lead.message_words for lead in drawn if lead.message_words > 3]
     assert statistics.median(written) == pytest.approx(45, rel=0.1)
 
 

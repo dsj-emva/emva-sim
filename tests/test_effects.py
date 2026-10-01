@@ -56,7 +56,6 @@ def reference_lead():
         dates_given="exact",
         destinations=("Kenya", "Tanzania"),
         message_words=100,
-        message_specificity="very_specific",
         text_commitment=False,
         real_buyer=False,
     )

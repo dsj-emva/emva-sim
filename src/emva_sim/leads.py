@@ -31,7 +31,6 @@ class Lead:
     dates_given: str
     destinations: tuple[str, ...]
     message_words: int
-    message_specificity: str
     text_commitment: bool
     real_buyer: bool
     answers: dict[str, str] = field(default_factory=dict)
@@ -117,25 +116,18 @@ def _destinations(rng: Random, p: dict, dreamer: bool) -> tuple[str, ...]:
     return tuple(o for o in options if o in chosen)
 
 
-def _message(rng: Random, p: dict, dreamer: bool) -> tuple[int, str]:
-    """The words of the lead's message and how specific it is; #6 writes text to match."""
+def _message_words(rng: Random, p: dict, dreamer: bool) -> int:
+    """The words of the lead's message; #6 writes text to match."""
     message = p["form"]["message"]
-    shape, blank, vague = message["shape"], message["blank_or_token"], message["vague_share"]
+    shape, blank = message["shape"], message["blank_or_token"]
     token = shape["token_words_at_most"]
     if not dreamer and rng.random() < blank / (1 - message["dreamer_share"]):
-        return rng.randint(0, token), "blank_or_token"
-    if rng.random() < vague / (1 - blank):
-        specificity = "vague"
-    else:
-        partly = shape["partly_to_very_specific"]
-        specificity = "partly_specific" if rng.random() < partly / (1 + partly) else "very_specific"
+        return rng.randint(0, token)
     median, sigma = message["median_words"], message["words_sigma"]
     if dreamer:
         over = shape["dreamer_over_words"]
-        return math.floor(
-            draws.lognormal_between(rng, median, sigma, over, math.inf)
-        ) + 1, specificity
-    return max(token + 1, round(draws.lognormal(rng, median, sigma))), specificity
+        return math.floor(draws.lognormal_between(rng, median, sigma, over, math.inf)) + 1
+    return max(token + 1, round(draws.lognormal(rng, median, sigma)))
 
 
 def _heard_about(rng: Random, p: dict, lead: Lead) -> str:
@@ -285,7 +277,7 @@ def draw_lead(
     budget *= _market_shift(p, group, trap["budget_multiplier"])
     dreamers = p["form"]["message"]["dreamer_share"]
     dreamer = rng.random() < dreamers
-    message_words, message_specificity = _message(rng, p, dreamer)
+    message_words = _message_words(rng, p, dreamer)
     lead = Lead(
         submitted_at=submitted_at,
         market_group=group,
@@ -305,7 +297,6 @@ def draw_lead(
         dates_given=_dates_given(rng, p),
         destinations=_destinations(rng, p, dreamer),
         message_words=message_words,
-        message_specificity=message_specificity,
         text_commitment=rng.random() < p["effects"]["text_commitment"]["share_of_leads"],
         real_buyer=rng.random() < p["notes"]["real_buyer_share"],
     )
