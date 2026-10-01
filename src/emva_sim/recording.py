@@ -11,7 +11,6 @@ from dataclasses import dataclass, replace
 from datetime import date, datetime, time, timedelta
 from random import Random
 
-from emva_sim.leads import Lead
 from emva_sim.process import ContactAttempt, TruePath
 
 MINUTE = timedelta(minutes=1)
@@ -70,7 +69,14 @@ class Recording:
                 events.append((stage["name"], moment))
         return sorted(events, key=lambda event: (event[1], self.order[event[0]]))
 
-    def lead(self, lead: Lead, path: TruePath) -> Recorded:
+    def lead(self, path: TruePath) -> Recorded:
+        """How the team records a genuine Lead's true path, at the profile's [recording] rates.
+
+        A dead lead may be left open at its last stage instead of Lost; a record may skip a run
+        of open stages on its way to a later one; each change is entered late or in bulk, never
+        before the change recorded ahead of it; a deal may move backward; a won deal may have no
+        Amount; a Lost deal's reason may be blank or another than the true one ([loss]).
+        """
         events = self.true_events(path)
         left_out = set()
         if events[-1][0] == self.lost and self.rng.random() < self.p["recording"]["dead_left_open"]:

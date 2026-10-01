@@ -52,7 +52,12 @@ class Submission:
 def submissions(
     rng: Random, p: dict, drawn: list[Lead], start: datetime, until: datetime
 ) -> list[Submission]:
-    """Every submission received from start to until (the history), in order of arrival."""
+    """Every submission received from start to until (the history), in order of arrival.
+
+    Each Lead brings a duplicate with chance d / (1 - d - b) and a bot with chance b / (1 - d - b),
+    so duplicates (d) and bots (b) are their profile shares of all rows. A duplicate that would
+    arrive after the history is not received.
+    """
     mess = p["mess"]
     genuine_share = 1 - mess["duplicate_leads"] - mess["bot_or_spam"]
     received = []

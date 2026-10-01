@@ -95,7 +95,7 @@ def generate(
     records = []
     for deal_id, contact_id, s in zip(deal_ids, contact_ids, received, strict=True):
         if s.kind == intake.LEAD:
-            owner, recorded = paths[s.lead].owner, recording.lead(drawn[s.lead], paths[s.lead])
+            owner, recorded = paths[s.lead].owner, recording.lead(paths[s.lead])
         else:
             owner, recorded = rng.choice(p["team"]["owners"]), recording.not_a_lead(s.submitted_at)
         records.append(Record(deal_id, contact_id, owner, s, recorded))
