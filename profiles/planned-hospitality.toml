@@ -179,11 +179,11 @@ source = "enquiry-forms.md §1: fields seen on 12 operator forms (Expert Africa,
 
 # How often leads fill what the form allows them to skip, and what they write.
 [form.answers.states_budget]
-low = 0.15
-middle = 0.30
-high = 0.40
-confidence = "guessed"
-source = "none (enquiry-forms.md §3: optional budget field)"
+low = 0.3
+middle = 0.45
+high = 0.6
+confidence = "estimated"
+source = "the user, from a client they have worked with (2026-10-01): luxury operators often make budget mandatory, so upwards of 40%"
 
 [form.answers.gives_phone_when_optional]
 low = 0.45
@@ -193,11 +193,11 @@ confidence = "guessed"
 source = "none"
 
 [form.answers.states_exact_dates]
-low = 0.10
+low = 0.15
 middle = 0.25
-high = 0.45
-confidence = "guessed"
-source = "none (enquiry-forms.md §3)"
+high = 0.35
+confidence = "estimated"
+source = "the user, from a client they have worked with (2026-10-01): about 25%"
 
 [form.answers.answers_how_heard]
 low = 0.40
@@ -377,32 +377,32 @@ source = "sales-steps-and-exports.md §2: Safari Portal, SafariOffice, TripCreat
 # Transition rates (share of leads at a stage that reach the next), for leads that receive a Contact attempt.
 # Submitted -> Contact attempted is set by neglect below.
 [process.transition.engaged]
-low = 0.55
-middle = 0.70
-high = 0.80
-confidence = "guessed"
-source = "cycle-and-deal-size.md §3a; SafariBookings: 1-2 in 5-6 never reply (search extract only)"
+low = 0.35
+middle = 0.45
+high = 0.55
+confidence = "estimated"
+source = "the user, from a client they have worked with (2026-10-01): under 55%; research said 55-80% (cycle-and-deal-size.md §3a)"
 
 [process.transition.qualified]
-low = 0.65
-middle = 0.75
-high = 0.85
-confidence = "guessed"
-source = "none (cycle-and-deal-size.md §3a)"
-
-[process.transition.proposal]
-low = 0.80
-middle = 0.85
-high = 0.90
-confidence = "guessed"
-source = "none (cycle-and-deal-size.md §3a)"
-
-[process.transition.won]
-low = 0.25
-middle = 0.33
+low = 0.2
+middle = 0.3
 high = 0.45
 confidence = "estimated"
-source = "cycle-and-deal-size.md §3a: consistent with Submitted -> Won 6-27% and SafariBookings about 1 in 6"
+source = "the user, from a client they have worked with (2026-10-01): under 65%, closer to 30%"
+
+[process.transition.proposal]
+low = 0.4
+middle = 0.5
+high = 0.6
+confidence = "estimated"
+source = "the user, from a client they have worked with (2026-10-01): about 50%"
+
+[process.transition.won]
+low = 0.2
+middle = 0.25
+high = 0.3
+confidence = "estimated"
+source = "the user, from a client they have worked with (2026-10-01): 20-30% of itineraries become a deposit"
 
 # Days from Submitted to Won, median of won leads; lognormal.
 [process.days_to_won_median]
@@ -436,10 +436,10 @@ source = "cycle-and-deal-size.md §3a: safari.com interactions before deposit 2.
 
 [process.won_then_cancelled]
 low = 0.0
-middle = 0.04
-high = 0.10
-confidence = "guessed"
-source = "none (sales-steps-and-exports.md open question 3); the Outcome stays Won, the export shows Lost"
+middle = 0.015
+high = 0.03
+confidence = "estimated"
+source = "the user, from a client they have worked with (2026-10-01): 0-3%"
 
 # ---------------------------------------------------------------------------------------------------------
 # Neglect and Contact attempts. Neglect is mostly the advertiser's behaviour (workload, weekends, staff), so
@@ -505,11 +505,11 @@ source = "neglect-and-mess.md §4: 24-52% with manual add-ins (Weflow, vendor)"
 # ---------------------------------------------------------------------------------------------------------
 
 [recording.skips_a_stage]
-low = 0.20
-middle = 0.40
-high = 0.70
-confidence = "guessed"
-source = "none; skipping allowed by default (HubSpot pipeline rules)"
+low = 0.35
+middle = 0.5
+high = 0.65
+confidence = "estimated"
+source = "the user, from a client they have worked with (2026-10-01): about 50%"
 
 [recording.backward_move]
 low = 0.02
@@ -719,7 +719,7 @@ note = "reference: exact dates"
 [effects.lead_source]
 form = "additive"
 visible = "submission"
-referral = { low = 1.5, middle = 2.5, high = 4.0, confidence = "guessed", source = "what-predicts-a-booking.md §3: vendor ranges, unsourced; Runggaldier et al. 2023 spread by source 1-91%" }
+referral = { low = 2.5, middle = 4.0, high = 6.0, confidence = "guessed", source = "the user's guess from experience (2026-10-01): about 4 times a Google-ad lead" }
 paid_social = { low = 0.4, middle = 0.6, high = 0.9, confidence = "guessed", source = "none" }
 organic = { low = 1.0, middle = 1.4, high = 2.0, confidence = "guessed", source = "none" }
 note = "reference: paid search"
@@ -728,15 +728,15 @@ note = "reference: paid search"
 [effects.repeat_client]
 form = "additive"
 visible = "submission"
-odds_ratio = { low = 2.0, middle = 3.5, high = 6.0, confidence = "guessed", source = "what-predicts-a-booking.md §3 (60-70% vs 5-20% claim untraced)" }
-share_of_leads = { low = 0.03, middle = 0.08, high = 0.15, confidence = "guessed", source = "none" }
+odds_ratio = { low = 4.0, middle = 6.0, high = 10.0, confidence = "estimated", source = "the user, from a client they have worked with (2026-10-01): past clients almost always book again" }
+share_of_leads = { low = 0.01, middle = 0.03, high = 0.06, confidence = "estimated", source = "the user, from a client they have worked with (2026-10-01): small, since past clients usually go straight to their existing contact, not the form" }
 floor_penalty_kept = { low = 0.25, middle = 0.50, high = 0.75, confidence = "guessed", source = "none; share of the budget-floor penalty (on the log-odds) a repeat client still feels" }
 
 # 7. Response speed x lead quality: advertiser behaviour, not a property of the lead (interaction).
 [effects.response_speed_by_quality]
 form = "interaction"
 visible = "contact attempted"
-high_quality_within_1h = { low = 1.5, middle = 2.5, high = 4.0, confidence = "guessed", source = "what-predicts-a-booking.md §4: direction from HBR, MIT, Telfer (contact and qualification, not bookings)" }
+high_quality_within_1h = { low = 2.5, middle = 4.0, high = 6.0, confidence = "estimated", source = "the user, from a client they have worked with (2026-10-01): about 4 times; the quicker after the form the better; direction also from HBR, MIT, Telfer" }
 low_quality_within_1h = { low = 1.0, middle = 1.1, high = 1.3, confidence = "guessed", source = "none" }
 note = "reference: first attempt after 24 h; high quality is the top third of hidden quality"
 
