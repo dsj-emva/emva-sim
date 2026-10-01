@@ -138,6 +138,8 @@ held_at_middle = [
   "deal.nights_sigma",
   "process.booking_lead_time_sigma",
   "process.lost_after_provisional_hold",
+  "mess.duplicate_days_later",
+  "mess.duplicate_or_bot_moved_to_lost",
 ]
 
 # ---------------------------------------------------------------------------------------------------------
@@ -902,8 +904,16 @@ owners = ["Amara Okafor", "James Whitfield", "Sofia Marchetti", "Tom Brennan"]
 titles = { female = { mrs = 0.35, ms = 0.35, miss = 0.15, dr = 0.10, mx = 0.05 }, male = { mr = 0.85, dr = 0.10, mx = 0.05 } }
 
 # ---------------------------------------------------------------------------------------------------------
-# How the sales team records stages.
+# How the sales team records stages. Every CRM stage change but the deal's creation at New Enquiry is
+# entered by hand, either late (lag_days_median is the median of an exponential lag) or in the weekly
+# pipeline review (bulk_update_share), where every change made in bulk gets the review's one timestamp.
+# HubSpot sets Close Date when a deal is moved to a closed stage and keeps only the latest Date entered of
+# a stage (sales-steps-and-exports.md §3-4). The review's day and hours were added for the generator
+# (issue #8), awaiting the user's review.
 # ---------------------------------------------------------------------------------------------------------
+
+[recording]
+bulk_review = { weekday = "Friday", from_hour = 16, to_hour = 18 }
 
 [recording.skips_a_stage]
 low = 0.35
@@ -948,8 +958,14 @@ confidence = "guessed"
 source = "none"
 
 # ---------------------------------------------------------------------------------------------------------
-# Data mess at intake.
+# Data mess at intake. Duplicates and bots are shares of all rows of the export; invalid emails, invalid
+# phones and fields missing or wrong are shares of the genuine Leads (invalid phones of those who give
+# one). A record with a field missing or wrong has one of key_fields (form roles) blank or wrong. Added
+# for the generator (issue #8), awaiting the user's review.
 # ---------------------------------------------------------------------------------------------------------
+
+[mess]
+key_fields = ["first_name", "last_name", "country", "destinations", "travel_date", "nights", "adults", "children", "style", "budget_per_person"]
 
 [mess.duplicate_leads]
 low = 0.02
@@ -957,6 +973,24 @@ middle = 0.08
 high = 0.20
 confidence = "estimated"
 source = "neglect-and-mess.md §5: CRM-wide 10-30% (Landbase, vendor) covers all records; enquiries lower"
+
+# Days from a Lead's submission to its duplicate (the same person again, or through a second channel);
+# exponential with this median. Added for the generator (issue #8), awaiting the user's review.
+[mess.duplicate_days_later]
+low = 0.5
+middle = 3
+high = 14
+confidence = "guessed"
+source = "none; added for the generator (issue #8), awaiting the user's review"
+
+# Share of duplicate and bot deals the sales team moves to Lost; the rest stay at New Enquiry. Added for
+# the generator (issue #8), awaiting the user's review.
+[mess.duplicate_or_bot_moved_to_lost]
+low = 0.2
+middle = 0.5
+high = 0.8
+confidence = "guessed"
+source = "none; added for the generator (issue #8), awaiting the user's review"
 
 [mess.bot_or_spam]
 low = 0.005
