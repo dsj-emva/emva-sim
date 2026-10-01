@@ -18,6 +18,9 @@ from emva_sim.phrases import Phrase, Phrases, Text, render, words
 BLANK, TOKEN, DREAMER = "blank", "token", "dreamer"
 VAGUE, PARTLY, VERY = "vague", "partly_specific", "very_specific"
 ENGLISH, FRENCH = "en", "fr"
+# A bot's spam: a sales pitch with a link, a run of links (phrases), or gibberish (drawn letters).
+GIBBERISH, SPAM_SHAPE = "gibberish", "spam"
+SPAM = ["pitch", "links", GIBBERISH]
 
 # Slots a mention fills: allowed in a message of any shape.
 MENTION_SLOTS = {"age", "age2", "child_ages", "companion", "first_name"}
@@ -190,6 +193,21 @@ class Writer:
     def written(self, lead: Lead, text: Text) -> Lead:
         """The Lead with this message as its answer."""
         return replace(lead, answers={**lead.answers, self.message_label: text.text})
+
+    def bot_message(self, rng: Random, lead: Lead) -> Text:
+        """A bot's message: spam at the profile's share, else what the Lead it plays would write."""
+        if rng.random() >= self.p["mess"]["bot_spam_message"]:
+            return self.message(rng, lead)
+        kind = rng.choice(SPAM)
+        if kind == GIBBERISH:
+            count = self.text["gibberish_words"]
+            n = rng.randint(count["min"], count["max"])
+            made_up = [people.gibberish(rng, 2, 10) for _ in range(n)]
+            return Text(" ".join(made_up), (f"spam.{GIBBERISH}",), shape=SPAM_SHAPE)
+        phrase = rng.choice(self.phrases.group(f"spam.{kind}"))
+        links = self.text["spam_links"]
+        text = render(rng.choice(phrase.options), {"link": lambda: rng.choice(links)})
+        return Text(text, (phrase.id,), shape=SPAM_SHAPE)
 
     def message(self, rng: Random, lead: Lead) -> Text:
         message = self.p["form"]["message"]

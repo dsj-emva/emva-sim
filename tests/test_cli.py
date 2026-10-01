@@ -1,11 +1,9 @@
 import subprocess
-from pathlib import Path
 
 import pytest
+from conftest import PROFILE
 
 from emva_sim import cli, datasets
-
-PROFILE = Path(__file__).parent.parent / "profiles" / "planned-hospitality.toml"
 
 
 def test_generate_writes_a_dataset_and_labels_its_numbers(tmp_path, capsys):

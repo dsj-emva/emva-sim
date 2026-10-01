@@ -12,10 +12,11 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 from random import Random
 
-from emva_sim import hidden_truth, hubspot, intake, leads, profile
+from emva_sim import hidden_truth, hubspot, intake, leads, messages, profile
 from emva_sim.hubspot import Record
 from emva_sim.intake import RowKind
 from emva_sim.leads import Lead
+from emva_sim.phrases import Phrases
 from emva_sim.process import Process, TruePath
 from emva_sim.recording import Recording
 
@@ -49,19 +50,29 @@ def generate(
 ) -> Path:
     """Write one dataset to the folder of out named for it, and return that folder."""
     folder = Path(out) / folder_name(setting)
-    write(profile.load(profile_path), setting, seed, folder, history)
+    raw = profile.load(profile_path)
+    write(raw, Phrases.load(profile_path, raw), setting, seed, folder, history)
     return folder
 
 
-def write(raw: dict, setting: str, seed: int, folder: Path, history: History) -> None:
-    """Write one dataset into folder, replacing any earlier copy of it."""
+def write(
+    raw: dict, phrases: Phrases, setting: str, seed: int, folder: Path, history: History
+) -> None:
+    """Write one dataset into folder, replacing any earlier copy of it.
+
+    The text is written after the true paths, from the profile's phrases and their cached
+    variations, so it never changes them either.
+    """
     p = profile.resolve(raw, setting)
     rng = Random(seed)
     drawn, paths = leads_and_paths(p, rng, history)
+    writer = messages.Writer(p, phrases)
+    written = [writer.message(rng, lead) for lead in drawn]
+    drawn = [writer.written(lead, text) for lead, text in zip(drawn, written, strict=True)]
 
     start = datetime.combine(history.start, datetime.min.time())
     after_end = datetime.combine(history.end + timedelta(days=1), datetime.min.time())
-    received = intake.submissions(rng, p, drawn, start, after_end)
+    received = intake.submissions(rng, p, drawn, written, writer, start, after_end)
     deal_ids = hubspot.record_ids(rng, len(received), hubspot.DEAL_RECORD_IDS_FROM)
     new_contacts = sum(s.new_contact for s in received)
     contact_ids = iter(hubspot.record_ids(rng, new_contacts, hubspot.CONTACT_RECORD_IDS_FROM))

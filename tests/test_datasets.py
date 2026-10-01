@@ -1,14 +1,15 @@
 import hashlib
 import json
+import shutil
 import tomllib
 from datetime import date
 from pathlib import Path
 
 import pytest
+from conftest import PROFILE
 
 from emva_sim import dataset, datasets, profile
 
-PROFILE = Path(__file__).parent.parent / "profiles" / "planned-hospitality.toml"
 TINY = dataset.History(start=date(2024, 1, 1), end=date(2024, 1, 2), export=date(2024, 3, 1))
 
 
@@ -109,6 +110,17 @@ def test_a_manifest_names_its_profile_its_dates_and_that_its_numbers_are_on_simu
     assert m["export_date"] == "2024-03-01"
 
 
+def test_a_manifest_names_the_phrase_bank_and_the_cached_variations_its_text_came_from(written):
+    folder = PROFILE.parent
+    assert manifest(written, "middle")["phrases"] == {
+        name: {"file": file, "sha256": hashlib.sha256((folder / file).read_bytes()).hexdigest()}
+        for name, file in [
+            ("bank", "planned-hospitality.phrases.toml"),
+            ("variations", "planned-hospitality.variations.json"),
+        ]
+    }
+
+
 def test_a_manifest_names_the_generator_that_wrote_it_by_version_and_code_hash(written):
     src = Path(__file__).parent.parent / "src" / "emva_sim"
     code = hashlib.sha256()
@@ -175,7 +187,9 @@ def test_a_non_empty_folder_without_an_index_is_refused_and_left_untouched(tmp_p
 def test_a_crash_mid_run_leaves_the_earlier_output_intact(written, tmp_path):
     out = tmp_path / "datasets"
     datasets.write_all(PROFILE, out, history=TINY)
-    broken = tmp_path / "broken.toml"
+    # A copy of the profile, beside its phrase bank and cache, with a range made unreadable.
+    shutil.copytree(PROFILE.parent, tmp_path / "broken")
+    broken = tmp_path / "broken" / PROFILE.name
     text = PROFILE.read_text()
     leads_per_month = "[volume.leads_per_month]\nlow = 100\nmiddle = 400\nhigh = 1000\n"
     assert leads_per_month in text
@@ -183,7 +197,7 @@ def test_a_crash_mid_run_leaves_the_earlier_output_intact(written, tmp_path):
     with pytest.raises(TypeError):
         datasets.write_all(broken, out, history=TINY)
     assert files(out) == files(written)
-    assert sorted(p.name for p in tmp_path.iterdir()) == ["broken.toml", "datasets"]
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["broken", "datasets"]
 
 
 def test_each_manifest_carries_its_setting_and_seed(written):

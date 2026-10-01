@@ -7,7 +7,6 @@ touches a Lead or its true path: the mess is in the copy the sales system holds.
 
 import calendar
 import re
-import string
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import StrEnum
@@ -15,7 +14,9 @@ from random import Random
 
 from emva_sim import draws, form, leads
 from emva_sim.leads import Lead
-from emva_sim.people import EMAIL_DOMAINS, THROWAWAY_DOMAINS
+from emva_sim.messages import Writer
+from emva_sim.people import EMAIL_DOMAINS, THROWAWAY_DOMAINS, gibberish
+from emva_sim.phrases import Text
 
 
 class RowKind(StrEnum):
@@ -32,7 +33,7 @@ class Submission:
 
     lead is the Lead it is or repeats, or the made-up one a bot plays; index is that Lead's place
     among the drawn Leads (None for a bot). traffic_source is the contact's, which a duplicate
-    on a second contact does not share with its Lead.
+    on a second contact does not share with its Lead. message is how its message was written.
     """
 
     kind: RowKind
@@ -41,6 +42,7 @@ class Submission:
     submitted_at: datetime
     answers: dict[str, str]
     traffic_source: str
+    message: Text
     invalid_email: bool = False
     invalid_phone: bool = False
     missing_or_wrong: tuple[str, ...] = ()  # labels of the key fields held blank or wrong
@@ -48,9 +50,17 @@ class Submission:
 
 
 def submissions(
-    rng: Random, p: dict, drawn: list[Lead], start: datetime, until: datetime
+    rng: Random,
+    p: dict,
+    drawn: list[Lead],
+    written: list[Text],
+    writer: Writer,
+    start: datetime,
+    until: datetime,
 ) -> list[Submission]:
     """Every submission received from start to until (the history), in order of arrival.
+
+    written is each drawn Lead's message, already in its answers; writer writes the bots'.
 
     Each Lead brings a duplicate with chance d / (1 - d - b) and a bot with chance b / (1 - d - b),
     so duplicates (d) and bots (b) are their profile shares of all rows. A duplicate that would
@@ -60,7 +70,7 @@ def submissions(
     genuine_share = 1 - mess["duplicate_leads"] - mess["bot_or_spam"]
     received = []
     for i, lead in enumerate(drawn):
-        held = _genuine(rng, p, i, lead)
+        held = _genuine(rng, p, i, lead, written[i])
         received.append(held)
         if rng.random() < mess["duplicate_leads"] / genuine_share:
             again = _duplicate(rng, p, held)
@@ -68,11 +78,11 @@ def submissions(
                 received.append(again)
         if rng.random() < mess["bot_or_spam"] / genuine_share:
             at = start + (until - start) * rng.random()
-            received.append(_bot(rng, p, at.replace(second=0, microsecond=0)))
+            received.append(_bot(rng, p, writer, at.replace(second=0, microsecond=0)))
     return sorted(received, key=lambda s: s.submitted_at)
 
 
-def _genuine(rng: Random, p: dict, i: int, lead: Lead) -> Submission:
+def _genuine(rng: Random, p: dict, i: int, lead: Lead, message: Text) -> Submission:
     """A Lead as the sales system holds it: email or phone invalid, a key field blank or wrong."""
     mess = p["mess"]
     answers = dict(lead.answers)
@@ -98,6 +108,7 @@ def _genuine(rng: Random, p: dict, i: int, lead: Lead) -> Submission:
         lead.submitted_at,
         answers,
         lead.traffic_source,
+        message,
         invalid_email,
         invalid_phone,
         altered,
@@ -178,15 +189,22 @@ def _duplicate(rng: Random, p: dict, held: Submission) -> Submission:
             answers[label] = case(answers[label])
     source = held.traffic_source if same_email else leads.traffic_source(rng, p)
     return Submission(
-        RowKind.DUPLICATE, lead, held.index, later, answers, source, new_contact=not same_email
+        RowKind.DUPLICATE,
+        lead,
+        held.index,
+        later,
+        answers,
+        source,
+        held.message,
+        new_contact=not same_email,
     )
 
 
-def _bot(rng: Random, p: dict, at: datetime) -> Submission:
+def _bot(rng: Random, p: dict, writer: Writer, at: datetime) -> Submission:
     """A bot or spam submission, answering the form as a made-up Lead would.
 
-    Only the profile's shares of bots give a made-up name, a throwaway address or an impossible
-    party, so no one sign gives every bot away.
+    Only the profile's shares of bots give a made-up name, a throwaway address, an impossible
+    party or a spam message, so no one sign gives every bot away.
     """
     mess = p["mess"]
     party = None
@@ -200,21 +218,20 @@ def _bot(rng: Random, p: dict, at: datetime) -> Submission:
     )
     made_up = rng.random() < mess["bot_made_up_name"]
     if made_up:
-        answers[first], answers[last] = _gibberish(rng).capitalize(), _gibberish(rng).capitalize()
+        answers[first] = gibberish(rng, 5, 10).capitalize()
+        answers[last] = gibberish(rng, 5, 10).capitalize()
     throwaway = rng.random() < mess["bot_throwaway_email"]
     if made_up or throwaway:
         domain = rng.choice(THROWAWAY_DOMAINS if throwaway else EMAIL_DOMAINS)
         local = f"{answers[first]}.{answers[last]}{rng.randrange(100)}".lower()
         answers[email] = f"{local}@{domain}"
-    return Submission(RowKind.BOT, lead, None, at, answers, lead.traffic_source)
+    message = writer.bot_message(rng, lead)
+    answers[writer.message_label] = message.text
+    return Submission(RowKind.BOT, lead, None, at, answers, lead.traffic_source, message)
 
 
 def _between(rng: Random, bounds: dict) -> int:
     return rng.randint(bounds["min"], bounds["max"])
-
-
-def _gibberish(rng: Random) -> str:
-    return "".join(rng.choice(string.ascii_lowercase) for _ in range(rng.randint(5, 10)))
 
 
 def _other_address(rng: Random, email: str, alias_tag: str) -> str:

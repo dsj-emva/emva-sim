@@ -12,10 +12,11 @@ from random import Random
 import pytest
 from conftest import PROFILE, TRUTH, assert_rate, ends, kinds, number, raw, resolved, rows
 
-from emva_sim import dataset, form, intake, leads, profile
+from emva_sim import dataset, form, intake, leads, messages, profile
 from emva_sim.hidden_truth import true_path_columns
 from emva_sim.intake import RowKind
 from emva_sim.people import FIRST_NAMES, LAST_NAMES, THROWAWAY_DOMAINS
+from emva_sim.phrases import Phrases
 
 HISTORY = dataset.History(start=date(2024, 1, 1), end=date(2024, 6, 30), export=date(2024, 7, 5))
 MONTHS = 6
@@ -296,9 +297,11 @@ def test_a_wrong_number_is_one_more_at_the_profiles_share(setting):
     drawn = leads.draw_leads(Random(1), p, date(2024, 1, 1), date(2024, 3, 31))
     start, until = datetime(2024, 1, 1), datetime(2024, 4, 1)
     adults = form.field(p, "adults")["label"]
+    writer = messages.Writer(p, Phrases.load(PROFILE, raw()))
+    written = [writer.message(Random(2), lead) for lead in drawn]
     pairs = [
         (int(s.lead.answers[adults]), int(s.answers[adults]))
-        for s in intake.submissions(Random(1), p, drawn, start, until)
+        for s in intake.submissions(Random(1), p, drawn, written, writer, start, until)
         if s.kind == RowKind.LEAD
     ]
     assert all(abs(held - true) == 1 for true, held in pairs)

@@ -2,16 +2,15 @@ import csv
 import io
 import re
 from datetime import date
-from pathlib import Path
 from random import Random
 
 import pytest
+from conftest import PROFILE
 
 from emva_sim import dataset, profile
 from emva_sim.logistic import logit
 from emva_sim.process import Process
 
-PROFILE = Path(__file__).parent.parent / "profiles" / "planned-hospitality.toml"
 HISTORY = dataset.History(start=date(2024, 1, 1), end=date(2024, 6, 30), export=date(2024, 7, 5))
 DEALS = "export/with-calls-and-notes/hubspot-crm-exports-safari-enquiries-2024-07-05.csv"
 CONTACTS = "export/with-calls-and-notes/hubspot-crm-exports-all-contacts-2024-07-05.csv"
