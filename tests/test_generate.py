@@ -1,6 +1,5 @@
 import csv
 import io
-import math
 import re
 from datetime import date
 from pathlib import Path
@@ -9,6 +8,7 @@ from random import Random
 import pytest
 
 from emva_sim import dataset, profile
+from emva_sim.logistic import logit
 from emva_sim.process import Process
 
 PROFILE = Path(__file__).parent.parent / "profiles" / "planned-hospitality.toml"
@@ -355,7 +355,7 @@ def test_each_leads_win_log_odds_is_the_base_plus_its_terms(middle):
     for row in genuine_rows(middle):
         propensity = float(row["win_propensity"])
         total = float(row["base_log_odds"]) + sum(float(row[f"term_{t}"]) for t in TERMS)
-        assert math.log(propensity / (1 - propensity)) == pytest.approx(total, abs=1e-4)
+        assert logit(propensity) == pytest.approx(total, abs=1e-4)
 
 
 def test_a_neglected_lead_has_no_response_speed_term_and_is_never_won(middle):

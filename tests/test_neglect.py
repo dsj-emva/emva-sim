@@ -10,12 +10,12 @@ is only part of its quality, so the top third's rate lies between that and s.
 import math
 
 from conftest import large_sample
+from odds import log_odds
 
 
 def quality(row):
     """The hidden win log-odds without the handling's response-speed term."""
-    p = float(row["win_propensity"])
-    return math.log(p / (1 - p)) - float(row["term_response_speed_by_quality"])
+    return log_odds(row) - float(row["term_response_speed_by_quality"])
 
 
 def thirds(rows):

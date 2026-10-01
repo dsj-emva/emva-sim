@@ -3,10 +3,11 @@
 import math
 from collections import defaultdict
 
+from emva_sim.logistic import logit
+
 
 def log_odds(row) -> float:
-    p = float(row["win_propensity"])
-    return math.log(p / (1 - p))
+    return logit(float(row["win_propensity"]))
 
 
 # Strata are bins of this width on the log-odds. Response speed's term is continuous, so exact

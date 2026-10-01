@@ -17,6 +17,7 @@ from random import Random
 from emva_sim import draws, ladder
 from emva_sim.effects import RESPONSE_SPEED, Effects
 from emva_sim.leads import Lead
+from emva_sim.logistic import logit, sigmoid
 
 
 @dataclass(frozen=True)
@@ -45,24 +46,21 @@ class TruePath:
 
     @property
     def win_propensity(self) -> float:
-        return _sigmoid(self.base_log_odds + sum(self.terms.values()))
+        return win_propensity(self.base_log_odds, self.terms)
 
 
-def _logit(p: float) -> float:
-    return math.log(p / (1 - p))
-
-
-def _sigmoid(x: float) -> float:
-    return 1 / (1 + math.exp(-x))
+def win_propensity(base_log_odds: float, terms: dict[str, float]) -> float:
+    """A lead's chance of a won Outcome once contacted: the base plus its terms, on the log-odds."""
+    return sigmoid(base_log_odds + sum(terms.values()))
 
 
 def _base_log_odds(terms: list[float], target: float) -> float:
     """The base whose propensities, with these summed terms, average target (Newton's method)."""
     counted = Counter(terms)
     n = sum(counted.values())
-    base = _logit(target)
+    base = logit(target)
     for _ in range(100):
-        chances = {t: _sigmoid(base + t) for t in counted}
+        chances = {t: sigmoid(base + t) for t in counted}
         mean = sum(counted[t] * c for t, c in chances.items()) / n
         slope = sum(counted[t] * c * (1 - c) for t, c in chances.items()) / n
         step = (mean - target) / slope
@@ -155,7 +153,7 @@ class Process:
         contacted = [
             sum(t.values()) for t, s in zip(terms, starts, strict=True) if not s.neglected_lead
         ]
-        base = _base_log_odds(contacted, self.win_rate) if contacted else _logit(self.win_rate)
+        base = _base_log_odds(contacted, self.win_rate) if contacted else logit(self.win_rate)
         return [self._path(rng, *row, base) for row in zip(leads, starts, terms, high, strict=True)]
 
     def _start(self, rng: Random, lead: Lead, looks: float) -> _Start:
@@ -202,7 +200,7 @@ class Process:
 
         cycle = lead.cycle_days
         first_attempt = start.first_attempt_days
-        won = rng.random() < _sigmoid(base + sum(terms.values()))
+        won = rng.random() < win_propensity(base, terms)
         stops_before = None if won else rng.choices(ladder.AFTER_CONTACT, self.failing_shares)[0]
 
         at = {ladder.CONTACT_ATTEMPTED: start_at + timedelta(days=first_attempt)}
