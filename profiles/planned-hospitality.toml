@@ -196,10 +196,10 @@ source = "the user, from experience (2026-10-01): the key booking cycle for the 
 [volume.traffic_source]
 reference = "paid_search"
 labels = { paid_search = "Paid Search", organic = "Organic Search", paid_social = "Paid Social", referral = "Referrals" }
-# What a lead answers to "How did you hear about us?" for each source (one option at random); a repeat client
-# answers heard_as_repeat_client.
-heard_as = { paid_search = ["Google"], organic = ["Google", "ChatGPT or another AI assistant", "Magazine", "Other"], paid_social = ["Instagram", "Facebook"], referral = ["Recommended by a friend", "Travel agent"] }
-heard_as_repeat_client = "Travelled with you before"
+# What a lead answers to "How did you hear about us?" for each source (one option key at random); a repeat
+# client answers heard_as_repeat_client.
+heard_as = { paid_search = ["google"], organic = ["google", "ai_assistant", "magazine", "other"], paid_social = ["instagram", "facebook"], referral = ["friend", "travel_agent"] }
+heard_as_repeat_client = "travelled_before"
 
 [volume.traffic_source.organic]
 low = 0.15
@@ -228,29 +228,188 @@ source = "none; added for the generator (issue #5), awaiting the user's review"
 # ---------------------------------------------------------------------------------------------------------
 
 [form]
-fields = [
-  { label = "Title", role = "title", kind = "choice", options = ["Mr", "Mrs", "Ms", "Miss", "Dr", "Mx"], required = true },
-  { label = "First name", role = "first_name", kind = "text", required = true },
-  { label = "Last name", role = "last_name", kind = "text", required = true },
-  { label = "Email", role = "email", kind = "email", required = true },
-  { label = "Phone", role = "phone", kind = "phone", required = false },
-  { label = "Country of residence", role = "country", kind = "country", required = true },
-  { label = "Where would you like to go?", role = "destinations", kind = "multi", options = ["Kenya", "Tanzania", "Botswana", "South Africa", "Rwanda", "Uganda", "Namibia", "Zambia", "Zimbabwe", "Not sure yet"], required = true },
-  { label = "When would you like to travel?", role = "travel_date", kind = "month_year", allow = ["exact dates", "month", "year only", "not sure"], required = true },
-  { label = "Are your dates flexible?", role = "dates_flexible", kind = "choice", options = ["Fixed", "Flexible", "Not sure"], required = false },
-  { label = "Number of nights", role = "nights", kind = "choice", options = ["Under 5", "5-7", "8-10", "11-14", "15+", "Not sure"], required = false },
-  { label = "Number of adults", role = "adults", kind = "number", required = true },
-  { label = "Number of children", role = "children", kind = "number", required = false },
-  { label = "Ages of children", role = "children_ages", kind = "text", required = false },
-  { label = "Accommodation style", role = "style", kind = "choice", options = ["Comfortable", "Luxury", "Ultra-luxury", "Not sure"], required = false },
-  { label = "Budget per person (excluding international flights)", role = "budget_per_person", kind = "choice", options = ["Under $4,000", "$4,000 - $7,000", "$7,000 - $10,000", "$10,000 - $20,000", "$20,000+", "Not sure"], required = false },
-  { label = "Have you travelled with us before?", role = "travelled_before", kind = "choice", options = ["Yes", "I have enquired before", "No"], required = false },
-  { label = "How did you hear about us?", role = "heard_about", kind = "choice", options = ["Google", "Instagram", "Facebook", "Recommended by a friend", "Travelled with you before", "Magazine", "Travel agent", "ChatGPT or another AI assistant", "Other"], required = false },
-  { label = "Tell us about your dream trip", role = "message", kind = "long_text", required = false },
-  { label = "Sign me up for the newsletter", role = "newsletter", kind = "checkbox", required = false },
-]
-# "role" says what a field asks, so the generator stays free of this form's labels.
 source = "enquiry-forms.md §1: fields seen on 12 operator forms (Expert Africa, Go2Africa, Rhino Africa, Steppes, Audley, Scott Dunn, &Beyond, Cazenove+Loyd, Natural Selection, Porini, SafariBookings, Noboru); budget bands after Go2Africa and Scott Dunn"
+
+# "role" says what a field asks and an option's "key", "min"/"max" or "not_sure" what it means, so the
+# generator reads none of this form's wording. A band holds values from min (inclusive) to max (exclusive).
+[[form.fields]]
+label = "Title"
+role = "title"
+kind = "choice"
+required = true
+options = [
+  { label = "Mr", key = "mr" },
+  { label = "Mrs", key = "mrs" },
+  { label = "Ms", key = "ms" },
+  { label = "Miss", key = "miss" },
+  { label = "Dr", key = "dr" },
+  { label = "Mx", key = "mx" },
+]
+
+[[form.fields]]
+label = "First name"
+role = "first_name"
+kind = "text"
+required = true
+
+[[form.fields]]
+label = "Last name"
+role = "last_name"
+kind = "text"
+required = true
+
+[[form.fields]]
+label = "Email"
+role = "email"
+kind = "email"
+required = true
+
+[[form.fields]]
+label = "Phone"
+role = "phone"
+kind = "phone"
+required = false
+
+[[form.fields]]
+label = "Country of residence"
+role = "country"
+kind = "country"
+required = true
+
+[[form.fields]]
+label = "Where would you like to go?"
+role = "destinations"
+kind = "multi"
+required = true
+options = [
+  { label = "Kenya" },
+  { label = "Tanzania" },
+  { label = "Botswana" },
+  { label = "South Africa" },
+  { label = "Rwanda" },
+  { label = "Uganda" },
+  { label = "Namibia" },
+  { label = "Zambia" },
+  { label = "Zimbabwe" },
+  { label = "Not sure yet", not_sure = true },
+]
+
+[[form.fields]]
+label = "When would you like to travel?"
+role = "travel_date"
+kind = "month_year"
+allow = ["exact dates", "month", "year only", "not sure"]
+not_sure_answer = "Not sure"
+required = true
+
+[[form.fields]]
+label = "Are your dates flexible?"
+role = "dates_flexible"
+kind = "choice"
+required = false
+options = [
+  { label = "Fixed", key = "fixed" },
+  { label = "Flexible", key = "flexible" },
+  { label = "Not sure", not_sure = true },
+]
+
+[[form.fields]]
+label = "Number of nights"
+role = "nights"
+kind = "choice"
+required = false
+options = [
+  { label = "Under 5", max = 5 },
+  { label = "5-7", min = 5, max = 8 },
+  { label = "8-10", min = 8, max = 11 },
+  { label = "11-14", min = 11, max = 15 },
+  { label = "15+", min = 15 },
+  { label = "Not sure", not_sure = true },
+]
+
+[[form.fields]]
+label = "Number of adults"
+role = "adults"
+kind = "number"
+required = true
+
+[[form.fields]]
+label = "Number of children"
+role = "children"
+kind = "number"
+required = false
+
+[[form.fields]]
+label = "Ages of children"
+role = "children_ages"
+kind = "text"
+required = false
+
+[[form.fields]]
+label = "Accommodation style"
+role = "style"
+kind = "choice"
+required = false
+options = [
+  { label = "Comfortable", key = "comfortable" },
+  { label = "Luxury", key = "luxury" },
+  { label = "Ultra-luxury", key = "ultra_luxury" },
+  { label = "Not sure", not_sure = true },
+]
+
+[[form.fields]]
+label = "Budget per person (excluding international flights)"
+role = "budget_per_person"
+kind = "choice"
+required = false
+options = [
+  { label = "Under $4,000", max = 4000 },
+  { label = "$4,000 - $7,000", min = 4000, max = 7000 },
+  { label = "$7,000 - $10,000", min = 7000, max = 10000 },
+  { label = "$10,000 - $20,000", min = 10000, max = 20000 },
+  { label = "$20,000+", min = 20000 },
+  { label = "Not sure", not_sure = true },
+]
+
+[[form.fields]]
+label = "Have you travelled with us before?"
+role = "travelled_before"
+kind = "choice"
+required = false
+options = [
+  { label = "Yes", key = "yes" },
+  { label = "I have enquired before", key = "enquired_before" },
+  { label = "No", key = "no" },
+]
+
+[[form.fields]]
+label = "How did you hear about us?"
+role = "heard_about"
+kind = "choice"
+required = false
+options = [
+  { label = "Google", key = "google" },
+  { label = "Instagram", key = "instagram" },
+  { label = "Facebook", key = "facebook" },
+  { label = "Recommended by a friend", key = "friend" },
+  { label = "Travelled with you before", key = "travelled_before" },
+  { label = "Magazine", key = "magazine" },
+  { label = "Travel agent", key = "travel_agent" },
+  { label = "ChatGPT or another AI assistant", key = "ai_assistant" },
+  { label = "Other", key = "other" },
+]
+
+[[form.fields]]
+label = "Tell us about your dream trip"
+role = "message"
+kind = "long_text"
+required = false
+
+[[form.fields]]
+label = "Sign me up for the newsletter"
+role = "newsletter"
+kind = "checkbox"
+required = false
 
 # How often leads fill what the form allows them to skip, and what they write.
 [form.answers.states_budget]

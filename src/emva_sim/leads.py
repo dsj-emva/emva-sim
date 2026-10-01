@@ -1,13 +1,11 @@
 """Leads as they arrive: when each is submitted, the trip it wants, and its answers to the form."""
 
 import calendar
-import math
-import re
 from dataclasses import dataclass, field, replace
 from datetime import date, datetime, timedelta
 from random import Random
 
-from emva_sim import draws, people
+from emva_sim import draws, form, people
 
 DAYS_PER_MONTH = 365.25 / 12
 
@@ -74,41 +72,6 @@ def _pick(rng: Random, shares: dict[str, float], rest: str) -> str:
     return rest
 
 
-def _bounds(option: str) -> tuple[float, float] | None:
-    numbers = [float(n.replace(",", "")) for n in re.findall(r"\d[\d,]*", option)]
-    if option.startswith("Under"):
-        return -math.inf, numbers[0]
-    if option.endswith("+"):
-        return numbers[0], math.inf
-    if len(numbers) == 2:
-        return numbers[0], numbers[1]
-    return None
-
-
-def band(value: float, options: list[str]) -> str:
-    """The first option whose band holds value: "Under X" (below X), "A - B" (inclusive) or "N+"."""
-    for option in options:
-        bounds = _bounds(option)
-        if bounds is None:
-            continue
-        low, high = bounds
-        if (value < high) if math.isinf(low) else (low <= value <= high):
-            return option
-    raise ValueError(f"{value} is in no band of {options}")
-
-
-def _key(label: str) -> str:
-    return label.lower().replace("-", "_")
-
-
-def _field(p: dict, role: str) -> dict:
-    return next(f for f in p["form"]["fields"] if f["role"] == role)
-
-
-def _unsure(options: list[str]) -> str:
-    return next(option for option in options if option.startswith("Not sure"))
-
-
 def _travel_answer(rng: Random, p: dict, travel: date) -> str:
     answers = p["form"]["answers"]
     if rng.random() < answers["states_exact_dates"]:
@@ -117,13 +80,14 @@ def _travel_answer(rng: Random, p: dict, travel: date) -> str:
         return f"{calendar.month_name[travel.month]} {travel.year}"
     if rng.random() < answers["year_when_no_month"]:
         return str(travel.year)
-    return "Not sure"
+    return form.field(p, "travel_date")["not_sure_answer"]
 
 
-def _destinations(rng: Random, p: dict, options: list[str]) -> str:
+def _destinations(rng: Random, p: dict) -> str:
+    options = [o["label"] for o in form.field(p, "destinations")["options"]]
     count = 1 + draws.poisson(rng, p["form"]["answers"]["countries_named"] - 1)
     chosen = rng.sample(options, min(count, len(options)))
-    unsure = _unsure(options)
+    unsure = form.unsure(p, "destinations")
     return unsure if unsure in chosen else ";".join(o for o in options if o in chosen)
 
 
@@ -132,16 +96,16 @@ def _heard_about(rng: Random, p: dict, lead: Lead) -> str:
     if rng.random() >= p["form"]["answers"]["answers_how_heard"]:
         return ""
     if lead.repeat_client:
-        return source["heard_as_repeat_client"]
-    return rng.choice(source["heard_as"][lead.traffic_source])
+        return form.label(p, "heard_about", source["heard_as_repeat_client"])
+    return form.label(p, "heard_about", rng.choice(source["heard_as"][lead.traffic_source]))
 
 
 def _answer(rng: Random, p: dict, lead: Lead, person: people.Person, form_field: dict) -> str:
     answers = p["form"]["answers"]
-    options = form_field.get("options", [])
+    options = [o["label"] for o in form_field.get("options", [])]
     match form_field["role"]:
         case "title":
-            return person.title
+            return form.label(p, "title", person.title)
         case "first_name":
             return person.first_name
         case "last_name":
@@ -153,7 +117,7 @@ def _answer(rng: Random, p: dict, lead: Lead, person: people.Person, form_field:
         case "country":
             return lead.country
         case "destinations":
-            return _destinations(rng, p, options)
+            return _destinations(rng, p)
         case "travel_date":
             return _travel_answer(rng, p, lead.travel_at.date())
         case "dates_flexible":
@@ -161,7 +125,7 @@ def _answer(rng: Random, p: dict, lead: Lead, person: people.Person, form_field:
         case "newsletter":
             return rng.choice(["Yes", "No"])
         case "nights":
-            return band(lead.nights, options)
+            return form.band(p, "nights", lead.nights)
         case "adults":
             return str(lead.adults)
         case "children":
@@ -171,12 +135,13 @@ def _answer(rng: Random, p: dict, lead: Lead, person: people.Person, form_field:
                 str(age) for age in sorted(rng.randrange(18) for _ in range(lead.children))
             )
         case "style":
-            return lead.style
+            return form.label(p, "style", lead.style)
         case "budget_per_person":
             stated = rng.random() < answers["states_budget"]
-            return band(lead.price_per_person_per_night * lead.nights, options) if stated else ""
+            per_person = lead.price_per_person_per_night * lead.nights
+            return form.band(p, "budget_per_person", per_person) if stated else ""
         case "travelled_before":
-            return "Yes" if lead.repeat_client else "No"
+            return form.label(p, "travelled_before", "yes" if lead.repeat_client else "no")
         case "heard_about":
             return _heard_about(rng, p, lead)
         case "message":
@@ -185,12 +150,10 @@ def _answer(rng: Random, p: dict, lead: Lead, person: people.Person, form_field:
 
 
 def _style(rng: Random, p: dict) -> str:
-    options = _field(p, "style")["options"]
-    styles = [o for o in options if o != _unsure(options)]
+    """The key of the accommodation style the lead wants; the one not in the mix is the rest."""
+    keys = [o["key"] for o in form.field(p, "style")["options"] if "key" in o]
     mix = p["deal"]["style_mix"]
-    rest = next(s for s in styles if _key(s) not in mix)
-    chosen = _pick(rng, mix, _key(rest))
-    return next(s for s in styles if _key(s) == chosen)
+    return _pick(rng, mix, next(k for k in keys if k not in mix))
 
 
 def _party(rng: Random, p: dict) -> tuple[int, int]:
@@ -215,7 +178,7 @@ def _seasonal_price(p: dict, style: str, travel_month: int) -> float:
     peak_months = p["season"]["peak_months"]
     rate = deal["peak_to_low_season_rate"]
     peak_share = len(peak_months) / 12
-    low = deal["price_per_person_per_night"][_key(style)] / (1 - peak_share + peak_share * rate)
+    low = deal["price_per_person_per_night"][style] / (1 - peak_share + peak_share * rate)
     return low * rate if travel_month in peak_months else low
 
 

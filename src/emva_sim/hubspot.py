@@ -15,6 +15,7 @@ from datetime import date, datetime
 from pathlib import Path
 from random import Random
 
+from emva_sim import form
 from emva_sim.leads import Lead
 from emva_sim.process import TruePath
 
@@ -102,17 +103,13 @@ class Export:
         return _decimal(float(value)) if form_field["kind"] == "number" and value else value
 
     def _deal_name(self, lead: Lead) -> str:
-        destinations = self._answer_by_role(lead, "destinations").split(";")[0]
-        place = "" if destinations.startswith("Not sure") else f" {destinations}"
-        return f"{self._answer_by_role(lead, 'last_name')} –{place} {lead.travel_at:%b}"
-
-    def _answer_by_role(self, lead: Lead, role: str) -> str:
-        return lead.answers[next(f["label"] for f in self.fields if f["role"] == role)]
+        destination = form.answer(self.p, lead.answers, "destinations").split(";")[0]
+        place = "" if destination == form.unsure(self.p, "destinations") else f" {destination}"
+        return f"{form.answer(self.p, lead.answers, 'last_name')} –{place} {lead.travel_at:%b}"
 
     def _contact_name(self, lead: Lead) -> str:
-        return (
-            f"{self._answer_by_role(lead, 'first_name')} {self._answer_by_role(lead, 'last_name')}"
-        )
+        first = form.answer(self.p, lead.answers, "first_name")
+        return f"{first} {form.answer(self.p, lead.answers, 'last_name')}"
 
     def _closed(self, times: dict[str, datetime]) -> datetime | None:
         for stage in self.stages:

@@ -88,8 +88,8 @@ LAST_NAMES = [
     "Young",
 ]
 TITLES = {
-    "female": ["Mrs", "Mrs", "Ms", "Ms", "Miss", "Dr"],
-    "male": ["Mr", "Mr", "Mr", "Mr", "Dr"],
+    "female": ["mrs", "mrs", "ms", "ms", "miss", "dr"],
+    "male": ["mr", "mr", "mr", "mr", "dr"],
 }
 EMAIL_DOMAINS = ["example.com", "example.org", "example.net"]
 US_AREA_CODES = ["212", "312", "415", "617", "303"]
