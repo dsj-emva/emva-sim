@@ -2,65 +2,100 @@
 
 For each effect, contacted leads in its group against its reference group, by what the lead is
 (never by the term itself), in strata where every other term is held fixed. The measured odds ratio
-of winning (Mantel-Haenszel) must lie within 3 standard errors of the profile's middle, and each
-comparison must be precise enough to mean something: a standard error of at most 0.07 on the log
-odds ratio. Both rules were written before any result was seen.
+of winning (Mantel-Haenszel) must lie within 3 standard errors of the profile's value at the
+sample's setting, and each comparison must be precise enough to mean something: a standard error of
+at most MAX_SE on the log odds ratio. Both rules were written before any result was seen. Every
+number that picks a group (bands, floors, dates, months) is read from the sample's resolved profile.
 
-The middle sample is 150,000 leads at the middle. Effects whose groups win too rarely there for
-that precision (the party size, the repeat client's softened floor, the price rise, a budget under
-half the floor, a short lead time) are measured on a second sample of 72,000 leads with every
-effect size still at its middle but more leads in those groups and more wins: more repeat clients,
-larger friends' parties, more budgets and exact dates stated, a lower and wider budget spread,
-and a higher reply and deposit rate.
+Samples, each generated once:
+- middle: 150,000 leads at the middle.
+- rich, at the middle, all-low and all-high (every range at that end): 72,000 leads each, with every
+  effect size at the setting's but more leads in the rare groups and more wins: more repeat
+  clients, larger friends' parties, more budgets and exact dates stated, a lower and wider budget
+  spread, and a higher reply and deposit rate. Effects whose groups win too rarely at the middle for
+  that precision are measured on the rich middle sample; every effect is measured on both rich ends.
 """
 
 import math
+from dataclasses import dataclass
 from datetime import datetime
 
 import pytest
 from conftest import large_sample
 from odds import log_odds, mantel_haenszel, rest_without, stratum
 
+from emva_sim import dataset
 from emva_sim.leads import DatesGiven
 
 MAX_SE = 0.07
-PEAK = (7, 8, 9, 10)
-RISE = datetime(2025, 2, 1)
-PRICE = {"comfortable": 550, "luxury": 1300, "ultra_luxury": 3000}
+# Where a group is rare at an end by the profile's own numbers, the cap is relaxed, for that
+# comparison only, to what the rich sample can give; each with its reason.
+RELAXED_SE = {
+    ("peak travel under 4 months ahead", "all-high"): (
+        0.08,
+        "at the high end bookings run 9 months ahead and market A twice as far as B, so few trips"
+        " are under 4 months away",
+    ),
+    ("after the price rise, a budget just above the new floor", "all-high"): (
+        0.10,
+        "at the high end the floor rises 20%, leaving only budgets 1.2 to 1.3 times the old floor"
+        " in the group, half the middle's band",
+    ),
+}
+# Ruled 2026-10-01: lead time and season reads a year-only date as unsure, like "Not sure".
+UNSURE = (DatesGiven.YEAR, DatesGiven.NOT_SURE)
+RICH = {
+    "form.answers.travelled_before": 0.30,
+    "form.party_mix.friends": 0.40,
+    "form.party_size.friends_adults": 7.0,
+    "form.answers.states_budget": 0.90,
+    "form.answers.states_exact_dates": 0.60,
+    "form.answers.budget_to_style_price": 0.6,
+    "form.answers.budget_sigma": 1.0,
+    "process.transition.engaged": 0.8,
+    "process.transition.won": 0.6,
+}
 
 
-@pytest.fixture(scope="module")
-def rich_sample():
-    return large_sample(
-        "middle",
-        3000,
-        seed=2,
-        **{
-            "form.answers.travelled_before": 0.30,
-            "form.party_mix.friends": 0.40,
-            "form.party_size.friends_adults": 7.0,
-            "form.answers.states_budget": 0.90,
-            "form.answers.states_exact_dates": 0.60,
-            "form.answers.budget_to_style_price": 0.6,
-            "form.answers.budget_sigma": 1.0,
-            "process.transition.engaged": 0.8,
-            "process.transition.won": 0.6,
-        },
-    ).rows
+@pytest.fixture(scope="session")
+def rich_samples():
+    return {
+        setting: large_sample(setting, 3000, seed=2, **RICH)
+        for setting in ("middle", "all-low", "all-high")
+    }
 
 
 def lead(row):
     return row["lead"]
 
 
-def old_floor(row):
-    return 0.7 * PRICE[lead(row).style]
+def effect(p, name):
+    return p["effects"][name]
 
 
-def floor_share(row):
+def rise_at(p):
+    start = dataset.DEFAULT_HISTORY.start
+    months_in = start.month - 1 + effect(p, "price_rise")["at_month_of_history"] - 1
+    return datetime(start.year + months_in // 12, months_in % 12 + 1, 1)
+
+
+def old_floor(p, row):
+    share = effect(p, "budget_floor")["floor_share_of_style_price"]
+    return share * p["deal"]["price_per_person_per_night"][lead(row).style]
+
+
+def after_rise(p, row):
+    return lead(row).submitted_at >= rise_at(p)
+
+
+def floor_share(p, row):
     """The stated budget as a share of the floor in force when the lead was submitted."""
-    risen = 1.1 if lead(row).submitted_at >= RISE else 1.0
-    return lead(row).budget_per_person_per_night / (old_floor(row) * risen)
+    risen = 1 + effect(p, "price_rise")["floor_rise"] if after_rise(p, row) else 1
+    return lead(row).budget_per_person_per_night / (old_floor(p, row) * risen)
+
+
+def share_of_old_floor(p, row):
+    return lead(row).budget_per_person_per_night / old_floor(p, row)
 
 
 def stated(row):
@@ -71,275 +106,366 @@ def new_client(row):
     return not lead(row).repeat_client
 
 
-def peak(row):
-    return lead(row).travel_at.month in PEAK
-
-
-def ahead(row):
-    return lead(row).months_ahead
+def peak(p, row):
+    return lead(row).travel_at.month in p["season"]["peak_months"]
 
 
 def dated(row):
-    return lead(row).dates_given not in (DatesGiven.YEAR, DatesGiven.NOT_SURE)
+    return lead(row).dates_given not in UNSURE
+
+
+def lead_time_bands(p):
+    bands = effect(p, "lead_time_by_season")
+    return bands["under_months"], bands["over_months"]
+
+
+def short_ahead(p, row):
+    return dated(row) and lead(row).months_ahead < lead_time_bands(p)[0]
+
+
+def far_or_unsure(p, row):
+    return not dated(row) or lead(row).months_ahead > lead_time_bands(p)[1]
+
+
+def lead_time_reference(p, row):
+    return not short_ahead(p, row) and not far_or_unsure(p, row)
 
 
 def hours_to_first_attempt(row):
-    path = row["path"]
-    return (path.stage_times["Contact attempted"] - lead(row).submitted_at).total_seconds() / 3600
+    first = row["path"].stage_times["Contact attempted"]
+    return (first - lead(row).submitted_at).total_seconds() / 3600
+
+
+def quick(p, row):
+    return hours_to_first_attempt(row) <= effect(p, "response_speed_by_quality")["within_hours"]
+
+
+def slow(p, row):
+    no_lift = effect(p, "response_speed_by_quality")["no_lift_from_hours"]
+    return hours_to_first_attempt(row) >= no_lift
 
 
 def high_quality(row):
     return row["high_quality"] == "yes"
 
 
-def at_floor(row):
-    return stated(row) and new_client(row) and floor_share(row) >= 1
+def at_floor(p, row):
+    return stated(row) and new_client(row) and floor_share(p, row) >= 1
 
 
-def lead_time_reference(row):
-    if not dated(row):
-        return False
-    return (peak(row) and 6 <= ahead(row) <= 14) or (not peak(row) and 4 <= ahead(row) <= 8)
+def short_message(p, row):
+    return lead(row).message_words < effect(p, "message_length")["under_words"]
 
 
-def written(lo, hi):
-    return lambda row: lo <= lead(row).message_words <= hi
-
-
-def dreamer(row):
+def dreamer(p, row):
+    shape = p["form"]["message"]["shape"]
     x = lead(row)
-    return x.message_words > 400 and len(x.destinations) > 3 and not x.states_budget
+    return (
+        x.message_words > shape["dreamer_over_words"]
+        and len(x.destinations) > shape["dreamer_over_countries"]
+        and not x.states_budget
+    )
 
 
-def source(name):
-    return lambda row: lead(row).traffic_source == name
+def message_reference(p, row):
+    return not short_message(p, row) and not dreamer(p, row)
 
 
-def after_rise_stated(row):
-    return stated(row) and lead(row).submitted_at >= RISE
+def source_is(name):
+    return lambda p, row: lead(row).traffic_source == name
 
 
-def share_of_old_floor(row):
-    return lead(row).budget_per_person_per_night / old_floor(row)
+def paid_search(p, row):
+    return lead(row).traffic_source == p["volume"]["traffic_source"]["reference"]
 
 
-# (name, sample, profile odds ratio at the middle, group, reference, term held out of the strata)
+def large_party(p, row):
+    return lead(row).party_size > effect(p, "party_size")["over_travellers"]
+
+
+def near_new_floor(p, row):
+    near = effect(p, "price_rise")["near_floor_under"]
+    return (
+        stated(row)
+        and after_rise(p, row)
+        and floor_share(p, row) >= 1
+        and share_of_old_floor(p, row) < near
+    )
+
+
+def clear_of_rise(p, row):
+    near = effect(p, "price_rise")["near_floor_under"]
+    return stated(row) and after_rise(p, row) and share_of_old_floor(p, row) >= near
+
+
+@dataclass(frozen=True)
+class Case:
+    name: str
+    at_middle: str  # which sample measures it at the middle: "middle" or "rich"
+    expected: object  # p -> the profile's odds ratio at p's setting
+    group: object  # (p, row) -> bool
+    reference: object  # (p, row) -> bool
+    term: str
+
+
 CASES = [
-    (
+    Case(
         "budget under half the floor",
         "rich",
-        0.10,
-        lambda r: stated(r) and new_client(r) and floor_share(r) < 0.5,
+        lambda p: effect(p, "budget_floor")["below_half"],
+        lambda p, r: (
+            stated(r)
+            and new_client(r)
+            and floor_share(p, r) < effect(p, "budget_floor")["below_half_under"]
+        ),
         at_floor,
         "budget_floor",
     ),
-    (
+    Case(
         "budget from half the floor to the floor",
         "middle",
-        0.50,
-        lambda r: stated(r) and new_client(r) and 0.5 <= floor_share(r) < 1,
+        lambda p: effect(p, "budget_floor")["half_to_floor"],
+        lambda p, r: (
+            stated(r)
+            and new_client(r)
+            and effect(p, "budget_floor")["below_half_under"] <= floor_share(p, r) < 1
+        ),
         at_floor,
         "budget_floor",
     ),
-    (
-        "repeat client's budget below the floor (softened: 0.5 ** 0.5)",
+    Case(
+        "repeat client's budget below the floor, softened",
         "rich",
-        0.50**0.5,
-        lambda r: stated(r) and not new_client(r) and 0.5 <= floor_share(r) < 1,
-        lambda r: stated(r) and not new_client(r) and floor_share(r) >= 1,
+        lambda p: (
+            effect(p, "budget_floor")["half_to_floor"]
+            ** effect(p, "repeat_client")["floor_penalty_kept"]
+        ),
+        lambda p, r: (
+            stated(r)
+            and not new_client(r)
+            and effect(p, "budget_floor")["below_half_under"] <= floor_share(p, r) < 1
+        ),
+        lambda p, r: stated(r) and not new_client(r) and floor_share(p, r) >= 1,
         "budget_floor",
     ),
-    (
+    Case(
         "no budget stated",
         "middle",
-        0.70,
-        lambda r: not stated(r),
-        lambda r: stated(r) and floor_share(r) >= 1,
+        lambda p: effect(p, "no_budget")["odds_ratio"],
+        lambda p, r: not stated(r),
+        lambda p, r: stated(r) and floor_share(p, r) >= 1,
         "no_budget",
     ),
-    (
+    Case(
         "peak travel under 4 months ahead",
         "rich",
-        0.40,
-        lambda r: dated(r) and peak(r) and ahead(r) < 4,
+        lambda p: effect(p, "lead_time_by_season")["peak_under_4_months"],
+        lambda p, r: short_ahead(p, r) and peak(p, r),
         lead_time_reference,
         "lead_time_by_season",
     ),
-    (
+    Case(
         "off-peak travel under 4 months ahead",
         "rich",
-        1.0,
-        lambda r: dated(r) and not peak(r) and ahead(r) < 4,
+        lambda p: effect(p, "lead_time_by_season")["off_peak_under_4_months"],
+        lambda p, r: short_ahead(p, r) and not peak(p, r),
         lead_time_reference,
         "lead_time_by_season",
     ),
-    (
-        "travel over 18 months ahead or not sure",
+    Case(
+        "travel over 18 months ahead or unsure",
         "rich",
-        0.60,
-        lambda r: not dated(r) or ahead(r) > 18,
+        lambda p: effect(p, "lead_time_by_season")["over_18_months_or_unsure"],
+        far_or_unsure,
         lead_time_reference,
         "lead_time_by_season",
     ),
-    (
+    Case(
         "dates given as a month",
         "middle",
-        0.90,
-        lambda r: lead(r).dates_given is DatesGiven.MONTH,
-        lambda r: lead(r).dates_given is DatesGiven.EXACT,
+        lambda p: effect(p, "date_specificity")["month_only"],
+        lambda p, r: lead(r).dates_given is DatesGiven.MONTH,
+        lambda p, r: lead(r).dates_given is DatesGiven.EXACT,
         "date_specificity",
     ),
-    (
+    Case(
         "no dates given",
         "middle",
-        0.55,
-        lambda r: lead(r).dates_given in (DatesGiven.YEAR, DatesGiven.NOT_SURE),
-        lambda r: lead(r).dates_given is DatesGiven.EXACT,
+        lambda p: effect(p, "date_specificity")["no_dates"],
+        lambda p, r: lead(r).dates_given in UNSURE,
+        lambda p, r: lead(r).dates_given is DatesGiven.EXACT,
         "date_specificity",
     ),
-    ("referral", "middle", 4.0, source("referral"), source("paid_search"), "lead_source"),
-    ("paid social", "middle", 0.6, source("paid_social"), source("paid_search"), "lead_source"),
-    ("organic search", "middle", 1.4, source("organic"), source("paid_search"), "lead_source"),
-    (
+    *(
+        Case(
+            name,
+            "middle",
+            lambda p, source=source: effect(p, "lead_source")[source],
+            source_is(source),
+            paid_search,
+            "lead_source",
+        )
+        for name, source in [
+            ("referral", "referral"),
+            ("paid social", "paid_social"),
+            ("organic search", "organic"),
+        ]
+    ),
+    Case(
         "repeat client",
         "middle",
-        6.0,
-        lambda r: lead(r).repeat_client,
-        new_client,
+        lambda p: effect(p, "repeat_client")["odds_ratio"],
+        lambda p, r: lead(r).repeat_client,
+        lambda p, r: new_client(r),
         "repeat_client",
     ),
-    (
+    Case(
         "high quality, first attempt within 1 hour",
         "middle",
-        4.0,
-        lambda r: high_quality(r) and hours_to_first_attempt(r) <= 1,
-        lambda r: high_quality(r) and hours_to_first_attempt(r) > 24,
+        lambda p: effect(p, "response_speed_by_quality")["high_quality_within_1h"],
+        lambda p, r: high_quality(r) and quick(p, r),
+        lambda p, r: high_quality(r) and slow(p, r),
         "response_speed_by_quality",
     ),
-    (
+    Case(
         "low quality, first attempt within 1 hour",
         "middle",
-        1.1,
-        lambda r: not high_quality(r) and hours_to_first_attempt(r) <= 1,
-        lambda r: not high_quality(r) and hours_to_first_attempt(r) > 24,
+        lambda p: effect(p, "response_speed_by_quality")["low_quality_within_1h"],
+        lambda p, r: not high_quality(r) and quick(p, r),
+        lambda p, r: not high_quality(r) and slow(p, r),
         "response_speed_by_quality",
     ),
-    (
+    Case(
         "message under 15 words",
         "middle",
-        0.60,
-        written(0, 14),
-        written(40, 200),
+        lambda p: effect(p, "message_length")["under_15_words"],
+        short_message,
+        message_reference,
         "message_length",
     ),
-    ("dreamer", "middle", 0.75, dreamer, written(40, 200), "message_length"),
-    (
+    Case(
+        "dreamer",
+        "middle",
+        lambda p: effect(p, "message_length")["dreamer"],
+        dreamer,
+        message_reference,
+        "message_length",
+    ),
+    Case(
         "party over 6",
         "rich",
-        0.70,
-        lambda r: lead(r).party_size > 6,
-        lambda r: lead(r).party_size == 2,
+        lambda p: effect(p, "party_size")["over_6"],
+        large_party,
+        lambda p, r: not large_party(p, r),
         "party_size",
     ),
-    (
+    Case(
         "phone given",
         "middle",
-        1.5,
-        lambda r: lead(r).gives_phone,
-        lambda r: not lead(r).gives_phone,
+        lambda p: effect(p, "phone_given")["odds_ratio_when_optional"],
+        lambda p, r: lead(r).gives_phone,
+        lambda p, r: not lead(r).gives_phone,
         "phone_given",
     ),
-    (
+    Case(
         "after the price rise, a budget just above the new floor",
         "rich",
-        0.75,
-        lambda r: after_rise_stated(r) and floor_share(r) >= 1 and share_of_old_floor(r) < 1.3,
-        lambda r: after_rise_stated(r) and share_of_old_floor(r) >= 1.5,
+        lambda p: effect(p, "price_rise")["near_floor_after"],
+        near_new_floor,
+        clear_of_rise,
         "price_rise",
     ),
-    (
+    Case(
         "commitment shown in the text",
         "middle",
-        2.5,
-        lambda r: lead(r).text_commitment,
-        lambda r: not lead(r).text_commitment,
+        lambda p: effect(p, "text_commitment")["odds_ratio"],
+        lambda p, r: lead(r).text_commitment,
+        lambda p, r: not lead(r).text_commitment,
         "text_commitment",
     ),
-    (
+    Case(
         "a real buyer, as the notes show",
         "middle",
-        3.5,
-        lambda r: lead(r).real_buyer,
-        lambda r: not lead(r).real_buyer,
+        lambda p: effect(p, "notes_real_buyer")["odds_ratio"],
+        lambda p, r: lead(r).real_buyer,
+        lambda p, r: not lead(r).real_buyer,
         "notes_real_buyer",
     ),
 ]
+BY_NAME = {case.name: case for case in CASES}
 
 
-@pytest.fixture(scope="module")
-def samples(middle_sample, rich_sample):
-    return {"middle": middle_sample.rows, "rich": rich_sample}
+def measured(sample, case):
+    p = sample.p
+    return mantel_haenszel(
+        sample.rows,
+        lambda r: case.group(p, r),
+        lambda r: case.reference(p, r),
+        rest_without(case.term),
+    )
 
 
-def measured(rows, group, reference, term):
-    return mantel_haenszel(rows, group, reference, rest_without(term))
+def assert_at_profiles_size(sample, case, setting="middle"):
+    log_or, se = measured(sample, case)
+    expected = case.expected(sample.p)
+    cap, _reason = RELAXED_SE.get((case.name, setting), (MAX_SE, ""))
+    assert se <= cap, (case.name, se)
+    assert abs(log_or - math.log(expected)) <= 3 * se, (case.name, math.exp(log_or), expected)
 
 
-@pytest.mark.parametrize(
-    ("name", "sample", "odds_ratio", "group", "reference", "term"), CASES, ids=[c[0] for c in CASES]
-)
-def test_the_outcomes_carry_each_effect_at_the_profiles_size(
-    samples, name, sample, odds_ratio, group, reference, term
-):
-    log_or, se = measured(samples[sample], group, reference, term)
-    assert se <= MAX_SE, (name, se)
-    assert abs(log_or - math.log(odds_ratio)) <= 3 * se, (name, math.exp(log_or), odds_ratio)
+@pytest.mark.parametrize("case", CASES, ids=[c.name for c in CASES])
+def test_the_outcomes_carry_each_effect_at_the_profiles_middle(middle_sample, rich_samples, case):
+    sample = middle_sample if case.at_middle == "middle" else rich_samples["middle"]
+    assert_at_profiles_size(sample, case)
 
 
-def contrast(rows, first, second):
+@pytest.mark.parametrize("setting", ["all-low", "all-high"])
+@pytest.mark.parametrize("case", CASES, ids=[c.name for c in CASES])
+def test_the_outcomes_carry_each_effect_at_both_ends(rich_samples, case, setting):
+    assert_at_profiles_size(rich_samples[setting], case, setting)
+
+
+def contrast(sample, first, second):
     """The difference of two measured log odds ratios and its standard error."""
-    (a, a_se), (b, b_se) = measured(rows, *first), measured(rows, *second)
+    (a, a_se), (b, b_se) = measured(sample, first), measured(sample, second)
     return a - b, math.hypot(a_se, b_se)
 
 
-def case(name):
-    _, _, _, group, reference, term = next(c for c in CASES if c[0] == name)
-    return group, reference, term
-
-
-def test_season_changes_what_a_short_lead_time_does(rich_sample):
-    # Interaction: under 4 months ahead costs a peak trip 0.40 and an off-peak trip nothing.
-    difference, se = contrast(
-        rich_sample,
-        case("peak travel under 4 months ahead"),
-        case("off-peak travel under 4 months ahead"),
-    )
+def test_season_changes_what_a_short_lead_time_does(rich_samples):
+    # Interaction: under 4 months ahead costs a peak trip and an off-peak one differently.
+    sample = rich_samples["middle"]
+    peak_case = BY_NAME["peak travel under 4 months ahead"]
+    off_peak_case = BY_NAME["off-peak travel under 4 months ahead"]
+    difference, se = contrast(sample, peak_case, off_peak_case)
+    expected = math.log(peak_case.expected(sample.p) / off_peak_case.expected(sample.p))
     assert difference < -3 * se
-    assert abs(difference - math.log(0.40)) <= 3 * se
+    assert abs(difference - expected) <= 3 * se
 
 
 def test_quality_changes_what_a_quick_first_attempt_does(middle_sample):
-    # Interaction: within an hour lifts a high-quality lead 4.0 and a low-quality one 1.1.
-    difference, se = contrast(
-        middle_sample.rows,
-        case("high quality, first attempt within 1 hour"),
-        case("low quality, first attempt within 1 hour"),
-    )
+    # Interaction: within an hour lifts a high-quality lead far more than a low-quality one.
+    high = BY_NAME["high quality, first attempt within 1 hour"]
+    low = BY_NAME["low quality, first attempt within 1 hour"]
+    difference, se = contrast(middle_sample, high, low)
+    expected = math.log(high.expected(middle_sample.p) / low.expected(middle_sample.p))
     assert difference > 3 * se
-    assert abs(difference - math.log(4.0 / 1.1)) <= 3 * se
+    assert abs(difference - expected) <= 3 * se
 
 
 @pytest.mark.parametrize(
-    ("sample", "short", "long"),
+    ("sample_name", "short", "long"),
     [
         ("middle", "message under 15 words", "dreamer"),
-        ("rich", "peak travel under 4 months ahead", "travel over 18 months ahead or not sure"),
+        ("rich", "peak travel under 4 months ahead", "travel over 18 months ahead or unsure"),
     ],
 )
-def test_the_middle_does_best_with_both_ends_worse(samples, sample, short, long):
+def test_the_middle_does_best_with_both_ends_worse(
+    middle_sample, rich_samples, sample_name, short, long
+):
     # Inverted U: both ends win less often than the middle band, each clearly.
+    sample = middle_sample if sample_name == "middle" else rich_samples["middle"]
     for name in (short, long):
-        log_or, se = measured(samples[sample], *case(name))
+        log_or, se = measured(sample, BY_NAME[name])
         assert log_or < -3 * se, name
 
 
