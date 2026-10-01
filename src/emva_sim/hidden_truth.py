@@ -12,7 +12,32 @@ from emva_sim import ladder
 from emva_sim.hubspot import Record, stamp
 from emva_sim.intake import RowKind
 from emva_sim.leads import Lead
-from emva_sim.process import TruePath
+from emva_sim.process import RESPONSE_SPEED, TruePath
+
+# The planted effects' terms, in the order of the profile; the proxy trap has none.
+TERMS = [
+    "budget_floor",
+    "no_budget",
+    "lead_time_by_season",
+    "date_specificity",
+    "lead_source",
+    "repeat_client",
+    "message_length",
+    "party_size",
+    "phone_given",
+    "price_rise",
+    "text_commitment",
+    "notes_real_buyer",
+    RESPONSE_SPEED,
+]
+# What the lead is that the exports do not show; issue #6 writes text to match.
+HIDDEN_ATTRIBUTES = [
+    "budget_per_person_per_night",
+    "message_words",
+    "message_specificity",
+    "text_commitment",
+    "real_buyer",
+]
 
 # A genuine Lead's true path; blank for duplicates and bots, which have none.
 TRUE_PATH_COLUMNS = [
@@ -27,6 +52,10 @@ TRUE_PATH_COLUMNS = [
     "itinerary_versions",
     "cancelled_after_won",
     "call_attempts",
+    "base_log_odds",
+    *(f"term_{name}" for name in TERMS),
+    "high_quality",
+    *HIDDEN_ATTRIBUTES,
 ]
 COLUMNS = [
     "deal_record_id",
@@ -58,7 +87,7 @@ def _write(path: Path, header: list[str], rows: Iterable[list[str]]) -> None:
 def _true_path(lead: Lead, path: TruePath) -> list[str]:
     return [
         lead.market_group.upper(),
-        f"{path.win_propensity:.6f}",
+        f"{path.win_propensity:.8g}",
         _yes_no(path.neglected_lead),
         stamp(path.stage_times.get(ladder.CONTACT_ATTEMPTED)),
         path.reached_stage,
@@ -68,7 +97,22 @@ def _true_path(lead: Lead, path: TruePath) -> list[str]:
         str(len(path.quotes)),
         _yes_no(bool(path.cancelled_at)),
         str(sum(attempt.channel == "call" for attempt in path.attempts)),
+        f"{path.base_log_odds:.6f}",
+        *(f"{path.terms[name]:.6f}" for name in TERMS),
+        _yes_no(path.high_quality),
+        *(_attribute(getattr(lead, name)) for name in HIDDEN_ATTRIBUTES),
     ]
+
+
+def true_path(lead: Lead, path: TruePath) -> dict[str, str]:
+    """A genuine Lead's true-path columns, by name."""
+    return dict(zip(TRUE_PATH_COLUMNS, _true_path(lead, path), strict=True))
+
+
+def _attribute(value) -> str:
+    if isinstance(value, bool):
+        return _yes_no(value)
+    return f"{value:.2f}" if isinstance(value, float) else str(value)
 
 
 def _rows(records: list[Record], paths: list[TruePath]) -> Iterator[list[str]]:

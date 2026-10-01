@@ -1,5 +1,6 @@
 import csv
 import io
+import math
 import re
 from datetime import date
 from pathlib import Path
@@ -129,7 +130,7 @@ def test_a_median_delay_that_contradicts_the_late_share_is_refused():
     p = profile.resolve(profile.load(PROFILE), "middle")
     p["handling"]["first_attempt_delay_median_hours"] = 24
     with pytest.raises(ValueError, match="a median of 24"):
-        Process(p)
+        Process(p, date(2024, 1, 1))
 
 
 def test_generating_again_replaces_the_previous_dataset(tmp_path):
@@ -311,6 +312,14 @@ def test_the_hidden_truth_has_one_row_per_deal_keyed_by_both_record_ids(middle):
         "itinerary_versions",
         "cancelled_after_won",
         "call_attempts",
+        "base_log_odds",
+        *(f"term_{name}" for name in TERMS),
+        "high_quality",
+        "budget_per_person_per_night",
+        "message_words",
+        "message_specificity",
+        "text_commitment",
+        "real_buyer",
         "true_loss_reason",
         "row_kind",
         "duplicate_of_deal_record_id",
@@ -318,3 +327,39 @@ def test_the_hidden_truth_has_one_row_per_deal_keyed_by_both_record_ids(middle):
         "invalid_phone",
         "fields_missing_or_wrong",
     ]
+
+
+TERMS = [
+    "budget_floor",
+    "no_budget",
+    "lead_time_by_season",
+    "date_specificity",
+    "lead_source",
+    "repeat_client",
+    "message_length",
+    "party_size",
+    "phone_given",
+    "price_rise",
+    "text_commitment",
+    "notes_real_buyer",
+    "response_speed_by_quality",
+]
+
+
+def genuine_rows(folder):
+    return [row for row in rows(folder / TRUTH) if row["row_kind"] == "lead"]
+
+
+def test_each_leads_win_log_odds_is_the_base_plus_its_terms(middle):
+    for row in genuine_rows(middle):
+        propensity = float(row["win_propensity"])
+        total = float(row["base_log_odds"]) + sum(float(row[f"term_{t}"]) for t in TERMS)
+        assert math.log(propensity / (1 - propensity)) == pytest.approx(total, abs=1e-4)
+
+
+def test_a_neglected_lead_has_no_response_speed_term_and_is_never_won(middle):
+    neglected = [row for row in genuine_rows(middle) if row["neglected_lead"] == "yes"]
+    assert neglected
+    for row in neglected:
+        assert float(row["term_response_speed_by_quality"]) == 0.0
+        assert row["outcome"] == "not won"

@@ -67,9 +67,12 @@ def test_each_transition_holds_at_the_profiles_middle(leads, stage, previous, ra
     assert reached(leads, stage) / reached(leads, previous) == pytest.approx(rate, abs=tolerance)
 
 
-def test_with_no_planted_effects_every_lead_has_the_base_propensity(leads):
-    base = 0.45 * 0.95 * 0.97 * 0.25
-    assert {r["win_propensity"] for r in leads} == {f"{base:.6f}"}
+def test_the_planted_effects_spread_the_propensity_around_the_funnels_win_rate(leads):
+    # The base log-odds is solved so contacted leads' propensities average the funnel's win rate.
+    contacted = [float(r["win_propensity"]) for r in leads if r["neglected_lead"] == "no"]
+    assert statistics.mean(contacted) == pytest.approx(0.45 * 0.95 * 0.97 * 0.25, abs=1e-5)
+    assert min(contacted) < 0.02
+    assert max(contacted) > 0.5
 
 
 def test_about_ten_in_a_hundred_leads_win(leads):
