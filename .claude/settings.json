@@ -1,24 +1,15 @@
 {
-  "permissions": {
-    "deny": [
-      "Read(~/code/emva/emva-app/.DS_Store)",
-      "Read(~/code/emva/emva-app/.claude/**)",
-      "Read(~/code/emva/emva-app/.env)",
-      "Read(~/code/emva/emva-app/.env.*)",
-      "Read(~/code/emva/emva-app/.git/**)",
-      "Read(~/code/emva/emva-app/.github/**)",
-      "Read(~/code/emva/emva-app/.gitignore)",
-      "Read(~/code/emva/emva-app/.ruff_cache/**)",
-      "Read(~/code/emva/emva-app/CLAUDE.md)",
-      "Read(~/code/emva/emva-app/Makefile)",
-      "Read(~/code/emva/emva-app/apps/**)",
-      "Read(~/code/emva/emva-app/compose.yaml)",
-      "Read(~/code/emva/emva-app/node_modules/**)",
-      "Read(~/code/emva/emva-app/package.json)",
-      "Read(~/code/emva/emva-app/packages/**)",
-      "Read(~/code/emva/emva-app/pnpm-lock.yaml)",
-      "Read(~/code/emva/emva-app/pnpm-workspace.yaml)",
-      "Read(~/code/emva/emva-app/services/**)"
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Read|Grep|Glob|Edit|MultiEdit|Write|NotebookEdit|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "uv run --quiet --no-project --python 3.12 \"$CLAUDE_PROJECT_DIR/.claude/hooks/guard_emva_app.py\" || { code=$?; [ $code -eq 2 ] && exit 2; echo \"guard_emva_app hook failed to run (exit $code); refusing to be safe\" >&2; exit 2; }"
+          }
+        ]
+      }
     ]
   }
 }
