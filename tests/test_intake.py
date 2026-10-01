@@ -1,43 +1,36 @@
 """Mess at intake, on simulated data: duplicates, bots or spam, and what the CRM holds wrongly.
 
-One fixed seed, six months of leads. Each rate's tolerance is about three standard errors at its
-own rate and size, written before the numbers were looked at.
+One fixed seed, six months of leads. Each rate is checked at the middle and at its range's low and
+high ends, within three standard errors at the size measured.
 """
 
-import csv
 import re
 from datetime import date
-from pathlib import Path
 
 import pytest
+from conftest import PROFILE, TRUTH, assert_rate, ends, kinds, number, raw, resolved, rows
 
-from emva_sim import dataset, profile
+from emva_sim import dataset, form, leads
+from emva_sim.hidden_truth import TRUE_PATH_COLUMNS
+from emva_sim.intake import RowKind
 from emva_sim.people import FIRST_NAMES
 
-PROFILE = Path(__file__).parent.parent / "profiles" / "planned-hospitality.toml"
 HISTORY = dataset.History(start=date(2024, 1, 1), end=date(2024, 6, 30), export=date(2024, 7, 5))
+MONTHS = 6
 EXPORT = "export/with-calls-and-notes"
 DEALS = f"{EXPORT}/hubspot-crm-exports-safari-enquiries-2024-07-05.csv"
 CONTACTS = f"{EXPORT}/hubspot-crm-exports-all-contacts-2024-07-05.csv"
-TRUTH = "hidden-truth/hidden-truth.csv"
+KEY_FIELDS = [form.field(raw(), role)["label"] for role in raw()["mess"]["key_fields"]]
 
 
-def rows(path):
-    with open(path, newline="", encoding="utf-8") as f:
-        return list(csv.DictReader(f))
+def column(label):
+    """The contacts export's column for a form field."""
+    return raw()["exports"]["contact_properties"].get(label, label)
 
 
 @pytest.fixture(scope="module")
-def generated(tmp_path_factory):
-    made = {}
-
-    def at(setting):
-        if setting not in made:
-            out = tmp_path_factory.mktemp("out")
-            made[setting] = dataset.generate(PROFILE, setting, seed=1, out=out, history=HISTORY)
-        return made[setting]
-
-    return at
+def generated(generate):
+    return lambda setting: generate(setting, HISTORY)
 
 
 @pytest.fixture(scope="module")
@@ -45,34 +38,43 @@ def middle(generated):
     return generated("middle")
 
 
-def kinds(folder, kind):
-    return [r for r in rows(folder / TRUTH) if r["row_kind"] == kind]
+def contact_of_deal(folder):
+    """Each deal's contact row, by deal Record ID."""
+    return {
+        deal: contact
+        for contact in rows(folder / CONTACTS)
+        for deal in contact["Associated Deal IDs"].split(";")
+    }
 
 
-@pytest.mark.parametrize(
-    ("setting", "share", "tolerance"),
-    [
-        ("middle", 0.08, 0.016),
-        ("mess.duplicate_leads@low", 0.02, 0.008),
-        ("mess.duplicate_leads@high", 0.20, 0.021),
-    ],
-)
-def test_the_profiles_share_of_rows_are_duplicate_leads(generated, setting, share, tolerance):
+def with_contacts(folder, kind):
+    contacts = contact_of_deal(folder)
+    return [(contacts[r["deal_record_id"]], r) for r in kinds(folder, kind)]
+
+
+def altered(row):
+    named = row["fields_missing_or_wrong"]
+    return named.split(";") if named else []
+
+
+@pytest.mark.parametrize("setting", ends("mess.duplicate_leads"))
+def test_the_profiles_share_of_rows_are_duplicate_leads(generated, setting):
     folder = generated(setting)
-    deals = rows(folder / DEALS)
-    assert len(kinds(folder, "duplicate")) / len(deals) == pytest.approx(share, abs=tolerance)
+    duplicates = len(kinds(folder, RowKind.DUPLICATE))
+    assert_rate(duplicates, len(rows(folder / DEALS)), number(setting, "mess.duplicate_leads"))
 
 
 def test_the_profiles_volume_counts_genuine_leads_only(middle):
-    assert len(kinds(middle, "lead")) == 400 * 6
+    volume = number("middle", "volume.leads_per_month")
+    assert len(kinds(middle, RowKind.LEAD)) == volume * MONTHS
     assert len(rows(middle / DEALS)) == len(rows(middle / TRUTH))
 
 
 def test_a_duplicate_is_the_same_person_again_later_as_a_second_contact(middle):
-    contacts = {c["Associated Deal IDs"]: c for c in rows(middle / CONTACTS)}
+    contacts = contact_of_deal(middle)
     deals = {d["Record ID"]: d for d in rows(middle / DEALS)}
-    genuine = {r["deal_record_id"]: r for r in kinds(middle, "lead")}
-    duplicates = kinds(middle, "duplicate")
+    genuine = {r["deal_record_id"]: r for r in kinds(middle, RowKind.LEAD)}
+    duplicates = kinds(middle, RowKind.DUPLICATE)
     assert duplicates
     for row in duplicates:
         original = row["duplicate_of_deal_record_id"]
@@ -80,32 +82,25 @@ def test_a_duplicate_is_the_same_person_again_later_as_a_second_contact(middle):
         again, first = contacts[row["deal_record_id"]], contacts[original]
         assert again["Record ID"] != first["Record ID"]
         assert again["Email"] != first["Email"]
-        for name, field in (("First Name", "First name"), ("Last Name", "Last name")):
-            if field not in altered(genuine[original]):
-                assert again[name].lower() == first[name].lower()
+        for label in ("First name", "Last name"):
+            if label not in altered(genuine[original]):
+                assert again[column(label)].lower() == first[column(label)].lower()
         assert deals[row["deal_record_id"]]["Create Date"] >= deals[original]["Create Date"]
     assert any(contacts[r["deal_record_id"]]["First Name"].islower() for r in duplicates)
 
 
 def test_duplicates_have_no_outcome_of_their_own_so_grading_can_leave_them_out(middle):
-    for row in kinds(middle, "duplicate"):
+    for row in kinds(middle, RowKind.DUPLICATE):
         assert not row["win_propensity"] and not row["outcome"], row
-    for row in kinds(middle, "lead"):
+    for row in kinds(middle, RowKind.LEAD):
         assert row["win_propensity"] and row["outcome"] and not row["duplicate_of_deal_record_id"]
 
 
-@pytest.mark.parametrize(
-    ("setting", "share", "tolerance"),
-    [
-        ("middle", 0.04, 0.012),
-        ("mess.bot_or_spam@low", 0.005, 0.004),
-        ("mess.bot_or_spam@high", 0.15, 0.02),
-    ],
-)
-def test_the_profiles_share_of_rows_are_bot_or_spam(generated, setting, share, tolerance):
+@pytest.mark.parametrize("setting", ends("mess.bot_or_spam"))
+def test_the_profiles_share_of_rows_are_bot_or_spam(generated, setting):
     folder = generated(setting)
-    deals = rows(folder / DEALS)
-    assert len(kinds(folder, "bot or spam")) / len(deals) == pytest.approx(share, abs=tolerance)
+    bots = len(kinds(folder, RowKind.BOT))
+    assert_rate(bots, len(rows(folder / DEALS)), number(setting, "mess.bot_or_spam"))
 
 
 def junk_signs(contact):
@@ -123,11 +118,10 @@ def junk_signs(contact):
 
 
 def test_bots_look_like_junk_and_genuine_leads_held_rightly_do_not(middle):
-    contacts = {c["Associated Deal IDs"]: c for c in rows(middle / CONTACTS)}
-    bots = [contacts[r["deal_record_id"]] for r in kinds(middle, "bot or spam")]
+    bots = with_contacts(middle, RowKind.BOT)
     assert bots
     seen = set()
-    for bot in bots:
+    for bot, _ in bots:
         signs = junk_signs(bot)
         assert signs - {"empty message"}, bot
         seen |= signs
@@ -138,13 +132,15 @@ def test_bots_look_like_junk_and_genuine_leads_held_rightly_do_not(middle):
         "empty message",
         "impossible party",
     }
-    for row in kinds(middle, "lead") + kinds(middle, "duplicate"):
+    for contact, row in with_contacts(middle, RowKind.LEAD) + with_contacts(
+        middle, RowKind.DUPLICATE
+    ):
         if not altered(row):
-            assert not junk_signs(contacts[row["deal_record_id"]]) - {"empty message"}
+            assert not junk_signs(contact) - {"empty message"}
 
 
 def test_bots_have_no_outcome_so_grading_can_leave_them_out(middle):
-    for row in kinds(middle, "bot or spam"):
+    for row in kinds(middle, RowKind.BOT):
         assert not row["win_propensity"] and not row["outcome"], row
         assert not row["duplicate_of_deal_record_id"]
 
@@ -152,122 +148,56 @@ def test_bots_have_no_outcome_so_grading_can_leave_them_out(middle):
 VALID_EMAIL = re.compile(r"[A-Za-z0-9._+-]+@[a-z0-9-]+(\.[a-z0-9-]+)+")
 
 
-def valid_phone(raw):
-    countries = [c for group in raw["markets"]["groups"].values() for c in group["countries"]]
-    formats = [f for c in countries for f in c["phones"]]
+def valid_phone():
+    formats = [f for c in leads.countries(raw()) for f in c["phones"]]
     patterns = [re.escape(f).replace("\\#", "#").replace("#", r"\d") for f in formats]
     return re.compile("|".join(f"(?:{p})" for p in patterns))
 
 
-def genuine_contacts(folder):
-    contacts = {c["Associated Deal IDs"]: c for c in rows(folder / CONTACTS)}
-    return [(contacts[r["deal_record_id"]], r) for r in kinds(folder, "lead")]
-
-
-@pytest.mark.parametrize(
-    ("setting", "share", "tolerance"),
-    [
-        ("middle", 0.03, 0.011),
-        ("mess.invalid_email@low", 0.01, 0.006),
-        ("mess.invalid_email@high", 0.08, 0.017),
-    ],
-)
-def test_the_profiles_share_of_genuine_leads_have_an_invalid_email(
-    generated, setting, share, tolerance
-):
-    contacts = genuine_contacts(generated(setting))
+@pytest.mark.parametrize("setting", ends("mess.invalid_email"))
+def test_the_profiles_share_of_genuine_leads_have_an_invalid_email(generated, setting):
+    contacts = with_contacts(generated(setting), RowKind.LEAD)
     invalid = [(c, r) for c, r in contacts if not VALID_EMAIL.fullmatch(c["Email"])]
-    assert len(invalid) / len(contacts) == pytest.approx(share, abs=tolerance)
+    assert_rate(len(invalid), len(contacts), number(setting, "mess.invalid_email"))
     assert all(r["invalid_email"] == "yes" for _, r in invalid)
     assert sum(r["invalid_email"] == "yes" for _, r in contacts) == len(invalid)
 
 
-@pytest.mark.parametrize(
-    ("setting", "share", "tolerance"),
-    [
-        ("middle", 0.06, 0.018),
-        ("mess.invalid_phone@low", 0.02, 0.011),
-        ("mess.invalid_phone@high", 0.15, 0.027),
-    ],
-)
-def test_the_profiles_share_of_given_phones_are_invalid(generated, setting, share, tolerance):
-    valid = valid_phone(profile.load(PROFILE))
-    given = [(c, r) for c, r in genuine_contacts(generated(setting)) if c["Phone Number"]]
+@pytest.mark.parametrize("setting", ends("mess.invalid_phone"))
+def test_the_profiles_share_of_given_phones_are_invalid(generated, setting):
+    valid = valid_phone()
+    given = [
+        (c, r) for c, r in with_contacts(generated(setting), RowKind.LEAD) if c["Phone Number"]
+    ]
     invalid = [(c, r) for c, r in given if not valid.fullmatch(c["Phone Number"])]
-    assert len(invalid) / len(given) == pytest.approx(share, abs=tolerance)
+    assert_rate(len(invalid), len(given), number(setting, "mess.invalid_phone"))
     assert all(r["invalid_phone"] == "yes" for _, r in invalid)
     assert sum(r["invalid_phone"] == "yes" for _, r in given) == len(invalid)
 
 
-KEY_FIELDS = [
-    "First name",
-    "Last name",
-    "Country of residence",
-    "Where would you like to go?",
-    "When would you like to travel?",
-    "Number of nights",
-    "Number of adults",
-    "Number of children",
-    "Accommodation style",
-    "Budget per person (excluding international flights)",
-]
-COLUMN = {
-    "First name": "First Name",
-    "Last name": "Last Name",
-    "Country of residence": "Country/Region",
-}
-
-
-def altered(row):
-    named = row["fields_missing_or_wrong"]
-    return named.split(";") if named else []
-
-
-@pytest.mark.parametrize(
-    ("setting", "share", "tolerance"),
-    [
-        ("middle", 0.30, 0.028),
-        ("mess.field_missing_or_wrong@low", 0.15, 0.022),
-        ("mess.field_missing_or_wrong@high", 0.50, 0.031),
-    ],
-)
+@pytest.mark.parametrize("setting", ends("mess.field_missing_or_wrong"))
 def test_the_profiles_share_of_genuine_records_have_a_key_field_missing_or_wrong(
-    generated, setting, share, tolerance
+    generated, setting
 ):
-    contacts = genuine_contacts(generated(setting))
+    contacts = with_contacts(generated(setting), RowKind.LEAD)
     messy = [r for _, r in contacts if altered(r)]
-    assert len(messy) / len(contacts) == pytest.approx(share, abs=tolerance)
+    assert_rate(len(messy), len(contacts), number(setting, "mess.field_missing_or_wrong"))
     assert {field for r in messy for field in altered(r)} == set(KEY_FIELDS)
 
 
 def test_a_required_key_field_is_blank_only_where_the_hidden_truth_says_it_is_missing(middle):
-    required = ["First name", "Last name", "Country of residence", "Number of adults"]
+    required = [f["label"] for f in resolved("middle")["form"]["fields"] if f["required"]]
     blank = wrong = 0
-    for contact, row in genuine_contacts(middle):
+    for contact, row in with_contacts(middle, RowKind.LEAD):
         for field in altered(row):
-            if contact[COLUMN.get(field, field)]:
+            if contact[column(field)]:
                 wrong += 1
             else:
                 blank += 1
-        for field in required:
-            if not contact[COLUMN.get(field, field)]:
+        for field in set(required) & set(KEY_FIELDS):
+            if not contact[column(field)]:
                 assert field in altered(row), (field, row)
     assert blank and wrong
-
-
-TRUE_PATH = [
-    "market_group",
-    "win_propensity",
-    "neglected_lead",
-    "first_contact_attempt_at",
-    "reached_stage",
-    "outcome",
-    "won_at",
-    "deal_value",
-    "itinerary_versions",
-    "cancelled_after_won",
-    "call_attempts",
-]
 
 
 @pytest.mark.parametrize(
@@ -276,7 +206,7 @@ TRUE_PATH = [
 )
 def test_the_mess_never_changes_a_leads_true_path(generated, middle, setting):
     def true_paths(folder):
-        return [[r[c] for c in TRUE_PATH] for r in kinds(folder, "lead")]
+        return [[r[c] for c in TRUE_PATH_COLUMNS] for r in kinds(folder, RowKind.LEAD)]
 
     assert true_paths(generated(setting)) == true_paths(middle)
 
@@ -291,7 +221,7 @@ def test_the_same_seed_gives_the_same_mess(tmp_path):
     second = dataset.generate(PROFILE, "all-high", seed=5, out=tmp_path / "b", history=month)
     assert files(first) == files(second)
     truth = rows(first / TRUTH)
-    assert {r["row_kind"] for r in truth} == {"lead", "duplicate", "bot or spam"}
+    assert {r["row_kind"] for r in truth} == set(RowKind)
     assert any(r["fields_missing_or_wrong"] for r in truth)
 
 

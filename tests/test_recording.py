@@ -1,32 +1,43 @@
 """How the sales team records each Lead's true path, on simulated data.
 
 One fixed seed, six months of leads, exported long after the last one so nearly every stage change
-is recorded before the export. Each rate's tolerance is about three standard errors at that size,
-written before the numbers were looked at.
+is recorded before the export. Each rate is checked at the middle and at its range's low and high
+ends, within three standard errors at the size measured.
 """
 
-import csv
-import statistics
+import math
 from collections import Counter, defaultdict
 from datetime import date, datetime, time
-from pathlib import Path
 
 import pytest
+from conftest import (
+    STAGES,
+    TRUTH,
+    assert_exponential_median,
+    assert_rate,
+    ends,
+    genuine,
+    number,
+    raw,
+    resolved,
+    rows,
+)
 
-from emva_sim import dataset, profile
+from emva_sim import dataset
+from emva_sim.intake import RowKind
 
-PROFILE = Path(__file__).parent.parent / "profiles" / "planned-hospitality.toml"
 HISTORY = dataset.History(start=date(2024, 1, 1), end=date(2024, 6, 30), export=date(2025, 12, 31))
 DEALS_ON = "export/deals-and-contacts-only/hubspot-crm-exports-safari-enquiries-%Y-%m-%d.csv"
 DEALS = HISTORY.export.strftime(DEALS_ON)
-TRUTH = "hidden-truth/hidden-truth.csv"
-STAGES = "hidden-truth/stage-history.csv"
 EXPORT = "2025-12-31 00:00"
-
-
-def rows(path):
-    with open(path, newline="", encoding="utf-8") as f:
-        return list(csv.DictReader(f))
+STAGE_LIST = raw()["pipeline"]["stages"]
+CREATED = STAGE_LIST[0]["name"]
+OPEN_AFTER_CREATION = {
+    s["name"] for s in STAGE_LIST[1:] if "closed" not in s and "after_won" not in s
+}
+CLOSED = {s["name"]: s["closed"] for s in STAGE_LIST if "closed" in s}
+WON = {s["name"] for s in STAGE_LIST if s.get("closed") == "won" or "after_won" in s}
+MEANINGS = {r["recorded"]: r["meaning"] for r in raw()["loss"]["reasons"]["recorded"]}
 
 
 def entered(stage):
@@ -34,9 +45,13 @@ def entered(stage):
 
 
 @pytest.fixture(scope="module")
-def middle(tmp_path_factory):
-    out = tmp_path_factory.mktemp("out")
-    return dataset.generate(PROFILE, "middle", seed=1, out=out, history=HISTORY)
+def generated(generate):
+    return lambda setting: generate(setting, HISTORY)
+
+
+@pytest.fixture(scope="module")
+def middle(generated):
+    return generated("middle")
 
 
 def history_by_deal(folder):
@@ -44,11 +59,6 @@ def history_by_deal(folder):
     for change in rows(folder / STAGES):
         by_deal[change["deal_record_id"]].append(change)
     return by_deal
-
-
-def genuine(folder):
-    """The deal Record IDs of genuine Leads, without duplicates and bots."""
-    return {r["deal_record_id"] for r in rows(folder / TRUTH) if r["row_kind"] == "lead"}
 
 
 def lead_histories(folder):
@@ -75,19 +85,6 @@ def test_the_export_shows_the_latest_recorded_entry_of_each_stage_before_the_exp
         assert shown == {entered(stage): at for stage, at in latest.items()}, deal_id
 
 
-@pytest.fixture(scope="module")
-def generated(tmp_path_factory, middle):
-    made = {"middle": middle}
-
-    def at(setting):
-        if setting not in made:
-            out = tmp_path_factory.mktemp("out")
-            made[setting] = dataset.generate(PROFILE, setting, seed=1, out=out, history=HISTORY)
-        return made[setting]
-
-    return at
-
-
 def moment(text):
     return datetime.strptime(text, "%Y-%m-%d %H:%M")
 
@@ -96,99 +93,83 @@ def days(start, end):
     return (moment(end) - moment(start)).total_seconds() / 86400
 
 
-def first_lags(folder):
-    """Days from each deal's first true change after New Enquiry to when it was recorded.
+def hand_entered(folder):
+    """Every recorded change but the deals' creation at their first stage."""
+    changes = rows(folder / STAGES)
+    return [c for c in changes if c["recorded_entered_at"] and c["crm_stage"] != CREATED]
 
-    Changes made in bulk are left out: they wait for the weekly review instead.
+
+def sharing(changes, at_least):
+    """The changes whose timestamp at least this many changes have."""
+    stamps = Counter(c["recorded_entered_at"] for c in changes)
+    return [c for c in changes if stamps[c["recorded_entered_at"]] >= at_least]
+
+
+REVIEW = raw()["recording"]["bulk_review"]
+
+
+def at_the_review(change):
+    # A deal moved through two stages at one review gets the second a minute after the first.
+    at = moment(change["recorded_entered_at"])
+    window = time(REVIEW["from_hour"]) <= at.time() <= time(REVIEW["to_hour"], 5)
+    return at.strftime("%A") == REVIEW["weekday"] and window
+
+
+def in_bulk(changes):
+    """The changes made at a weekly review: in its hours, with a timestamp another one shares."""
+    return [c for c in sharing(changes, 2) if at_the_review(c)]
+
+
+def first_lags(folder):
+    """Days from each deal's first true change after creation to when it was recorded.
+
+    Changes made in bulk are left out: they wait for the weekly review instead. The first change
+    is the one no earlier recorded change can push later.
     """
     bulk = {c["recorded_entered_at"] for c in in_bulk(hand_entered(folder))}
     lags = []
     for changes in lead_histories(folder):
-        true = [c for c in changes if c["true_entered_at"] and c["crm_stage"] != "New Enquiry"]
+        true = [c for c in changes if c["true_entered_at"] and c["crm_stage"] != CREATED]
         first = min(true, key=lambda c: c["true_entered_at"], default=None)
         if first and first["recorded_entered_at"] and first["recorded_entered_at"] not in bulk:
             lags.append(days(first["true_entered_at"], first["recorded_entered_at"]))
     return lags
 
 
-@pytest.mark.parametrize(
-    ("setting", "median", "tolerance"),
-    [
-        ("middle", 2, 0.2),
-        ("recording.lag_days_median@low", 0, 0),
-        ("recording.lag_days_median@high", 14, 1.3),
-    ],
-)
-def test_stage_changes_are_recorded_late_by_the_profiles_median_lag(
-    generated, setting, median, tolerance
-):
+@pytest.mark.parametrize("setting", ends("recording.lag_days_median"))
+def test_stage_changes_are_recorded_late_by_the_profiles_median_lag(generated, setting):
     lags = first_lags(generated(setting))
-    assert statistics.median(lags) == pytest.approx(median, abs=tolerance)
+    median = number(setting, "recording.lag_days_median")
+    if median:
+        assert_exponential_median(lags, median)
+    else:
+        # Pushed at most a minute behind the change recorded before it.
+        assert max(lags) <= 1 / 1440 + 1e-9
 
 
-def hand_entered(folder):
-    """Every recorded change but the deals' creation at New Enquiry."""
-    changes = rows(folder / STAGES)
-    return [c for c in changes if c["recorded_entered_at"] and c["crm_stage"] != "New Enquiry"]
+@pytest.mark.parametrize("setting", ends("recording.bulk_update_share"))
+def test_the_profiles_share_of_stage_changes_are_made_in_bulk(generated, setting):
+    # Only while leads arrive is every review busy enough for its timestamp to be seen shared.
+    changes = [c for c in hand_entered(generated(setting)) if c["recorded_entered_at"] < "2024-07"]
+    assert_rate(len(in_bulk(changes)), len(changes), number(setting, "recording.bulk_update_share"))
 
 
-def in_bulk(changes):
-    """The changes whose timestamp at least two other changes share."""
-    stamps = Counter(c["recorded_entered_at"] for c in changes)
-    return [c for c in changes if stamps[c["recorded_entered_at"]] >= 3]
+def test_timestamps_many_changes_share_are_the_weekly_pipeline_reviews(middle):
+    shared = sharing(hand_entered(middle), 3)
+    assert shared
+    assert all(at_the_review(change) for change in shared)
 
 
-@pytest.mark.parametrize(
-    ("setting", "share"),
-    [
-        ("middle", 0.20),
-        ("recording.bulk_update_share@low", 0.05),
-        ("recording.bulk_update_share@high", 0.40),
-    ],
-)
-def test_the_profiles_share_of_stage_changes_are_made_in_bulk(generated, setting, share):
-    changes = hand_entered(generated(setting))
-    assert len(in_bulk(changes)) / len(changes) == pytest.approx(share, abs=0.03)
-
-
-def test_bulk_updates_happen_in_the_weekly_pipeline_review(middle):
-    bulk = in_bulk(hand_entered(middle))
-    assert bulk
-    # A deal moved through two stages at one review gets the second a minute after the first.
-    for change in bulk:
-        at = moment(change["recorded_entered_at"])
-        assert at.strftime("%A") == "Friday" and time(16) <= at.time() <= time(18, 5), at
-
-
-@pytest.mark.parametrize(
-    ("setting", "share"),
-    [
-        ("middle", 0.30),
-        ("recording.dead_left_open@low", 0.10),
-        ("recording.dead_left_open@high", 0.60),
-    ],
-)
-def test_the_profiles_share_of_lost_leads_are_left_open_at_their_last_stage(
-    generated, setting, share
-):
+@pytest.mark.parametrize("setting", ends("recording.dead_left_open"))
+def test_the_profiles_share_of_lost_leads_are_left_open_at_their_last_stage(generated, setting):
     folder = generated(setting)
     lost = [c for c in rows(folder / STAGES) if c["crm_stage"] == "Lost" and c["true_entered_at"]]
     left_open = [c for c in lost if not c["recorded_entered_at"]]
-    assert len(left_open) / len(lost) == pytest.approx(share, abs=0.03)
+    assert_rate(len(left_open), len(lost), number(setting, "recording.dead_left_open"))
     deals = {d["Record ID"]: d for d in rows(folder / DEALS)}
     for change in left_open:
         deal = deals[change["deal_record_id"]]
         assert deal["Deal Stage"] != "Lost" and not deal["Closed Lost Reason"]
-
-
-OPEN_AFTER_CREATION = {
-    "Attempting Contact",
-    "In Discussion",
-    "Planning",
-    "Itinerary Sent",
-    "Provisional Hold",
-}
-CLOSED = {"Deposit Paid", "Lost"}
 
 
 def skippable(changes):
@@ -204,18 +185,11 @@ def skippable(changes):
     return true if closed else true[:-1]
 
 
-@pytest.mark.parametrize(
-    ("setting", "share"),
-    [
-        ("middle", 0.50),
-        ("recording.skips_a_stage@low", 0.35),
-        ("recording.skips_a_stage@high", 0.65),
-    ],
-)
-def test_the_profiles_share_of_records_skip_a_stage(generated, setting, share):
+@pytest.mark.parametrize("setting", ends("recording.skips_a_stage"))
+def test_the_profiles_share_of_records_skip_a_stage(generated, setting):
     passing = [s for s in map(skippable, lead_histories(generated(setting))) if s]
     skipping = [s for s in passing if any(not c["recorded_entered_at"] for c in s)]
-    assert len(skipping) / len(passing) == pytest.approx(share, abs=0.04)
+    assert_rate(len(skipping), len(passing), number(setting, "recording.skips_a_stage"))
 
 
 def moved_back(changes):
@@ -230,18 +204,11 @@ def can_move_back(changes):
     )
 
 
-@pytest.mark.parametrize(
-    ("setting", "share", "tolerance"),
-    [
-        ("middle", 0.05, 0.015),
-        ("recording.backward_move@low", 0.02, 0.01),
-        ("recording.backward_move@high", 0.10, 0.021),
-    ],
-)
-def test_the_profiles_share_of_deals_move_backward(generated, setting, share, tolerance):
+@pytest.mark.parametrize("setting", ends("recording.backward_move"))
+def test_the_profiles_share_of_deals_move_backward(generated, setting):
     deals = [c for c in lead_histories(generated(setting)) if can_move_back(c)]
     backward = [c for c in deals if moved_back(c)]
-    assert len(backward) / len(deals) == pytest.approx(share, abs=tolerance)
+    assert_rate(len(backward), len(deals), number(setting, "recording.backward_move"))
 
 
 def test_moving_back_overwrites_the_date_entered_of_the_stage_entered_again(middle):
@@ -259,57 +226,33 @@ def test_moving_back_overwrites_the_date_entered_of_the_stage_entered_again(midd
     assert overwritten
 
 
-WON = {"Deposit Paid", "Travelled", "Cancelled"}
-
-
-@pytest.mark.parametrize(
-    ("setting", "share", "tolerance"),
-    [
-        ("middle", 0.10, 0.06),
-        ("recording.won_without_amount@low", 0.02, 0.03),
-        ("recording.won_without_amount@high", 0.30, 0.09),
-    ],
-)
-def test_the_profiles_share_of_won_deals_have_no_amount(generated, setting, share, tolerance):
+@pytest.mark.parametrize("setting", ends("recording.won_without_amount"))
+def test_the_profiles_share_of_won_deals_have_no_amount(generated, setting):
     won = [d for d in rows(generated(setting) / DEALS) if d["Deal Stage"] in WON]
-    assert sum(not d["Amount"] for d in won) / len(won) == pytest.approx(share, abs=tolerance)
-
-
-MEANINGS = {
-    r["recorded"]: r["meaning"] for r in profile.load(PROFILE)["loss"]["reasons"]["recorded"]
-}
+    blank = sum(not d["Amount"] for d in won)
+    assert_rate(blank, len(won), number(setting, "recording.won_without_amount"))
 
 
 def lost_with_truth(folder):
-    truth = {r["deal_record_id"]: r for r in rows(folder / TRUTH) if r["row_kind"] == "lead"}
+    truth = {r["deal_record_id"]: r for r in rows(folder / TRUTH) if r["row_kind"] == RowKind.LEAD}
     deals = [
         d for d in rows(folder / DEALS) if d["Deal Stage"] == "Lost" and d["Record ID"] in truth
     ]
     return [(d, truth[d["Record ID"]]) for d in deals]
 
 
-@pytest.mark.parametrize(
-    ("setting", "share"),
-    [("middle", 0.35), ("loss.blank_reason@low", 0.15), ("loss.blank_reason@high", 0.50)],
-)
-def test_the_profiles_share_of_lost_deals_have_no_reason(generated, setting, share):
+@pytest.mark.parametrize("setting", ends("loss.blank_reason"))
+def test_the_profiles_share_of_lost_deals_have_no_reason(generated, setting):
     lost = lost_with_truth(generated(setting))
     blank = sum(not deal["Closed Lost Reason"] for deal, _ in lost)
-    assert blank / len(lost) == pytest.approx(share, abs=0.04)
+    assert_rate(blank, len(lost), number(setting, "loss.blank_reason"))
 
 
-@pytest.mark.parametrize(
-    ("setting", "share"),
-    [
-        ("middle", 0.40),
-        ("loss.recorded_differs_from_truth@low", 0.20),
-        ("loss.recorded_differs_from_truth@high", 0.60),
-    ],
-)
-def test_the_profiles_share_of_recorded_reasons_differ_from_the_true_one(generated, setting, share):
+@pytest.mark.parametrize("setting", ends("loss.recorded_differs_from_truth"))
+def test_the_profiles_share_of_recorded_reasons_differ_from_the_true_one(generated, setting):
     given = [(d, t) for d, t in lost_with_truth(generated(setting)) if d["Closed Lost Reason"]]
     differs = sum(MEANINGS[d["Closed Lost Reason"]] != t["true_loss_reason"] for d, t in given)
-    assert differs / len(given) == pytest.approx(share, abs=0.05)
+    assert_rate(differs, len(given), number(setting, "loss.recorded_differs_from_truth"))
 
 
 def test_every_lost_lead_and_no_other_has_a_true_loss_reason_drawn_from_the_profile(middle):
@@ -322,21 +265,18 @@ def test_every_lost_lead_and_no_other_has_a_true_loss_reason_drawn_from_the_prof
     for row in truth:
         assert bool(row["true_loss_reason"]) == (row["deal_record_id"] in lost), row
     reasons = Counter(r["true_loss_reason"] for r in truth if r["true_loss_reason"])
-    # The middle shares sum to 1.15, so each is scaled down to its part of the total.
-    for reason, share in [
-        ("could_not_reach_them", 0.35),
-        ("price", 0.40),
-        ("timing", 0.25),
-        ("never_a_real_buyer", 0.15),
-    ]:
-        assert reasons[reason] / reasons.total() == pytest.approx(share / 1.15, abs=0.03)
+    weights = {
+        m: number("middle", f"loss.reasons.{m}") for m in set(MEANINGS.values()) - {"unknown"}
+    }
+    for reason, weight in weights.items():
+        assert_rate(reasons[reason], reasons.total(), weight / sum(weights.values()))
 
 
 def test_a_change_recorded_after_the_export_date_is_not_shown_though_it_happened_before(
-    tmp_path,
+    generate,
 ):
     soon = dataset.History(start=date(2024, 1, 1), end=date(2024, 3, 31), export=date(2024, 4, 3))
-    folder = dataset.generate(PROFILE, "middle", seed=1, out=tmp_path, history=soon)
+    folder = generate("middle", soon)
     deals = {d["Record ID"]: d for d in rows(folder / soon.export.strftime(DEALS_ON))}
     late = [
         c
@@ -351,12 +291,17 @@ def test_a_change_recorded_after_the_export_date_is_not_shown_though_it_happened
 
 def test_close_date_follows_the_recorded_close_not_the_true_one(middle):
     by_deal = history_by_deal(middle)
-    closed = [d for d in rows(middle / DEALS) if d["Deal Stage"] in {"Deposit Paid", "Lost"}]
-    assert closed
-    late = 0
+    closed = [d for d in rows(middle / DEALS) if d["Deal Stage"] in CLOSED]
+    true_closes = later = 0
     for deal in closed:
         stage = deal["Deal Stage"]
         assert deal["Close Date"] == deal[entered(stage)], deal["Record ID"]
         change = next(c for c in by_deal[deal["Record ID"]] if c["crm_stage"] == stage)
-        late += change["recorded_entered_at"] > change["true_entered_at"]
-    assert late / len(closed) > 0.9
+        if change["true_entered_at"]:
+            assert change["recorded_entered_at"] >= change["true_entered_at"]
+            true_closes += 1
+            later += change["recorded_entered_at"] > change["true_entered_at"]
+    # A close keeps its true minute only if entered by hand less than a minute after it.
+    p = resolved("middle")["recording"]
+    within_a_minute = 1 - math.exp(-math.log(2) / p["lag_days_median"] / 1440)
+    assert_rate(later, true_closes, 1 - (1 - p["bulk_update_share"]) * within_a_minute)
