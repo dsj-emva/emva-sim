@@ -390,28 +390,28 @@ low = 0.35
 middle = 0.45
 high = 0.55
 confidence = "estimated"
-source = "the user, from a client they have worked with (2026-10-01): under 55%; research said 55-80% (cycle-and-deal-size.md §3a)"
+source = "the user's funnel (2026-10-01): of 100 enquiries 99 contacted, 45 reply, 43 plan, 42 get an itinerary, 10-11 pay a deposit"
 
 [process.transition.qualified]
-low = 0.2
-middle = 0.3
-high = 0.45
+low = 0.9
+middle = 0.95
+high = 0.98
 confidence = "estimated"
-source = "the user, from a client they have worked with (2026-10-01): under 65%, closer to 30%"
+source = "the user's funnel (2026-10-01): of 100 enquiries 99 contacted, 45 reply, 43 plan, 42 get an itinerary, 10-11 pay a deposit"
 
 [process.transition.proposal]
-low = 0.4
-middle = 0.5
-high = 0.6
+low = 0.93
+middle = 0.97
+high = 0.99
 confidence = "estimated"
-source = "the user, from a client they have worked with (2026-10-01): about 50%"
+source = "the user's funnel (2026-10-01): of 100 enquiries 99 contacted, 45 reply, 43 plan, 42 get an itinerary, 10-11 pay a deposit"
 
 [process.transition.won]
 low = 0.2
 middle = 0.25
 high = 0.3
 confidence = "estimated"
-source = "the user, from a client they have worked with (2026-10-01): 20-30% of itineraries become a deposit"
+source = "the user's funnel (2026-10-01): of 100 enquiries 99 contacted, 45 reply, 43 plan, 42 get an itinerary, 10-11 pay a deposit"
 
 # Days from Submitted to Won, median of won leads; lognormal.
 [process.days_to_won_median]
