@@ -34,7 +34,8 @@ def folder_name(setting: str) -> str:
     return setting.replace("@", ".")
 
 
-def write_all(profile_path: Path, out: Path, history: History = DEFAULT_HISTORY) -> None:
+def write_all(profile_path: Path, out: Path, history: History = DEFAULT_HISTORY) -> list[dict]:
+    """Write every dataset of the sweep and the index, and return the index's datasets."""
     profile_path = Path(profile_path)
     raw = profile.load(profile_path)
     named = {"file": profile_path.name, "sha256": _sha256(profile_path)}
@@ -59,6 +60,7 @@ def write_all(profile_path: Path, out: Path, history: History = DEFAULT_HISTORY)
         Path(out) / "index.json",
         {"data_source": DATA_SOURCE, "profile": named, "base_seed": BASE_SEED, "datasets": listed},
     )
+    return listed
 
 
 def _write_json(path: Path, content: dict) -> None:
