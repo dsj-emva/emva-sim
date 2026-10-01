@@ -17,7 +17,8 @@ from emva_sim import dataset, profile
 
 PROFILE = Path(__file__).parent.parent / "profiles" / "planned-hospitality.toml"
 HISTORY = dataset.History(start=date(2024, 1, 1), end=date(2024, 6, 30), export=date(2025, 12, 31))
-DEALS = "export/deals-and-contacts-only/hubspot-crm-exports-safari-enquiries-2025-12-31.csv"
+DEALS_ON = "export/deals-and-contacts-only/hubspot-crm-exports-safari-enquiries-%Y-%m-%d.csv"
+DEALS = HISTORY.export.strftime(DEALS_ON)
 TRUTH = "hidden-truth/hidden-truth.csv"
 STAGES = "hidden-truth/stage-history.csv"
 EXPORT = "2025-12-31 00:00"
@@ -312,6 +313,23 @@ def test_every_lost_lead_and_no_other_has_a_true_loss_reason_drawn_from_the_prof
         ("never_a_real_buyer", 0.15),
     ]:
         assert reasons[reason] / reasons.total() == pytest.approx(share / 1.15, abs=0.03)
+
+
+def test_a_change_recorded_after_the_export_date_is_not_shown_though_it_happened_before(
+    tmp_path,
+):
+    soon = dataset.History(start=date(2024, 1, 1), end=date(2024, 3, 31), export=date(2024, 4, 3))
+    folder = dataset.generate(PROFILE, "middle", seed=1, out=tmp_path, history=soon)
+    deals = {d["Record ID"]: d for d in rows(folder / soon.export.strftime(DEALS_ON))}
+    late = [
+        c
+        for c in rows(folder / STAGES)
+        if c["true_entered_at"] and c["true_entered_at"] < "2024-04-03" <= c["recorded_entered_at"]
+    ]
+    assert late
+    for change in late:
+        shown = deals[change["deal_record_id"]][entered(change["crm_stage"])]
+        assert shown < "2024-04-03", change
 
 
 def test_close_date_follows_the_recorded_close_not_the_true_one(middle):
