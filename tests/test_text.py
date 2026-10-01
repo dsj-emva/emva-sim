@@ -11,7 +11,7 @@ from datetime import date
 
 import pytest
 import separability
-from conftest import PROFILE, REAL_PROFILE, STAGES, assert_rate, ends, kinds, number, rows
+from conftest import REAL_PROFILE, STAGES, assert_rate, ends, kinds, number, rows
 
 from emva_sim import dataset, datasets, phrases
 from emva_sim.hidden_truth import CALL_NOTES, CLOSED_LOST_REASON, NOTE_BODY
@@ -74,15 +74,17 @@ def test_a_phrase_with_no_cached_variations_stops_generation_naming_the_command(
     assert not (tmp_path / "sweep").exists()
 
 
-def test_one_missing_variation_is_enough_to_stop_generation(tmp_path):
+def test_one_missing_variation_is_enough_to_stop_generation(tmp_path, test_profile):
     folder = tmp_path / "p"
-    shutil.copytree(PROFILE.parent, folder)
+    shutil.copytree(test_profile.parent, folder)
     cache_path = folder / "planned-hospitality.variations.json"
     cache = phrases.read_cache(cache_path, "echo")
     cache["phrases"].pop(sorted(cache["phrases"])[0])
     phrases.write_cache(cache_path, cache)
     with pytest.raises(MissingVariations, match="1 phrases"):
-        dataset.generate(folder / PROFILE.name, "middle", seed=1, out=tmp_path, history=HISTORY)
+        dataset.generate(
+            folder / test_profile.name, "middle", seed=1, out=tmp_path, history=HISTORY
+        )
 
 
 @pytest.mark.parametrize("setting", ["middle", "mess.bot_or_spam@high"])

@@ -24,6 +24,18 @@ notes = "a note a safari operator's sales consultant types into the CRM about a 
 loss_reason = "the reason a safari operator's sales consultant types when closing a lost deal in the CRM: a few words"
 spam = "a spam or bot submission in a web form's message box"
 
+# What each group carrying a planted signal says. vary-phrases asks the model, for every variation
+# of their phrases, whether it says this, and refuses a variation it says does not.
+[meaning]
+"message.en.commitment" = "the writer has already made a decision to take this trip: something is booked, approved, agreed, paid or fixed"
+"message.fr.commitment" = "the writer has already made a decision to take this trip: something is booked, approved, agreed, paid or fixed"
+"message.en.undecided" = "the writer has not yet decided, booked or committed to taking this trip"
+"message.fr.undecided" = "the writer has not yet decided, booked or committed to taking this trip"
+"notes.discovery.real_buyer" = "the lead is a serious buyer who means to book this trip"
+"notes.follow_up.real_buyer" = "the lead is a serious buyer who means to book this trip"
+"notes.discovery.not_real_buyer" = "the lead is not a serious buyer, or shows no real intent to book this trip"
+"notes.follow_up.not_real_buyer" = "the lead is not a serious buyer, or shows no real intent to book this trip"
+
 # ---------------------------------------------------------------------------------------------------------
 # Enquiry messages in English.
 # ---------------------------------------------------------------------------------------------------------

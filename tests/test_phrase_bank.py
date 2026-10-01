@@ -5,7 +5,6 @@ written it (`make vary-phrases`), must hold a valid reply for every phrase. Unti
 that read the committed cache say so and skip; every other test reads the echoed test cache.
 """
 
-import json
 import re
 from functools import cache
 
@@ -14,7 +13,7 @@ import separability
 from conftest import REAL_PROFILE, raw
 from test_text import HISTORY, engaged_notes, written_messages
 
-from emva_sim import dataset, messages, phrases, vary
+from emva_sim import dataset, messages, phrases
 
 LANGUAGES = ["en", "fr"]
 # Every slot the generator fills (messages.Writer.values, and bots' links).
@@ -46,15 +45,14 @@ def bank():
 
 def groups(prefix):
     found = {}
-    for pid, text in phrases.bank_phrases(bank()):
-        group = pid.split("#")[0]
-        if group.startswith(prefix):
-            found.setdefault(group.removeprefix(prefix), []).append(text)
+    for phrase in phrases.bank_phrases(bank()):
+        if phrase.group.startswith(prefix):
+            found.setdefault(phrase.group.removeprefix(prefix), []).append(phrase.text)
     return found
 
 
 def test_every_slot_a_phrase_names_is_one_the_generator_fills():
-    named = {slot for _, text in phrases.bank_phrases(bank()) for slot in phrases.slots(text)}
+    named = {slot for p in phrases.bank_phrases(bank()) for slot in phrases.slots(p.text)}
     assert named <= SLOTS
 
 
@@ -112,16 +110,33 @@ def committed():
 
 
 def missing():
+    """The bank's phrases without a valid entry in the committed cache."""
+    cached, text = committed()["phrases"], raw()["text"]
+    unusable = []
+    for phrase in phrases.bank_phrases(bank()):
+        try:
+            entry = cached.get(phrases.key(phrase.text))
+            n = text["variations_per_phrase"]
+            phrases.check_entry(bank(), phrase, entry, text["model"], n)
+        except phrases.InvalidVariations:
+            unusable.append(phrase.id)
+    return unusable
+
+
+def test_every_entry_in_the_committed_cache_is_valid_and_the_profiles_models():
     cached = committed()["phrases"]
-    return [pid for pid, text in phrases.bank_phrases(bank()) if phrases.key(text) not in cached]
+    unusable = set(missing())
+    in_cache = [p for p in phrases.bank_phrases(bank()) if phrases.key(p.text) in cached]
+    assert not [p.id for p in in_cache if p.id in unusable]
 
 
-def test_the_committed_cache_holds_only_valid_replies_of_the_profiles_model():
-    n = raw()["text"]["variations_per_phrase"]
-    for entry in committed()["phrases"].values():
-        assert entry["model"] == raw()["text"]["model"]
-        reply = json.dumps({"variations": entry["variations"]})
-        assert vary.validate(entry["phrase"], reply, n) == entry["variations"]
+def test_every_group_carrying_a_signal_says_what_it_carries():
+    meanings = bank()["meaning"]
+    for language in LANGUAGES:
+        assert {f"message.{language}.commitment", f"message.{language}.undecided"} <= set(meanings)
+    for note in ("discovery", "follow_up"):
+        for side in ("real_buyer", "not_real_buyer"):
+            assert f"notes.{note}.{side}" in meanings
 
 
 needs_cache = pytest.mark.skipif(

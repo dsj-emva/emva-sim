@@ -9,7 +9,6 @@ import statistics
 from datetime import date, datetime
 
 import pytest
-from conftest import PROFILE
 
 from emva_sim import dataset
 
@@ -28,9 +27,9 @@ def moment(text):
 
 
 @pytest.fixture(scope="module")
-def leads(tmp_path_factory):
+def leads(tmp_path_factory, test_profile):
     folder = dataset.generate(
-        PROFILE, "middle", seed=1, out=tmp_path_factory.mktemp("o"), history=HISTORY
+        test_profile, "middle", seed=1, out=tmp_path_factory.mktemp("o"), history=HISTORY
     )
     created = {d["Record ID"]: moment(d["Create Date"]) for d in rows(folder / DEALS)}
     truth = rows(folder / "hidden-truth" / "hidden-truth.csv")
