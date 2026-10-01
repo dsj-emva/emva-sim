@@ -127,6 +127,10 @@ held_at_middle = [
   "volume.traffic_source.paid_social",
   "volume.traffic_source.referral",
   "form.answers.countries_named",
+  "form.answers.enquired_before",
+  "form.answers.dates_fixed",
+  "form.answers.dates_flexible",
+  "form.answers.newsletter_opt_in",
   "form.answers.month_when_no_exact_dates",
   "form.answers.year_when_no_month",
   "form.party_size.family_children",
@@ -143,9 +147,22 @@ held_at_middle = [
 [season]
 peak_months = [7, 8, 9, 10]
 
-# Source markets: group A is the US, group B the UK and Europe. Each names the seasonality it follows.
-[markets]
-groups = { a = { countries = ["United States"], seasonality = "us" }, b = { countries = ["United Kingdom", "France"], seasonality = "uk_europe" } }
+# Source markets: group A is the US, group B the UK and Europe. Each names the seasonality it follows and
+# its countries, each country with the phone formats its leads write ("#" is any digit). The formats use
+# the ranges regulators reserve for fiction (Ofcom 07700 900xxx, US 555-01xx, ARCEP 06 39 98 xx xx), so no
+# number belongs to anyone.
+[markets.groups.a]
+seasonality = "us"
+countries = [
+  { name = "United States", phones = ["+1 (212) 555-01##", "+1 (312) 555-01##", "+1 (415) 555-01##", "+1 (617) 555-01##", "+1 (303) 555-01##"] },
+]
+
+[markets.groups.b]
+seasonality = "uk_europe"
+countries = [
+  { name = "United Kingdom", phones = ["+44 7700 900###"] },
+  { name = "France", phones = ["+33 6 39 98 ## ##"] },
+]
 
 [markets.group_a_share]
 low = 0.30
@@ -448,6 +465,37 @@ high = 0.06
 confidence = "estimated"
 source = "the user, from a client they have worked with (2026-10-01): small, since past clients usually go straight to their existing contact, not the form"
 
+# Of the other leads, those who answer "I have enquired before"; the rest answer "No".
+[form.answers.enquired_before]
+low = 0.03
+middle = 0.08
+high = 0.15
+confidence = "guessed"
+source = "none; added for the generator (issue #5), awaiting the user's review"
+
+# "Are your dates flexible?": Fixed, Flexible, and "Not sure" for the rest.
+[form.answers.dates_fixed]
+low = 0.20
+middle = 0.30
+high = 0.40
+confidence = "guessed"
+source = "none; added for the generator (issue #5), awaiting the user's review"
+
+[form.answers.dates_flexible]
+low = 0.35
+middle = 0.50
+high = 0.55
+confidence = "guessed"
+source = "none; added for the generator (issue #5), awaiting the user's review"
+
+# Leads who tick "Sign me up for the newsletter".
+[form.answers.newsletter_opt_in]
+low = 0.20
+middle = 0.40
+high = 0.60
+confidence = "guessed"
+source = "none; added for the generator (issue #5), awaiting the user's review"
+
 [form.answers.mentions_occasion]
 low = 0.10
 middle = 0.17
@@ -509,11 +557,16 @@ high = 0.14
 confidence = "estimated"
 source = "cycle-and-deal-size.md §2a: Go2Africa State of Safari 2025 (middle); ends estimated"
 
-# Party sizes (means). A solo party is 1 adult and a couple 2. A family is 2 adults and 1 or more children
-# (1 plus a Poisson number); a friends party is 2 or more adults (2 plus a Poisson number). Children come only
+# Party sizes. Adults per party type (a friends party has at least its number, plus a Poisson number up to
+# the mean friends_adults below); a family has 1 or more children (1 plus a Poisson number, mean
+# family_children), each aged a whole number of years drawn evenly from child_ages. Children come only
 # with families, so form.party_mix.family is the share of leads with children (the user's ruling,
 # 2026-10-01, replacing form.answers.includes_children). Added for the generator (issue #5), awaiting the
 # user's review.
+[form.party_size]
+adults = { solo = 1, couple = 2, family = 2, friends = 2 }
+child_ages = { min = 0, max = 17 }
+
 [form.party_size.family_children]
 low = 1.5
 middle = 2.0
@@ -840,6 +893,11 @@ deal_properties = ["Where would you like to go?", "When would you like to travel
 # The sales team, as HubSpot exports owners (made-up names). Added for the generator (issue #5).
 [team]
 owners = ["Amara Okafor", "James Whitfield", "Sofia Marchetti", "Tom Brennan"]
+
+# Titles leads give, as weights by the gender of their made-up first name. Guessed, and kept as plain values
+# rather than ranges because Title is a prohibited input that changes nothing in the Hidden truth.
+[people]
+titles = { female = { mrs = 0.35, ms = 0.35, miss = 0.15, dr = 0.10, mx = 0.05 }, male = { mr = 0.85, dr = 0.10, mx = 0.05 } }
 
 # ---------------------------------------------------------------------------------------------------------
 # How the sales team records stages.

@@ -102,7 +102,6 @@ def _heard_about(rng: Random, p: dict, lead: Lead) -> str:
 
 def _answer(rng: Random, p: dict, lead: Lead, person: people.Person, form_field: dict) -> str:
     answers = p["form"]["answers"]
-    options = [o["label"] for o in form_field.get("options", [])]
     match form_field["role"]:
         case "title":
             return form.label(p, "title", person.title)
@@ -121,9 +120,11 @@ def _answer(rng: Random, p: dict, lead: Lead, person: people.Person, form_field:
         case "travel_date":
             return _travel_answer(rng, p, lead.travel_at.date())
         case "dates_flexible":
-            return rng.choice(options)
+            shares = {"fixed": answers["dates_fixed"], "flexible": answers["dates_flexible"]}
+            key = _pick(rng, shares, "")
+            return form.label(p, "dates_flexible", key) if key else form.unsure(p, "dates_flexible")
         case "newsletter":
-            return rng.choice(["Yes", "No"])
+            return "Yes" if rng.random() < answers["newsletter_opt_in"] else "No"
         case "nights":
             return form.band(p, "nights", lead.nights)
         case "adults":
@@ -131,9 +132,9 @@ def _answer(rng: Random, p: dict, lead: Lead, person: people.Person, form_field:
         case "children":
             return str(lead.children) if lead.children else ""
         case "children_ages":
-            return ", ".join(
-                str(age) for age in sorted(rng.randrange(18) for _ in range(lead.children))
-            )
+            ages = p["form"]["party_size"]["child_ages"]
+            drawn = sorted(rng.randint(ages["min"], ages["max"]) for _ in range(lead.children))
+            return ", ".join(str(age) for age in drawn)
         case "style":
             return form.label(p, "style", lead.style)
         case "budget_per_person":
@@ -141,7 +142,10 @@ def _answer(rng: Random, p: dict, lead: Lead, person: people.Person, form_field:
             per_person = lead.price_per_person_per_night * lead.nights
             return form.band(p, "budget_per_person", per_person) if stated else ""
         case "travelled_before":
-            return form.label(p, "travelled_before", "yes" if lead.repeat_client else "no")
+            if lead.repeat_client:
+                return form.label(p, "travelled_before", "yes")
+            enquired = rng.random() < answers["enquired_before"]
+            return form.label(p, "travelled_before", "enquired_before" if enquired else "no")
         case "heard_about":
             return _heard_about(rng, p, lead)
         case "message":
@@ -157,15 +161,17 @@ def _style(rng: Random, p: dict) -> str:
 
 
 def _party(rng: Random, p: dict) -> tuple[int, int]:
-    size = p["form"]["party_size"]
-    match _pick(rng, p["form"]["party_mix"], "solo"):
-        case "couple":
-            return 2, 0
+    """Adults and children; the party type left out of the mix is the rest."""
+    size, mix = p["form"]["party_size"], p["form"]["party_mix"]
+    adults = size["adults"]
+    party = _pick(rng, mix, next(k for k in adults if k not in mix))
+    match party:
         case "family":
-            return 2, 1 + draws.poisson(rng, size["family_children"] - 1)
+            return adults[party], 1 + draws.poisson(rng, size["family_children"] - 1)
         case "friends":
-            return 2 + draws.poisson(rng, size["friends_adults"] - 2), 0
-    return 1, 0
+            extra = draws.poisson(rng, size["friends_adults"] - adults[party])
+            return adults[party] + extra, 0
+    return adults[party], 0
 
 
 def _seasonal_price(p: dict, style: str, travel_month: int) -> float:
@@ -200,7 +206,7 @@ def _lead(rng: Random, p: dict, submitted_at: datetime, group: str) -> Lead:
     lead = Lead(
         submitted_at=submitted_at,
         market_group=group,
-        country=country,
+        country=country["name"],
         traffic_source=traffic_source,
         repeat_client=repeat_client,
         style=style,
@@ -211,7 +217,7 @@ def _lead(rng: Random, p: dict, submitted_at: datetime, group: str) -> Lead:
         cycle_days=cycle_days,
         travel_at=travel_at,
     )
-    person = people.draw(rng, country)
+    person = people.draw(rng, p["people"]["titles"], country["phones"])
     answers = {f["label"]: _answer(rng, p, lead, person, f) for f in p["form"]["fields"]}
     return replace(lead, answers=answers)
 

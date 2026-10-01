@@ -1,7 +1,8 @@
-"""Made-up people for synthetic leads: names, titles, emails and phone numbers of no real person.
+"""Made-up people for synthetic leads: names, emails and phone numbers of no real person.
 
-Emails use the domains reserved for examples (RFC 2606). Phone numbers come from the ranges
-regulators reserve for fiction: Ofcom's 07700 900xxx, the US 555-01xx and ARCEP's 06 39 98 xx xx.
+The name lists are generic synthetic names, drawn independently of the market, so they are not an
+industry fact and carry no planted signal. Emails use the domains reserved for examples (RFC 2606);
+titles and phone formats come from the profile.
 """
 
 from dataclasses import dataclass
@@ -87,12 +88,7 @@ LAST_NAMES = [
     "Webb",
     "Young",
 ]
-TITLES = {
-    "female": ["mrs", "mrs", "ms", "ms", "miss", "dr"],
-    "male": ["mr", "mr", "mr", "mr", "dr"],
-}
 EMAIL_DOMAINS = ["example.com", "example.org", "example.net"]
-US_AREA_CODES = ["212", "312", "415", "617", "303"]
 
 
 @dataclass(frozen=True)
@@ -104,19 +100,16 @@ class Person:
     phone: str
 
 
-def _phone(rng: Random, country: str) -> str:
-    if country == "United Kingdom":
-        return f"+44 7700 900{rng.randrange(1000):03d}"
-    if country == "United States":
-        return f"+1 ({rng.choice(US_AREA_CODES)}) 555-01{rng.randrange(100):02d}"
-    if country == "France":
-        return f"+33 6 39 98 {rng.randrange(100):02d} {rng.randrange(100):02d}"
-    raise ValueError(f"no fictional phone range for {country}")
+def _phone(rng: Random, formats: list[str]) -> str:
+    return "".join(str(rng.randrange(10)) if c == "#" else c for c in rng.choice(formats))
 
 
-def draw(rng: Random, country: str) -> Person:
-    gender = rng.choice(["female", "male"])
+def draw(rng: Random, titles: dict[str, dict[str, float]], phone_formats: list[str]) -> Person:
+    """A made-up person; titles are weights by gender, phone formats use "#" for any digit."""
+    gender = rng.choice(sorted(titles))
     first = rng.choice(FIRST_NAMES[gender])
     last = rng.choice(LAST_NAMES)
     email = f"{first}.{last}{rng.randrange(100)}@{rng.choice(EMAIL_DOMAINS)}".lower()
-    return Person(rng.choice(TITLES[gender]), first, last, email, _phone(rng, country))
+    weights = titles[gender]
+    title = rng.choices(list(weights), list(weights.values()))[0]
+    return Person(title, first, last, email, _phone(rng, phone_formats))
