@@ -10,11 +10,13 @@ from dataclasses import dataclass, replace
 from datetime import date, datetime, time, timedelta
 from random import Random
 
-from emva_sim import draws
+from emva_sim import draws, ladder
 from emva_sim.process import ContactAttempt, TruePath
 
 MINUTE = timedelta(minutes=1)
 UNKNOWN = "unknown"
+UNREACHED = "could_not_reach_them"
+NEVER_A_BUYER = "never_a_real_buyer"
 
 
 def closed_stage(p: dict, closed: str) -> str:
@@ -103,7 +105,7 @@ class Recording:
         if self.rng.random() < self.p["recording"]["backward_move"]:
             changes = self._move_back(changes)
         no_amount = path.won and self.rng.random() < self.p["recording"]["won_without_amount"]
-        true_reason = self._true_loss_reason() if events[-1][0] == self.lost else ""
+        true_reason = self._true_loss_reason(path) if events[-1][0] == self.lost else ""
         recorded_lost = any(c.stage == self.lost and c.recorded_at for c in changes)
         reason = self._recorded_loss_reason(true_reason) if recorded_lost else ""
         calls = [a for a in path.attempts if a.channel == "call" and a.logged]
@@ -122,14 +124,17 @@ class Recording:
             reason = self._recorded_loss_reason(UNKNOWN)
         return Recorded(changes, [], reason, "", [])
 
-    def _true_loss_reason(self) -> str:
-        """What truly made a lost lead not win, drawn from the profile's shares.
+    def _true_loss_reason(self, path: TruePath) -> str:
+        """What truly made a lost lead not win, following where it was lost.
 
-        "unknown" takes what the shares leave; shares summing over one are scaled to sum to one.
+        A Lead lost before Engaged could not be reached (the profile's share) or was never a
+        real buyer; one lost later draws from the other reasons, as weights.
         """
-        shares = {key: self.reasons[key] for key in self.meanings if key != UNKNOWN}
-        rest = max(0.0, 1 - sum(shares.values()))
-        return self.rng.choices([*shares, UNKNOWN], [*shares.values(), rest])[0]
+        if ladder.ENGAGED not in path.stage_times:
+            unreached = self.rng.random() < self.reasons[UNREACHED]
+            return UNREACHED if unreached else NEVER_A_BUYER
+        later = [m for m in self.meanings if m != UNREACHED]
+        return self.rng.choices(later, [self.reasons[m] for m in later])[0]
 
     def _recorded_loss_reason(self, true_reason: str) -> str:
         """The Closed Lost Reason the team picks: blank, the true one, or another one."""

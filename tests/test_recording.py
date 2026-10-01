@@ -255,19 +255,41 @@ def test_the_profiles_share_of_recorded_reasons_differ_from_the_true_one(generat
     assert_rate(differs, len(given), number(setting, "loss.recorded_differs_from_truth"))
 
 
-def test_every_lost_lead_and_no_other_has_a_true_loss_reason_drawn_from_the_profile(middle):
+def test_every_lost_lead_and_no_other_has_a_true_loss_reason(middle):
     lost = {
         c["deal_record_id"]
         for c in rows(middle / STAGES)
         if c["crm_stage"] == "Lost" and c["true_entered_at"]
     }
-    truth = rows(middle / TRUTH)
-    for row in truth:
+    for row in rows(middle / TRUTH):
         assert bool(row["true_loss_reason"]) == (row["deal_record_id"] in lost), row
-    reasons = Counter(r["true_loss_reason"] for r in truth if r["true_loss_reason"])
-    weights = {
-        m: number("middle", f"loss.reasons.{m}") for m in set(MEANINGS.values()) - {"unknown"}
-    }
+
+
+def true_reasons(folder, lost_before_engaged):
+    """The true loss reasons of the Leads lost before Engaged, or of those lost at it or later."""
+    return Counter(
+        r["true_loss_reason"]
+        for r in rows(folder / TRUTH)
+        if r["true_loss_reason"]
+        and (r["reached_stage"] == "Contact attempted") == lost_before_engaged
+    )
+
+
+@pytest.mark.parametrize("setting", ends("loss.reasons.could_not_reach_them"))
+def test_a_lead_lost_before_engaged_truly_could_not_be_reached_or_was_never_a_buyer(
+    generated, setting
+):
+    reasons = true_reasons(generated(setting), lost_before_engaged=True)
+    assert set(reasons) == {"could_not_reach_them", "never_a_real_buyer"}
+    share = number(setting, "loss.reasons.could_not_reach_them")
+    assert_rate(reasons["could_not_reach_them"], reasons.total(), share)
+
+
+def test_a_lead_lost_later_has_a_true_reason_by_the_profiles_weights(middle):
+    reasons = true_reasons(middle, lost_before_engaged=False)
+    later = set(MEANINGS.values()) - {"could_not_reach_them"}
+    assert set(reasons) == later
+    weights = {m: number("middle", f"loss.reasons.{m}") for m in later}
     for reason, weight in weights.items():
         assert_rate(reasons[reason], reasons.total(), weight / sum(weights.values()))
 

@@ -140,6 +140,7 @@ held_at_middle = [
   "process.lost_after_provisional_hold",
   "mess.duplicate_days_later",
   "mess.duplicate_or_bot_moved_to_lost",
+  "loss.reasons.unknown",
 ]
 
 # ---------------------------------------------------------------------------------------------------------
@@ -1066,7 +1067,10 @@ high = 0.60
 confidence = "guessed"
 source = "notes-and-loss-reasons.md §5: HVS on misuse of 'lost to competitor'; Clozd (vendor, unsourced 60%)"
 
-# Shares among lost leads with a reason, by what the Hidden truth says happened ("unknown" is the rest).
+# What the Hidden truth says made a lost lead not win follows where it was lost (the user's ruling,
+# 2026-10-01): a Lead lost before Engaged truly could not be reached (could_not_reach_them, a share) or
+# was never a real buyer (the rest); a Lead lost at Engaged or later draws from price, timing,
+# never_a_real_buyer and unknown, as weights normalised to sum to one. The team records one of these values.
 [loss.reasons]
 recorded = [
   { recorded = "No response", meaning = "could_not_reach_them" },
@@ -1082,12 +1086,14 @@ recorded = [
 ]
 source = "notes-and-loss-reasons.md §3-4: Event Temple lost reasons, HVS, SafariBookings"
 
+# Among Leads lost before Engaged, the share whose truth is could not reach them; the rest were never
+# a real buyer.
 [loss.reasons.could_not_reach_them]
 low = 0.20
 middle = 0.35
 high = 0.50
 confidence = "estimated"
-source = "notes-and-loss-reasons.md: SafariBookings, 1-2 of 4-5 non-bookings never reply (search extract only)"
+source = "notes-and-loss-reasons.md: SafariBookings, 1-2 of 4-5 non-bookings never reply (search extract only); kept as the share among Leads lost before Engaged (the user's ruling, 2026-10-01)"
 
 [loss.reasons.price]
 low = 0.25
@@ -1109,6 +1115,13 @@ middle = 0.15
 high = 0.30
 confidence = "guessed"
 source = "none (notes-and-loss-reasons.md)"
+
+[loss.reasons.unknown]
+low = 0.05
+middle = 0.15
+high = 0.30
+confidence = "guessed"
+source = "notes-and-loss-reasons.md: HVS, 'other' often the largest value; added for the generator (issue #8), awaiting the user's review"
 
 # ---------------------------------------------------------------------------------------------------------
 # Planted effects. Sizes are odds ratios on winning, against the named reference, unless stated. The base
