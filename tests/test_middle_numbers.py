@@ -44,12 +44,12 @@ def reached(leads, stage):
     return sum(
         LADDER.index(r["reached_stage"]) >= LADDER.index(stage)
         for r in leads
-        if r["contacted"] == "yes"
+        if r["neglected_lead"] == "no"
     )
 
 
 def test_about_one_lead_in_a_hundred_is_neglected(leads):
-    share = sum(r["contacted"] == "no" for r in leads) / len(leads)
+    share = sum(r["neglected_lead"] == "yes" for r in leads) / len(leads)
     assert share == pytest.approx(0.01, abs=0.006)
 
 
@@ -82,7 +82,7 @@ def test_first_contact_attempts_follow_the_profiles_delay(leads):
     hours = [
         (moment(r["first_contact_attempt_at"]) - r["created"]).total_seconds() / 3600
         for r in leads
-        if r["contacted"] == "yes"
+        if r["neglected_lead"] == "no"
     ]
     assert statistics.median(hours) == pytest.approx(4, abs=1.5)
     assert sum(h > 24 for h in hours) / len(hours) == pytest.approx(0.30, abs=0.03)

@@ -20,7 +20,7 @@ LADDER_AFTER_CONTACT = ("Engaged", "Qualified", "Proposal", "Won")
 
 
 @dataclass(frozen=True)
-class Attempt:
+class ContactAttempt:
     at: datetime
     channel: str
     connected: bool
@@ -31,11 +31,11 @@ class TruePath:
     owner: str
     win_propensity: float
     effects: dict[str, float]
-    contacted: bool
+    neglected_lead: bool
     reached_stage: str
     won: bool
     stage_times: dict[str, datetime]
-    attempts: list[Attempt] = field(default_factory=list)
+    attempts: list[ContactAttempt] = field(default_factory=list)
     quotes: list[tuple[datetime, float]] = field(default_factory=list)
     provisional_hold_at: datetime | None = None
     travelled_at: datetime | None = None
@@ -103,7 +103,7 @@ class Process:
                 owner=owner,
                 win_propensity=propensity,
                 effects=effects,
-                contacted=False,
+                neglected_lead=True,
                 reached_stage="Submitted",
                 won=False,
                 stage_times=times,
@@ -130,7 +130,7 @@ class Process:
         engaged_at = at.get("Engaged")
         attempts = self._attempts(rng, at["Contact attempted"], engaged_at or at["Lost"])
         if engaged_at and rng.random() >= p["handling"]["first_attempt_by_email"]:
-            attempts.append(Attempt(engaged_at, "call", True))
+            attempts.append(ContactAttempt(engaged_at, "call", True))
 
         quotes, hold, travelled, cancelled = [], None, None, None
         if "Proposal" in at:
@@ -148,7 +148,7 @@ class Process:
             owner=owner,
             win_propensity=propensity,
             effects=effects,
-            contacted=True,
+            neglected_lead=False,
             reached_stage=reached,
             won=won,
             stage_times=times,
@@ -159,12 +159,14 @@ class Process:
             cancelled_at=cancelled,
         )
 
-    def _attempts(self, rng: Random, first: datetime, until: datetime) -> list[Attempt]:
+    def _attempts(self, rng: Random, first: datetime, until: datetime) -> list[ContactAttempt]:
         handling = self.p["handling"]
         count = 1 + draws.poisson(rng, handling["attempts_before_giving_up"] - 1)
         times = [first, *_between(rng, count - 1, first, until)]
         by_email = handling["first_attempt_by_email"]
-        return [Attempt(t, "email" if rng.random() < by_email else "call", False) for t in times]
+        return [
+            ContactAttempt(t, "email" if rng.random() < by_email else "call", False) for t in times
+        ]
 
     def _quotes(
         self, rng: Random, lead: Lead, first: datetime, end: datetime

@@ -244,7 +244,7 @@ def test_the_hidden_truth_has_one_row_per_lead_keyed_by_both_record_ids(middle):
         "contact_record_id",
         "market_group",
         "win_propensity",
-        "contacted",
+        "neglected_lead",
         "first_contact_attempt_at",
         "reached_stage",
         "outcome",
