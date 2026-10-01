@@ -3,7 +3,8 @@
 hidden-truth.csv has one row per deal; stage-history.csv one row per CRM stage change, with when
 it truly happened and when the team recorded it; text.csv one row per piece of text in the exports
 (each deal's message, each call's notes, each note, each Closed Lost Reason), with the phrases it
-was written from and what was planted in it. Read only when grading Emva.
+was written from, what was planted in it, and the sentence carrying a planted text signal as it was
+written before any abbreviation or typo. Read only when grading Emva.
 """
 
 import csv
@@ -85,6 +86,7 @@ TEXT_COLUMNS = [
     "fact_differs_from_fields",
     "abbreviated",
     "typo",
+    "signal",
 ]
 MESSAGE, CALL_NOTES, NOTE_BODY, CLOSED_LOST_REASON = (
     "message",
@@ -180,6 +182,7 @@ def _text_row(deal_id: int, kind: str, activity: str, text: Text) -> list[str]:
         differs,
         _flag(text.abbreviated),
         _flag(text.typo),
+        text.signal,
     ]
 
 

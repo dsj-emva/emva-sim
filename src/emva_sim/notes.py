@@ -148,8 +148,8 @@ class Notes:
     def _note(self, groups: list[str], lead: "_Noted", signal: int | None = None) -> Text:
         """A note of one phrase from each group the Lead fits, abbreviated and with a typo at
         their shares; signal is the place of the phrase that carries notes_real_buyer. A note
-        the team does not abbreviate uses no shorthand at all; one it does, uses shorthand where
-        its phrase has an expression to shorten or is written in shorthand."""
+        the team does not abbreviate uses no phrase written in shorthand and shortens nothing; one
+        it does, shortens every expression the team abbreviates."""
         abbreviates = self.rng.random() < self.settings["with_abbreviation"]
         picked = []
         for group in groups:
@@ -169,7 +169,6 @@ class Notes:
         text = " ".join(t for _, t in picked)
         if abbreviates:
             text = self.abbreviated(text)
-        abbreviated = bool(self.shorthand.search(text))
         typo = False
         if self.rng.random() < self.settings["with_typo"]:
             slipped = self._typo(text)
@@ -178,7 +177,7 @@ class Notes:
             text,
             tuple(pid for pid, _ in picked),
             ENGLISH,
-            abbreviated=abbreviated,
+            abbreviated=abbreviates,
             typo=typo,
             signal=picked[signal][1] if signal is not None else "",
         )

@@ -4,6 +4,7 @@ Reasons and bots' spam, written from the phrase bank and the echoed test cache (
 One fixed seed, six months of leads, exported long after the last one so their notes are in.
 """
 
+import difflib
 import math
 import re
 import shutil
@@ -11,11 +12,23 @@ from collections import defaultdict
 from datetime import date
 from random import Random
 
+import odds
 import pytest
 import separability
-from conftest import REAL_PROFILE, STAGES, assert_rate, ends, kinds, number, raw, resolved, rows
+from conftest import (
+    REAL_PROFILE,
+    STAGES,
+    STANDARD_ERRORS,
+    assert_rate,
+    ends,
+    kinds,
+    number,
+    raw,
+    resolved,
+    rows,
+)
 
-from emva_sim import dataset, datasets, messages, phrases
+from emva_sim import dataset, datasets, messages, notes, phrases
 from emva_sim.hidden_truth import CALL_NOTES, CLOSED_LOST_REASON, NOTE_BODY
 from emva_sim.hidden_truth import MESSAGE as MESSAGE_TEXT
 from emva_sim.intake import RowKind
@@ -341,3 +354,71 @@ def test_no_message_or_note_says_what_the_leads_fields_contradict(generated, set
                 assert requires[pid] <= known, (pid, sorted(requires[pid] - known), t)
                 checked += bool(requires[pid])
     assert checked > 50
+
+
+# The high ends of the text effects, and every range at its high end.
+HIGH_ENDS = [*(f"{name}@high" for name in TEXT_EFFECTS), "all-high"]
+
+
+def exported_notes(folder):
+    """Each Sales note's exported text, by its activity Record ID."""
+    found = {c["Record ID"]: c["Call notes"] for c in rows(folder / CALLS)}
+    return found | {n["Record ID"]: n["Note body"] for n in rows(folder / NOTES)}
+
+
+def holds(exported, written, slipped):
+    """The exported text holds the written sentence, but for one typo when there was one."""
+    if written in exported:
+        return True
+    if not slipped:
+        return False
+    match = difflib.SequenceMatcher(None, written, exported, autojunk=False)
+    return sum(block.size for block in match.get_matching_blocks()) >= len(written) - 2
+
+
+@pytest.mark.parametrize("setting", HIGH_ENDS)
+def test_at_the_high_ends_every_signal_survives_into_the_exported_text(
+    generate, setting, test_phrases
+):
+    folder = generate(setting, separability_history(setting))
+    p = resolved(setting)
+    shorten = notes.Notes(p, test_phrases, messages.Writer(p, test_phrases), Random(0)).abbreviated
+    messages_of = message_of_deal(folder)
+    truth = {r["deal_record_id"]: r for r in kinds(folder, RowKind.LEAD)}
+    committed = 0
+    for t in texts(folder, MESSAGE_TEXT):
+        row = truth.get(t["deal_record_id"])
+        if row and row["text_commitment"] == "yes":
+            assert t["signal"] and t["signal"] in messages_of[t["deal_record_id"]], t
+            committed += 1
+    assert committed > 100
+    exported = exported_notes(folder)
+    engaged = engaged_before_export(folder)
+    said = set()
+    for t in texts(folder, NOTE_BODY):
+        if t["signal"]:
+            written = shorten(t["signal"]) if t["abbreviated"] == "yes" else t["signal"]
+            assert holds(exported[t["activity_record_id"]], written, t["typo"] == "yes"), t
+            said.add(t["deal_record_id"])
+    noted = notes_of_deal(folder)
+    assert said == {d for d in engaged if d in truth and noted[d]}
+
+
+@pytest.mark.parametrize("setting", HIGH_ENDS)
+@pytest.mark.parametrize(
+    ("flag", "effect"),
+    [("text_commitment", "text_commitment"), ("real_buyer", "notes_real_buyer")],
+)
+def test_at_the_high_ends_the_outcome_odds_by_text_signal_are_the_profiles(
+    generate, setting, flag, effect
+):
+    folder = generate(setting, separability_history(setting))
+    leads = kinds(folder, RowKind.LEAD)
+    log_ratio, se = odds.mantel_haenszel(
+        leads,
+        lambda row: row[flag] == "yes",
+        lambda row: row[flag] == "no",
+        odds.rest_without(effect),
+    )
+    expected = math.log(number(setting, f"effects.{effect}.odds_ratio"))
+    assert abs(log_ratio - expected) <= STANDARD_ERRORS * se, (log_ratio, expected, se)
