@@ -1282,6 +1282,8 @@ source = "notes-and-loss-reasons.md: HVS, 'other' often the largest value; added
 form = "threshold"
 visible = "Submitted"
 floor_share_of_style_price = 0.7
+# "below_half" is a budget under this share of the floor.
+below_half_under = 0.5
 below_half = { low = 0.03, middle = 0.10, high = 0.25, confidence = "guessed", source = "none" }
 half_to_floor = { low = 0.30, middle = 0.50, high = 0.80, confidence = "guessed", source = "none" }
 note = "reference: at or above the floor; no further lift above 1.5x the floor"
@@ -1297,6 +1299,10 @@ note = "reference: a stated budget at or above the floor; missing is not below t
 [effects.lead_time_by_season]
 form = "interaction"
 visible = "Submitted"
+# Months from submission to travel: "under_4_months" is under under_months, "over_18_months" over
+# over_months; "unsure" is the travel date answered "Not sure". Every other lead time is the reference.
+under_months = 4
+over_months = 18
 peak_under_4_months = { low = 0.20, middle = 0.40, high = 0.70, confidence = "guessed", source = "none; shape from operator lead-time advice (Rhino Africa, Yellow Zebra)" }
 off_peak_under_4_months = { low = 0.8, middle = 1.0, high = 1.2, confidence = "guessed", source = "none" }
 over_18_months_or_unsure = { low = 0.40, middle = 0.60, high = 0.85, confidence = "guessed", source = "none" }
@@ -1330,6 +1336,10 @@ floor_penalty_kept = { low = 0.25, middle = 0.50, high = 0.75, confidence = "gue
 [effects.response_speed_by_quality]
 form = "interaction"
 visible = "Contact attempted"
+# "within_1h" is a first Contact attempt within within_hours of submission; any later first attempt
+# is the reference. High quality is this top share of leads by win propensity without this effect.
+within_hours = 1
+high_quality_top_share = 0.3333333333333333
 high_quality_within_1h = { low = 2.5, middle = 4.0, high = 6.0, confidence = "estimated", source = "the user, from a client they have worked with (2026-10-01): about 4 times; the quicker after the form the better; direction also from HBR, MIT, Telfer" }
 low_quality_within_1h = { low = 1.0, middle = 1.1, high = 1.3, confidence = "guessed", source = "none" }
 note = "reference: first attempt after 24 h; high quality is the top third of hidden quality"
@@ -1338,6 +1348,9 @@ note = "reference: first attempt after 24 h; high quality is the top third of hi
 [effects.message_length]
 form = "inverted_u"
 visible = "Submitted"
+# "under_15_words" is a message under under_words; a dreamer is as form.message.shape says. Every other
+# message is the reference.
+under_words = 15
 under_15_words = { low = 0.40, middle = 0.60, high = 0.85, confidence = "guessed", source = "none" }
 dreamer = { low = 0.55, middle = 0.75, high = 0.95, confidence = "guessed", source = "none" }
 note = "reference: 40-200 specific words; dreamer: over 400 words, no budget, over 3 countries. Read from meaning, never a giveaway keyword"
@@ -1346,6 +1359,9 @@ note = "reference: 40-200 specific words; dreamer: over 400 words, no budget, ov
 [effects.party_size]
 form = "threshold"
 visible = "Submitted"
+# "over_6" is a party of over over_travellers, adults and children together; every other party is the
+# reference.
+over_travellers = 6
 over_6 = { low = 0.50, middle = 0.70, high = 0.90, confidence = "guessed", source = "what-predicts-a-booking.md §6: direction from Runggaldier et al. 2023" }
 note = "reference: a party of 2"
 
@@ -1360,6 +1376,9 @@ odds_ratio_when_optional = { low = 1.2, middle = 1.5, high = 2.0, confidence = "
 form = "time_varying"
 visible = "Submitted"
 at_month_of_history = 14
+# "near_floor_after": a stated budget at or above the risen floor and under near_floor_under times the
+# old floor. A budget the rise puts below the floor takes effects.budget_floor instead.
+near_floor_under = 1.3
 floor_rise = { low = 0.05, middle = 0.10, high = 0.20, confidence = "guessed", source = "what-predicts-a-booking.md §8: Maasai Mara fee rise to $200 (July 2024)" }
 near_floor_after = { low = 0.55, middle = 0.75, high = 0.90, confidence = "guessed", source = "none" }
 note = "after the rise, leads within 1.0-1.3x of the old floor; leads above 1.5x unaffected"
