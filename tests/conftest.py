@@ -108,7 +108,7 @@ def large_sample(setting: str, leads_per_month: int, seed: int = 1, **overrides)
     rows = []
     for lead, path in zip(drawn, paths, strict=True):
         row = hidden_truth.true_path(lead, path)
-        row["lead"] = lead
+        row["lead"], row["path"] = lead, path
         rows.append(row)
     return rows
 
