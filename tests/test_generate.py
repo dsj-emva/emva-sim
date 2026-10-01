@@ -313,4 +313,6 @@ def test_the_hidden_truth_has_one_row_per_deal_keyed_by_both_record_ids(middle):
         "true_loss_reason",
         "row_kind",
         "duplicate_of_deal_record_id",
+        "invalid_email",
+        "invalid_phone",
     ]

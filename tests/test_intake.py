@@ -5,12 +5,13 @@ own rate and size, written before the numbers were looked at.
 """
 
 import csv
+import re
 from datetime import date
 from pathlib import Path
 
 import pytest
 
-from emva_sim import dataset
+from emva_sim import dataset, profile
 from emva_sim.people import FIRST_NAMES
 
 PROFILE = Path(__file__).parent.parent / "profiles" / "planned-hospitality.toml"
@@ -146,6 +147,56 @@ def test_bots_have_no_outcome_so_grading_can_leave_them_out(middle):
     for row in kinds(middle, "bot or spam"):
         assert not row["win_propensity"] and not row["outcome"], row
         assert not row["duplicate_of_deal_record_id"]
+
+
+VALID_EMAIL = re.compile(r"[A-Za-z0-9._+-]+@[a-z0-9-]+(\.[a-z0-9-]+)+")
+
+
+def valid_phone(raw):
+    countries = [c for group in raw["markets"]["groups"].values() for c in group["countries"]]
+    formats = [f for c in countries for f in c["phones"]]
+    patterns = [re.escape(f).replace("\\#", "#").replace("#", r"\d") for f in formats]
+    return re.compile("|".join(f"(?:{p})" for p in patterns))
+
+
+def genuine_contacts(folder):
+    contacts = {c["Associated Deal IDs"]: c for c in rows(folder / CONTACTS)}
+    return [(contacts[r["deal_record_id"]], r) for r in kinds(folder, "lead")]
+
+
+@pytest.mark.parametrize(
+    ("setting", "share", "tolerance"),
+    [
+        ("middle", 0.03, 0.011),
+        ("mess.invalid_email@low", 0.01, 0.006),
+        ("mess.invalid_email@high", 0.08, 0.017),
+    ],
+)
+def test_the_profiles_share_of_genuine_leads_have_an_invalid_email(
+    generated, setting, share, tolerance
+):
+    contacts = genuine_contacts(generated(setting))
+    invalid = [(c, r) for c, r in contacts if not VALID_EMAIL.fullmatch(c["Email"])]
+    assert len(invalid) / len(contacts) == pytest.approx(share, abs=tolerance)
+    assert all(r["invalid_email"] == "yes" for _, r in invalid)
+    assert sum(r["invalid_email"] == "yes" for _, r in contacts) == len(invalid)
+
+
+@pytest.mark.parametrize(
+    ("setting", "share", "tolerance"),
+    [
+        ("middle", 0.06, 0.018),
+        ("mess.invalid_phone@low", 0.02, 0.011),
+        ("mess.invalid_phone@high", 0.15, 0.027),
+    ],
+)
+def test_the_profiles_share_of_given_phones_are_invalid(generated, setting, share, tolerance):
+    valid = valid_phone(profile.load(PROFILE))
+    given = [(c, r) for c, r in genuine_contacts(generated(setting)) if c["Phone Number"]]
+    invalid = [(c, r) for c, r in given if not valid.fullmatch(c["Phone Number"])]
+    assert len(invalid) / len(given) == pytest.approx(share, abs=tolerance)
+    assert all(r["invalid_phone"] == "yes" for _, r in invalid)
+    assert sum(r["invalid_phone"] == "yes" for _, r in given) == len(invalid)
 
 
 def test_the_exports_never_say_which_rows_are_duplicates_or_bots(middle):

@@ -37,6 +37,8 @@ HIDDEN_TRUTH_COLUMNS = [
     "true_loss_reason",
     "row_kind",
     "duplicate_of_deal_record_id",
+    "invalid_email",
+    "invalid_phone",
 ]
 STAGE_HISTORY_COLUMNS = ["deal_record_id", "crm_stage", "true_entered_at", "recorded_entered_at"]
 # The columns from market_group to call_attempts hold a genuine Lead's true path.
@@ -127,7 +129,12 @@ def _truth_rows(
             r.recorded.true_loss_reason,
             s.kind,
             str(deal_of_lead[s.lead]) if s.kind == intake.DUPLICATE else "",
+            *((_yes_no(s.invalid_email), _yes_no(s.invalid_phone)) if genuine else ("", "")),
         ]
+
+
+def _yes_no(flag: bool) -> str:
+    return "yes" if flag else "no"
 
 
 def _stage_history(records: list[Record]) -> Iterator[list[str]]:

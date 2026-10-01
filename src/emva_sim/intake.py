@@ -43,6 +43,8 @@ class Submission:
     traffic_source: str
     repeat_client: bool
     travel_month: str
+    invalid_email: bool = False
+    invalid_phone: bool = False
 
 
 def submissions(
@@ -53,7 +55,7 @@ def submissions(
     genuine_share = 1 - mess["duplicate_leads"] - mess["bot_or_spam"]
     received = []
     for i, lead in enumerate(drawn):
-        received.append(_genuine(i, lead))
+        received.append(_genuine(rng, p, i, lead))
         if rng.random() < mess["duplicate_leads"] / genuine_share:
             again = _duplicate(rng, p, i, lead)
             if again.submitted_at < until:
@@ -63,15 +65,55 @@ def submissions(
     return sorted(received, key=lambda s: s.submitted_at)
 
 
-def _genuine(i: int, lead: Lead) -> Submission:
+def _genuine(rng: Random, p: dict, i: int, lead: Lead) -> Submission:
+    """A Lead as the sales system holds it: its email or phone may be invalid."""
+    mess = p["mess"]
+    answers = dict(lead.answers)
+    email, phone = form.field(p, "email")["label"], form.field(p, "phone")["label"]
+    invalid_email = rng.random() < mess["invalid_email"]
+    if invalid_email:
+        answers[email] = _broken_address(rng, answers[email])
+    invalid_phone = bool(answers[phone]) and rng.random() < mess["invalid_phone"]
+    if invalid_phone:
+        answers[phone] = _broken_phone(rng, answers[phone])
     return Submission(
         LEAD,
         i,
         lead.submitted_at,
-        dict(lead.answers),
+        answers,
         lead.traffic_source,
         lead.repeat_client,
         f"{lead.travel_at:%b}",
+        invalid_email,
+        invalid_phone,
+    )
+
+
+def _broken_address(rng: Random, email: str) -> str:
+    """An address no mail can reach: the @ left out or doubled, a dot or a space gone wrong."""
+    local, domain = email.split("@")
+    return rng.choice(
+        [
+            f"{local}{domain}",
+            f"{local}@@{domain}",
+            f"{local}@{domain.replace('.', '', 1)}",
+            f"{local}@{domain.replace('.', ',', 1)}",
+            f"{local} @{domain}",
+        ]
+    )
+
+
+def _broken_phone(rng: Random, phone: str) -> str:
+    """A number no call can reach: cut short, too long, a letter for a digit, or all zeros."""
+    digits = [i for i, c in enumerate(phone) if c.isdigit()]
+    i = rng.choice(digits)
+    return rng.choice(
+        [
+            phone[: digits[-4]].rstrip(),
+            f"{phone}{rng.randrange(100, 1000)}",
+            f"{phone[:i]}O{phone[i + 1 :]}",
+            "0" * len(digits),
+        ]
     )
 
 
