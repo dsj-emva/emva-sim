@@ -127,6 +127,7 @@ held_at_middle = [
   "volume.traffic_source.organic",
   "volume.traffic_source.paid_social",
   "volume.traffic_source.referral",
+  "form.answers.countries_named",
   "form.answers.month_when_no_exact_dates",
   "form.answers.year_when_no_month",
   "form.party_size.family_children",
@@ -149,6 +150,10 @@ source = "cycle-and-deal-size.md §4: from a guessed operator size; no published
 
 # Enquiries by month of submission, as a weight on the average month (1.0 elsewhere). The booking cycle
 # depends on the source market (the user, 2026-10-01); the markets are the proxy trap's groups.
+[volume.seasonality]
+markets = { a = "us", b = "uk_europe" }
+months = { january_weight = [1], november_december_weight = [11, 12], november_to_march_weight = [11, 12, 1, 2, 3] }
+
 [volume.seasonality.uk_europe.january_weight]
 low = 1.3
 middle = 1.6
@@ -208,26 +213,27 @@ source = "none; added for the generator (issue #5), awaiting the user's review"
 
 [form]
 fields = [
-  { label = "Title", kind = "choice", options = ["Mr", "Mrs", "Ms", "Miss", "Dr", "Mx"], required = true },
-  { label = "First name", kind = "text", required = true },
-  { label = "Last name", kind = "text", required = true },
-  { label = "Email", kind = "email", required = true },
-  { label = "Phone", kind = "phone", required = false },
-  { label = "Country of residence", kind = "country", required = true },
-  { label = "Where would you like to go?", kind = "multi", options = ["Kenya", "Tanzania", "Botswana", "South Africa", "Rwanda", "Uganda", "Namibia", "Zambia", "Zimbabwe", "Not sure yet"], required = true },
-  { label = "When would you like to travel?", kind = "month_year", allow = ["exact dates", "month", "year only", "not sure"], required = true },
-  { label = "Are your dates flexible?", kind = "choice", options = ["Fixed", "Flexible", "Not sure"], required = false },
-  { label = "Number of nights", kind = "choice", options = ["Under 5", "5-7", "8-10", "11-14", "15+", "Not sure"], required = false },
-  { label = "Number of adults", kind = "number", required = true },
-  { label = "Number of children", kind = "number", required = false },
-  { label = "Ages of children", kind = "text", required = false },
-  { label = "Accommodation style", kind = "choice", options = ["Comfortable", "Luxury", "Ultra-luxury", "Not sure"], required = false },
-  { label = "Budget per person (excluding international flights)", kind = "choice", options = ["Under $4,000", "$4,000 - $7,000", "$7,000 - $10,000", "$10,000 - $20,000", "$20,000+", "Not sure"], required = false },
-  { label = "Have you travelled with us before?", kind = "choice", options = ["Yes", "I have enquired before", "No"], required = false },
-  { label = "How did you hear about us?", kind = "choice", options = ["Google", "Instagram", "Facebook", "Recommended by a friend", "Travelled with you before", "Magazine", "Travel agent", "ChatGPT or another AI assistant", "Other"], required = false },
-  { label = "Tell us about your dream trip", kind = "long_text", required = false },
-  { label = "Sign me up for the newsletter", kind = "checkbox", required = false },
+  { label = "Title", role = "title", kind = "choice", options = ["Mr", "Mrs", "Ms", "Miss", "Dr", "Mx"], required = true },
+  { label = "First name", role = "first_name", kind = "text", required = true },
+  { label = "Last name", role = "last_name", kind = "text", required = true },
+  { label = "Email", role = "email", kind = "email", required = true },
+  { label = "Phone", role = "phone", kind = "phone", required = false },
+  { label = "Country of residence", role = "country", kind = "country", required = true },
+  { label = "Where would you like to go?", role = "destinations", kind = "multi", options = ["Kenya", "Tanzania", "Botswana", "South Africa", "Rwanda", "Uganda", "Namibia", "Zambia", "Zimbabwe", "Not sure yet"], required = true },
+  { label = "When would you like to travel?", role = "travel_date", kind = "month_year", allow = ["exact dates", "month", "year only", "not sure"], required = true },
+  { label = "Are your dates flexible?", role = "dates_flexible", kind = "choice", options = ["Fixed", "Flexible", "Not sure"], required = false },
+  { label = "Number of nights", role = "nights", kind = "choice", options = ["Under 5", "5-7", "8-10", "11-14", "15+", "Not sure"], required = false },
+  { label = "Number of adults", role = "adults", kind = "number", required = true },
+  { label = "Number of children", role = "children", kind = "number", required = false },
+  { label = "Ages of children", role = "children_ages", kind = "text", required = false },
+  { label = "Accommodation style", role = "style", kind = "choice", options = ["Comfortable", "Luxury", "Ultra-luxury", "Not sure"], required = false },
+  { label = "Budget per person (excluding international flights)", role = "budget_per_person", kind = "choice", options = ["Under $4,000", "$4,000 - $7,000", "$7,000 - $10,000", "$10,000 - $20,000", "$20,000+", "Not sure"], required = false },
+  { label = "Have you travelled with us before?", role = "travelled_before", kind = "choice", options = ["Yes", "I have enquired before", "No"], required = false },
+  { label = "How did you hear about us?", role = "heard_about", kind = "choice", options = ["Google", "Instagram", "Facebook", "Recommended by a friend", "Travelled with you before", "Magazine", "Travel agent", "ChatGPT or another AI assistant", "Other"], required = false },
+  { label = "Tell us about your dream trip", role = "message", kind = "long_text", required = false },
+  { label = "Sign me up for the newsletter", role = "newsletter", kind = "checkbox", required = false },
 ]
+# "role" says what a field asks, so the generator stays free of this form's labels.
 source = "enquiry-forms.md §1: fields seen on 12 operator forms (Expert Africa, Go2Africa, Rhino Africa, Steppes, Audley, Scott Dunn, &Beyond, Cazenove+Loyd, Natural Selection, Porini, SafariBookings, Noboru); budget bands after Go2Africa and Scott Dunn"
 
 # How often leads fill what the form allows them to skip, and what they write.
@@ -279,6 +285,15 @@ middle = 0.05
 high = 0.10
 confidence = "guessed"
 source = "none (enquiry-forms.md §3)"
+
+# Countries named in "Where would you like to go?" (mean; 1 plus a Poisson number). "Not sure yet" drawn
+# among them stands alone. Added for the generator (issue #5), awaiting the user's review.
+[form.answers.countries_named]
+low = 1.3
+middle = 1.6
+high = 2.0
+confidence = "guessed"
+source = "none; added for the generator (issue #5), awaiting the user's review"
 
 # How leads that give no exact dates answer "When would you like to travel?": a month, else a year only,
 # else "not sure". Added for the generator (issue #5), awaiting the user's review.
@@ -479,8 +494,8 @@ stages = [
   { name = "Itinerary Sent", ladder = "Proposal" },
   { name = "Provisional Hold", ladder = "Proposal", milestone = true },
   { name = "Deposit Paid", ladder = "Won", closed = "won" },
-  { name = "Travelled", ladder = "Won", after_won = true },
-  { name = "Cancelled", ladder = "Won", after_won = true },
+  { name = "Travelled", ladder = "Won", after_won = "travelled" },
+  { name = "Cancelled", ladder = "Won", after_won = "cancelled" },
   { name = "Lost", ladder = "Lost", closed = "lost" },
 ]
 source = "sales-steps-and-exports.md §2: Safari Portal, SafariOffice, TripCreator, Zoho travel templates"
@@ -588,6 +603,11 @@ high = 0.25
 confidence = "guessed"
 source = "none (neglect-and-mess.md open question 1)"
 
+# Hours to the first Contact attempt are lognormal, fitted to this median and to the share after
+# late_after_hours. The two must agree: a median below late_after_hours needs a share after it below one half.
+[handling]
+late_after_hours = 24
+
 [handling.first_attempt_delay_median_hours]
 low = 0.5
 middle = 4
@@ -627,7 +647,7 @@ source = "neglect-and-mess.md §4: 24-52% with manual add-ins (Weflow, vendor)"
 # Every dataset is written in both variants, because many advertisers' exports carry no record of Contact
 # attempts (neglect-and-mess.md §4).
 [exports]
-variants = ["with calls and notes", "deals and contacts only"]
+variants = [{ name = "with calls and notes", calls = true }, { name = "deals and contacts only", calls = false }]
 # HubSpot's own contact property for a form field, where it has one; every other field is a custom contact
 # property under its form label (sales-steps-and-exports.md §3).
 contact_properties = { "First name" = "First Name", "Last name" = "Last Name", "Email" = "Email", "Phone" = "Phone Number", "Country of residence" = "Country/Region", "Tell us about your dream trip" = "Message" }

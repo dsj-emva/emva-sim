@@ -1,0 +1,95 @@
+"""One dataset: the exports a sales system would hand over, and the Hidden truth kept apart.
+
+Layout: <out>/<dataset>/export/<variant>/<HubSpot file>.csv and
+<out>/<dataset>/hidden-truth/hidden-truth.csv. Everything comes from the profile, the setting and
+the seed: no system clock, no global random state.
+"""
+
+import csv
+from dataclasses import dataclass
+from datetime import date
+from pathlib import Path
+from random import Random
+
+from emva_sim import hubspot, leads, profile
+from emva_sim.hubspot import Record, stamp
+from emva_sim.process import Process
+
+HIDDEN_TRUTH_COLUMNS = [
+    "deal_record_id",
+    "contact_record_id",
+    "market_group",
+    "win_propensity",
+    "contacted",
+    "first_contact_attempt_at",
+    "reached_stage",
+    "outcome",
+    "won_at",
+    "deal_value",
+    "itinerary_versions",
+    "cancelled_after_won",
+]
+
+
+@dataclass(frozen=True)
+class History:
+    start: date = date(2024, 1, 1)
+    end: date = date(2025, 12, 31)
+    export: date = date(2026, 1, 5)
+
+
+DEFAULT_HISTORY = History()
+
+
+def _record_ids(rng: Random, count: int, first: int) -> list[int]:
+    ids, current = [], first
+    for _ in range(count):
+        current += rng.randint(1, 99)
+        ids.append(current)
+    return ids
+
+
+def _truth_row(r: Record) -> list[str]:
+    path = r.path
+    return [
+        str(r.deal_id),
+        str(r.contact_id),
+        r.lead.market_group,
+        f"{path.win_propensity:.6f}",
+        "yes" if path.contacted else "no",
+        stamp(path.stage_times.get("Contact attempted")),
+        path.reached_stage,
+        "won" if path.won else "not won",
+        stamp(path.stage_times.get("Won")),
+        f"{r.lead.deal_value:.2f}",
+        str(len(path.quotes)),
+        "yes" if path.cancelled_at else "no",
+    ]
+
+
+def name(p: dict, setting: str, seed: int) -> str:
+    return f"{p['name']}-{setting}-seed-{seed}"
+
+
+def generate(
+    profile_path: Path, setting: str, seed: int, out: Path, history: History = DEFAULT_HISTORY
+) -> Path:
+    """Write one dataset and return its folder."""
+    p = profile.resolve(profile.load(profile_path), setting)
+    rng = Random(seed)
+    drawn = leads.draw_leads(rng, p, history.start, history.end)
+    process = Process(p)
+    paths = [process.path(rng, lead) for lead in drawn]
+    deal_ids = _record_ids(rng, len(drawn), 10_000_000_000)
+    contact_ids = _record_ids(rng, len(drawn), 100_000)
+    records = [Record(*row) for row in zip(deal_ids, contact_ids, drawn, paths, strict=True)]
+
+    folder = Path(out) / name(p, setting, seed)
+    hubspot.Export(p, records, history.export).write(folder / "export", rng)
+    truth = folder / "hidden-truth" / "hidden-truth.csv"
+    truth.parent.mkdir(parents=True, exist_ok=True)
+    with truth.open("w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f, quoting=csv.QUOTE_ALL)
+        writer.writerow(HIDDEN_TRUTH_COLUMNS)
+        writer.writerows(_truth_row(r) for r in records)
+    return folder
