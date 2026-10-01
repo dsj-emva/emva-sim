@@ -15,13 +15,8 @@ from random import Random
 from emva_sim import draws
 from emva_sim.leads import Lead
 
-LADDER_AFTER_CONTACT = ("engaged", "qualified", "proposal", "won")
-STAGE_NAMES = {
-    "engaged": "Engaged",
-    "qualified": "Qualified",
-    "proposal": "Proposal",
-    "won": "Won",
-}
+# The Canonical ladder after Contact attempted; the profile names each transition by its stage.
+LADDER_AFTER_CONTACT = ("Engaged", "Qualified", "Proposal", "Won")
 
 
 @dataclass(frozen=True)
@@ -66,7 +61,7 @@ class Process:
     def __init__(self, p: dict):
         self.p = p
         handling = p["handling"]
-        self.transitions = [p["process"]["transition"][stage] for stage in LADDER_AFTER_CONTACT]
+        self.transitions = [p["process"]["transition"][s.lower()] for s in LADDER_AFTER_CONTACT]
         self.base_log_odds = _logit(math.prod(self.transitions))
         self.attempt_median_days = handling["first_attempt_delay_median_hours"] / 24
         self.late_days = handling["late_after_hours"] / 24
@@ -104,7 +99,15 @@ class Process:
         start = lead.submitted_at
         times = {"Submitted": start}
         if rng.random() < p["handling"]["neglected_share"]:
-            return TruePath(owner, propensity, effects, False, "Submitted", False, times)
+            return TruePath(
+                owner=owner,
+                win_propensity=propensity,
+                effects=effects,
+                contacted=False,
+                reached_stage="Submitted",
+                won=False,
+                stage_times=times,
+            )
 
         cycle = lead.cycle_days
         first_attempt = self._first_attempt_days(rng, cycle)
@@ -120,8 +123,8 @@ class Process:
             if stage == stops_before:
                 at["Lost"] = moment
                 break
-            at[STAGE_NAMES[stage]] = moment
-            reached = STAGE_NAMES[stage]
+            at[stage] = moment
+            reached = stage
         times.update(at)
 
         engaged_at = at.get("Engaged")
@@ -142,18 +145,18 @@ class Process:
                 travelled = lead.travel_at
 
         return TruePath(
-            owner,
-            propensity,
-            effects,
-            True,
-            reached,
-            won,
-            times,
-            attempts,
-            quotes,
-            hold,
-            travelled,
-            cancelled,
+            owner=owner,
+            win_propensity=propensity,
+            effects=effects,
+            contacted=True,
+            reached_stage=reached,
+            won=won,
+            stage_times=times,
+            attempts=attempts,
+            quotes=quotes,
+            provisional_hold_at=hold,
+            travelled_at=travelled,
+            cancelled_at=cancelled,
         )
 
     def _attempts(self, rng: Random, first: datetime, until: datetime) -> list[Attempt]:
@@ -166,12 +169,12 @@ class Process:
     def _quotes(
         self, rng: Random, lead: Lead, first: datetime, end: datetime
     ) -> list[tuple[datetime, float]]:
-        process = self.p["process"]
-        versions = 1 + draws.poisson(rng, process["itinerary_versions_per_won"] - 1)
-        times = [first, *_between(rng, versions - 1, first, end)]
-        drift = self.p["deal"]["final_to_first_quote"]
+        """Itinerary versions sent; the quote drifts across them and the last is the Deal value."""
+        versions = 1 + draws.poisson(rng, self.p["process"]["itinerary_versions_per_won"] - 1)
         if versions == 1:
             return [(first, lead.deal_value)]
+        times = [first, *_between(rng, versions - 1, first, end)]
+        drift = self.p["deal"]["final_to_first_quote"]
         return [
             (t, lead.deal_value * drift ** (i / (versions - 1) - 1)) for i, t in enumerate(times)
         ]
