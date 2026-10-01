@@ -94,7 +94,7 @@ def test_first_contact_attempts_follow_the_profiles_delay(leads):
 
 
 def test_deal_values_have_a_median_near_15000_and_span_5k_to_100k(leads):
-    values = sorted(float(r["deal_value"]) for r in leads)
+    values = sorted(float(r["deal_value"]) for r in leads if r["deal_value"])
     n = len(values)
     assert 10_000 <= statistics.median(values) <= 20_000
     assert 2_500 <= values[n // 20] <= 10_000

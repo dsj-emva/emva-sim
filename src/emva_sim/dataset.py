@@ -63,7 +63,7 @@ def _truth_row(r: Record) -> list[str]:
         path.reached_stage,
         "won" if path.won else "not won",
         stamp(path.stage_times.get("Won")),
-        f"{r.lead.deal_value:.2f}",
+        f"{r.lead.deal_value:.2f}" if path.quotes else "",
         str(len(path.quotes)),
         "yes" if path.cancelled_at else "no",
         str(sum(attempt.channel == "call" for attempt in path.attempts)),

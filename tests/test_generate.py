@@ -68,6 +68,14 @@ def test_every_dataset_of_the_sweep_generates(raw, tmp_path):
         assert rows(folder / TRUTH), setting
 
 
+def test_the_hidden_truth_gives_a_deal_value_only_to_quoted_or_won_deals(middle):
+    truth = rows(middle / TRUTH)
+    for row in truth:
+        quoted = row["reached_stage"] in {"Proposal", "Won"}
+        assert bool(row["deal_value"]) == quoted, row
+    assert any(row["deal_value"] for row in truth)
+
+
 LONG_AFTER = dataset.History(
     start=date(2024, 1, 1), end=date(2024, 3, 31), export=date(2025, 12, 31)
 )
