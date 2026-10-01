@@ -163,6 +163,7 @@ held_at_middle = [
   "form.message.mentions.sexual_orientation",
   "form.message.mentions.names_of_travellers",
   "mess.bot_spam_message",
+  "form.message.shape.partly_to_very_specific",
 ]
 
 # ---------------------------------------------------------------------------------------------------------
@@ -646,7 +647,7 @@ source = "none (enquiry-forms.md §2)"
 # vague gives a region and a rough year; partly specific a country or season, the party and a must-do
 # or two; very specific the dates, a named park, the nights and the budget (issue #6).
 [form.message.shape]
-partly_to_very_specific = 2.0
+partly_to_very_specific = { low = 1.2, middle = 2.0, high = 3.5, confidence = "guessed", source = "none; enquiry-forms.md §2: partly specific 35-55% and very specific 15-30% of messages, so about 1.2 to 3.7 to 1; added for the text (issue #6), awaiting the user's review" }
 token_words_at_most = 3
 dreamer_over_words = 400
 dreamer_over_countries = 3
@@ -1258,9 +1259,10 @@ source = "neglect-and-mess.md §5: 32% by sales professionals' own estimate (Fir
 
 # ---------------------------------------------------------------------------------------------------------
 # Text: the enquiry message, Sales notes and Closed Lost Reasons (issue #6). The phrases are in the
-# phrase bank; Claude Haiku 4.5 rewrote each once into natural variations, kept in the committed cache
-# (`make vary-phrases`). Generation reads only the cache, never the model, and fails if a phrase has no
-# cached variations. Plain values; the shares are ranges in [form.message], [notes] and [mess].
+# phrase bank. `make vary-phrases` has Claude Haiku 4.5 rewrite each once into natural variations, kept
+# in the committed cache; until it has been run with a key the cache is empty and generation stops.
+# Generation reads only the cache, never the model, and fails if a phrase has no valid cached
+# variations. Plain values; the shares are ranges in [form.message], [notes] and [mess].
 # ---------------------------------------------------------------------------------------------------------
 
 [text]
