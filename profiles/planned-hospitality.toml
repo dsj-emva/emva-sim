@@ -108,7 +108,6 @@ held_at_middle = [
   "volume.seasonality.uk_europe.january_weight",
   "volume.seasonality.uk_europe.november_december_weight",
   "volume.seasonality.us.november_to_march_weight",
-  "form.answers.includes_children",
   "form.party_mix.couple",
   "form.party_mix.family",
   "form.party_mix.friends",
@@ -265,13 +264,6 @@ high = 0.80
 confidence = "guessed"
 source = "none"
 
-[form.answers.includes_children]
-low = 0.15
-middle = 0.25
-high = 0.35
-confidence = "guessed"
-source = "none (enquiry-forms.md §3); Go2Africa party mix 28% families"
-
 [form.answers.mentions_occasion]
 low = 0.10
 middle = 0.17
@@ -335,7 +327,9 @@ source = "cycle-and-deal-size.md §2a: Go2Africa State of Safari 2025 (middle); 
 
 # Party sizes (means). A solo party is 1 adult and a couple 2. A family is 2 adults and 1 or more children
 # (1 plus a Poisson number); a friends party is 2 or more adults (2 plus a Poisson number). Children come only
-# with families. Added for the generator (issue #5), awaiting the user's review.
+# with families, so form.party_mix.family is the share of leads with children (the user's ruling,
+# 2026-10-01, replacing form.answers.includes_children). Added for the generator (issue #5), awaiting the
+# user's review.
 [form.party_size.family_children]
 low = 1.5
 middle = 2.0
