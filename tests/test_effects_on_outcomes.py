@@ -363,7 +363,6 @@ def test_the_market_has_no_effect_once_the_leads_terms_are_held(middle_sample):
     assert abs(log_or) <= 3 * se, math.exp(log_or)
 
 
-def test_the_market_has_no_term_of_its_own():
-    from emva_sim.dataset import HIDDEN_TRUTH_COLUMNS
-
-    assert not [c for c in HIDDEN_TRUTH_COLUMNS if c.startswith("term_") and "market" in c]
+def test_the_market_has_no_term_of_its_own(middle_sample):
+    terms = [column for column in middle_sample[0] if column.startswith("term_")]
+    assert terms and "term_proxy_trap_country" not in terms

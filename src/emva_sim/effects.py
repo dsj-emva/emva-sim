@@ -13,6 +13,14 @@ from emva_sim import form, ladder
 from emva_sim.leads import Lead
 
 SPEED_LIFT_BETWEEN = "linear in log hours"
+RESPONSE_SPEED = "response_speed_by_quality"
+# The form of an effect that has no term of its own (the proxy trap).
+NO_TERM = "confounded"
+
+
+def term_names(p: dict) -> list[str]:
+    """The planted effects that carry a term, in the profile's order."""
+    return [name for name, effect in p["effects"].items() if effect["form"] != NO_TERM]
 
 
 def _log(odds_ratio: float) -> float:
@@ -25,34 +33,37 @@ class Effects:
         self.e = p["effects"]
         months_in = history_start.month - 1 + self.e["price_rise"]["at_month_of_history"] - 1
         self.rise_at = datetime(history_start.year + months_in // 12, months_in % 12 + 1, 1)
-        if self.e["response_speed_by_quality"]["lift_between"] != SPEED_LIFT_BETWEEN:
+        if self.e[RESPONSE_SPEED]["lift_between"] != SPEED_LIFT_BETWEEN:
             raise ValueError(f"response speed's lift between must be {SPEED_LIFT_BETWEEN!r}")
+        self.names = term_names(p)
+        self._terms = {
+            "budget_floor": lambda lead: self._budget(lead)[0],
+            "no_budget": self._no_budget,
+            "lead_time_by_season": self._lead_time,
+            "date_specificity": self._date_specificity,
+            "lead_source": self._lead_source,
+            "repeat_client": self._repeat_client,
+            "message_length": self._message_length,
+            "party_size": self._party_size,
+            "phone_given": self._phone_given,
+            "price_rise": lambda lead: self._budget(lead)[1],
+            "text_commitment": self._text_commitment,
+            "notes_real_buyer": self._notes_real_buyer,
+        }
+        unknown = set(self.names) - set(self._terms) - {RESPONSE_SPEED}
+        if unknown:
+            raise ValueError(f"the generator cannot compute the effects {sorted(unknown)}")
         self.seen_at_submission = {
             name for name, effect in self.e.items() if effect["visible"] == ladder.SUBMITTED
         }
 
     def of_lead(self, lead: Lead) -> dict[str, float]:
-        """Every term the lead carries from what it is, whatever its handling."""
-        e = self.e
-        budget_floor, price_rise = self._budget(lead)
-        return {
-            "budget_floor": budget_floor,
-            "no_budget": 0.0 if lead.states_budget else _log(e["no_budget"]["odds_ratio"]),
-            "lead_time_by_season": self._lead_time(lead),
-            "date_specificity": self._date_specificity(lead),
-            "lead_source": self._lead_source(lead),
-            "repeat_client": _log(e["repeat_client"]["odds_ratio"]) if lead.repeat_client else 0.0,
-            "message_length": self._message_length(lead),
-            "party_size": self._party_size(lead),
-            "phone_given": self._phone_given(lead),
-            "price_rise": price_rise,
-            "text_commitment": (
-                _log(e["text_commitment"]["odds_ratio"]) if lead.text_commitment else 0.0
-            ),
-            "notes_real_buyer": (
-                _log(e["notes_real_buyer"]["odds_ratio"]) if lead.real_buyer else 0.0
-            ),
-        }
+        """Every term the lead carries from what it is, whatever its handling, in profile order."""
+        return {name: self._terms[name](lead) for name in self.names if name != RESPONSE_SPEED}
+
+    def with_response_speed(self, terms: dict[str, float], speed: float) -> dict[str, float]:
+        """The lead's terms with response speed's added, in profile order."""
+        return {name: speed if name == RESPONSE_SPEED else terms[name] for name in self.names}
 
     def apparent(self, terms: dict[str, float]) -> float:
         """How good the lead looks at submission: the terms of effects visible then."""
@@ -61,7 +72,7 @@ class Effects:
     def response_speed(self, hours_to_first_attempt: float, high_quality: bool) -> float:
         """The full lift within within_hours, none from no_lift_from_hours, linear in log hours
         between (the profile's lift_between)."""
-        effect = self.e["response_speed_by_quality"]
+        effect = self.e[RESPONSE_SPEED]
         quick, slow = effect["within_hours"], effect["no_lift_from_hours"]
         quality = "high_quality_within_1h" if high_quality else "low_quality_within_1h"
         hours = min(max(hours_to_first_attempt, quick), slow)
@@ -91,6 +102,21 @@ class Effects:
             penalty *= self.e["repeat_client"]["floor_penalty_kept"]
         near = after and current <= budget < rise["near_floor_under"] * old_floor
         return penalty, _log(rise["near_floor_after"]) if near else 0.0
+
+    def _flag(self, effect: str, flag: bool) -> float:
+        return _log(self.e[effect]["odds_ratio"]) if flag else 0.0
+
+    def _no_budget(self, lead: Lead) -> float:
+        return self._flag("no_budget", not lead.states_budget)
+
+    def _repeat_client(self, lead: Lead) -> float:
+        return self._flag("repeat_client", lead.repeat_client)
+
+    def _text_commitment(self, lead: Lead) -> float:
+        return self._flag("text_commitment", lead.text_commitment)
+
+    def _notes_real_buyer(self, lead: Lead) -> float:
+        return self._flag("notes_real_buyer", lead.real_buyer)
 
     def _lead_time(self, lead: Lead) -> float:
         effect = self.e["lead_time_by_season"]

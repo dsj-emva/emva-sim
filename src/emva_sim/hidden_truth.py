@@ -8,28 +8,12 @@ import csv
 from collections.abc import Iterable, Iterator
 from pathlib import Path
 
-from emva_sim import ladder
+from emva_sim import effects, ladder
 from emva_sim.hubspot import Record, stamp
 from emva_sim.intake import RowKind
 from emva_sim.leads import Lead
-from emva_sim.process import RESPONSE_SPEED, TruePath
+from emva_sim.process import TruePath
 
-# The planted effects' terms, in the order of the profile; the proxy trap has none.
-TERMS = [
-    "budget_floor",
-    "no_budget",
-    "lead_time_by_season",
-    "date_specificity",
-    "lead_source",
-    "repeat_client",
-    "message_length",
-    "party_size",
-    "phone_given",
-    "price_rise",
-    "text_commitment",
-    "notes_real_buyer",
-    RESPONSE_SPEED,
-]
 # What the lead is that the exports do not show; issue #6 writes text to match.
 HIDDEN_ATTRIBUTES = [
     "budget_per_person_per_night",
@@ -39,8 +23,9 @@ HIDDEN_ATTRIBUTES = [
     "real_buyer",
 ]
 
-# A genuine Lead's true path; blank for duplicates and bots, which have none.
-TRUE_PATH_COLUMNS = [
+# A genuine Lead's true path; blank for duplicates and bots, which have none. Between the two
+# parts, one term per planted effect that has one, in profile order (true_path_columns).
+_PATH_COLUMNS = [
     "market_group",
     "win_propensity",
     "neglected_lead",
@@ -53,14 +38,9 @@ TRUE_PATH_COLUMNS = [
     "cancelled_after_won",
     "call_attempts",
     "base_log_odds",
-    *(f"term_{name}" for name in TERMS),
-    "high_quality",
-    *HIDDEN_ATTRIBUTES,
 ]
-COLUMNS = [
-    "deal_record_id",
-    "contact_record_id",
-    *TRUE_PATH_COLUMNS,
+_PROPENSITY_COLUMNS = ["high_quality", *HIDDEN_ATTRIBUTES]
+_OTHER_COLUMNS = [
     "true_loss_reason",
     "row_kind",
     "duplicate_of_deal_record_id",
@@ -68,11 +48,22 @@ COLUMNS = [
     "invalid_phone",
     "fields_missing_or_wrong",
 ]
+
+
+def true_path_columns(p: dict) -> list[str]:
+    terms = [f"term_{name}" for name in effects.term_names(p)]
+    return [*_PATH_COLUMNS, *terms, *_PROPENSITY_COLUMNS]
+
+
+def columns(p: dict) -> list[str]:
+    return ["deal_record_id", "contact_record_id", *true_path_columns(p), *_OTHER_COLUMNS]
+
+
 STAGE_HISTORY_COLUMNS = ["deal_record_id", "crm_stage", "true_entered_at", "recorded_entered_at"]
 
 
-def write(folder: Path, records: list[Record], paths: list[TruePath]) -> None:
-    _write(folder / "hidden-truth.csv", COLUMNS, _rows(records, paths))
+def write(folder: Path, p: dict, records: list[Record], paths: list[TruePath]) -> None:
+    _write(folder / "hidden-truth.csv", columns(p), _rows(p, records, paths))
     _write(folder / "stage-history.csv", STAGE_HISTORY_COLUMNS, _stage_history(records))
 
 
@@ -98,15 +89,15 @@ def _true_path(lead: Lead, path: TruePath) -> list[str]:
         _yes_no(bool(path.cancelled_at)),
         str(sum(attempt.channel == "call" for attempt in path.attempts)),
         f"{path.base_log_odds:.6f}",
-        *(f"{path.terms[name]:.6f}" for name in TERMS),
+        *(f"{term:.6f}" for term in path.terms.values()),
         _yes_no(path.high_quality),
         *(_attribute(getattr(lead, name)) for name in HIDDEN_ATTRIBUTES),
     ]
 
 
-def true_path(lead: Lead, path: TruePath) -> dict[str, str]:
+def true_path(p: dict, lead: Lead, path: TruePath) -> dict[str, str]:
     """A genuine Lead's true-path columns, by name."""
-    return dict(zip(TRUE_PATH_COLUMNS, _true_path(lead, path), strict=True))
+    return dict(zip(true_path_columns(p), _true_path(lead, path), strict=True))
 
 
 def _attribute(value) -> str:
@@ -115,14 +106,15 @@ def _attribute(value) -> str:
     return f"{value:.2f}" if isinstance(value, float) else str(value)
 
 
-def _rows(records: list[Record], paths: list[TruePath]) -> Iterator[list[str]]:
+def _rows(p: dict, records: list[Record], paths: list[TruePath]) -> Iterator[list[str]]:
     deal_of_lead = {
         r.submission.index: r.deal_id for r in records if r.submission.kind == RowKind.LEAD
     }
     for r in records:
         s = r.submission
         genuine = s.kind == RowKind.LEAD
-        true_path = _true_path(s.lead, paths[s.index]) if genuine else [""] * len(TRUE_PATH_COLUMNS)
+        blank = [""] * len(true_path_columns(p))
+        true_path = _true_path(s.lead, paths[s.index]) if genuine else blank
         yield [
             str(r.deal_id),
             str(r.contact_id),

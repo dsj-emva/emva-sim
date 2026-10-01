@@ -4,6 +4,7 @@ import math
 import re
 from datetime import date
 from pathlib import Path
+from random import Random
 
 import pytest
 
@@ -329,21 +330,21 @@ def test_the_hidden_truth_has_one_row_per_deal_keyed_by_both_record_ids(middle):
     ]
 
 
-TERMS = [
-    "budget_floor",
-    "no_budget",
-    "lead_time_by_season",
-    "date_specificity",
-    "lead_source",
-    "repeat_client",
-    "message_length",
-    "party_size",
-    "phone_given",
-    "price_rise",
-    "text_commitment",
-    "notes_real_buyer",
-    "response_speed_by_quality",
-]
+# One term per planted effect, in the profile's order; the confounded proxy trap has none.
+TERMS = [name for name, e in profile.load(PROFILE)["effects"].items() if e["form"] != "confounded"]
+
+
+def test_the_terms_are_the_profiles_effects_but_the_proxy_trap():
+    assert len(TERMS) == 13
+    assert "proxy_trap_country" not in TERMS
+    assert TERMS[6] == "response_speed_by_quality"
+
+
+def test_an_effect_the_generator_cannot_compute_is_refused():
+    p = profile.resolve(profile.load(PROFILE), "middle")
+    p["effects"]["moon_phase"] = {"form": "additive", "visible": "Submitted"}
+    with pytest.raises(ValueError, match="moon_phase"):
+        dataset.leads_and_paths(p, Random(1), SHORT)
 
 
 def genuine_rows(folder):

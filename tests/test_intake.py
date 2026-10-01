@@ -13,7 +13,7 @@ import pytest
 from conftest import PROFILE, TRUTH, assert_rate, ends, kinds, number, raw, resolved, rows
 
 from emva_sim import dataset, form, intake, leads, profile
-from emva_sim.hidden_truth import TRUE_PATH_COLUMNS
+from emva_sim.hidden_truth import true_path_columns
 from emva_sim.intake import RowKind
 from emva_sim.people import FIRST_NAMES, LAST_NAMES, THROWAWAY_DOMAINS
 
@@ -329,7 +329,8 @@ def test_the_profiles_share_of_duplicates_type_the_name_in_another_case(generate
 )
 def test_the_mess_never_changes_a_leads_true_path(generated, middle, setting):
     def true_paths(folder):
-        return [[r[c] for c in TRUE_PATH_COLUMNS] for r in kinds(folder, RowKind.LEAD)]
+        columns = true_path_columns(resolved("middle"))
+        return [[r[c] for c in columns] for r in kinds(folder, RowKind.LEAD)]
 
     assert true_paths(generated(setting)) == true_paths(middle)
 

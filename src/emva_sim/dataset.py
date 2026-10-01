@@ -71,5 +71,5 @@ def generate(
     folder = Path(out) / name(p, setting, seed)
     shutil.rmtree(folder, ignore_errors=True)
     hubspot.Export(p, records, history.export).write(folder / "export", rng)
-    hidden_truth.write(folder / "hidden-truth", records, paths)
+    hidden_truth.write(folder / "hidden-truth", p, records, paths)
     return folder

@@ -15,10 +15,8 @@ from datetime import date, datetime, timedelta
 from random import Random
 
 from emva_sim import draws, ladder
-from emva_sim.effects import Effects
+from emva_sim.effects import RESPONSE_SPEED, Effects
 from emva_sim.leads import Lead
-
-RESPONSE_SPEED = "response_speed_by_quality"
 
 
 @dataclass(frozen=True)
@@ -145,11 +143,15 @@ class Process:
         high = _top(rng, [sum(t.values()) for t in terms], speed["high_quality_top_share"])
         looks = _mid_ranks([self.effects.apparent(t) for t in terms])
         starts = [self._start(rng, lead, place) for lead, place in zip(leads, looks, strict=True)]
-        for t, start, quality in zip(terms, starts, high, strict=True):
-            days = start.first_attempt_days
-            t[RESPONSE_SPEED] = (
-                0.0 if days is None else self.effects.response_speed(24 * days, quality)
+        terms = [
+            self.effects.with_response_speed(
+                t,
+                0.0
+                if start.first_attempt_days is None
+                else self.effects.response_speed(24 * start.first_attempt_days, quality),
             )
+            for t, start, quality in zip(terms, starts, high, strict=True)
+        ]
         contacted = [
             sum(t.values()) for t, s in zip(terms, starts, strict=True) if not s.neglected_lead
         ]
