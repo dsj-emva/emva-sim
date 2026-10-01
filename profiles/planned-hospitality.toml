@@ -29,6 +29,7 @@ currency = "USD"
 
 [sweep]
 one_at_a_time = [
+  "volume.leads_per_month",
   "form.answers.states_budget",
   "form.answers.gives_phone_when_optional",
   "form.answers.states_exact_dates",
@@ -104,7 +105,6 @@ one_at_a_time = [
   "effects.proxy_trap_country.lead_time_multiplier",
 ]
 held_at_middle = [
-  "volume.leads_per_month",
   "volume.seasonality.january_weight",
   "volume.seasonality.november_december_weight",
   "form.answers.includes_children",
