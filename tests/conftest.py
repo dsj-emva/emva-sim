@@ -10,11 +10,15 @@ from pathlib import Path
 from random import Random
 
 import pytest
+from echo_model import profile_with_echoed_variations
 
 from emva_sim import dataset, hidden_truth, profile
 from emva_sim.intake import RowKind
 
-PROFILE = Path(__file__).parent.parent / "profiles" / "planned-hospitality.toml"
+REAL_PROFILE = Path(__file__).parent.parent / "profiles" / "planned-hospitality.toml"
+# The profile and its phrase bank with a cache that echo_model wrote through vary-phrases, so the
+# tests generate text without the model, whether or not the committed cache is complete yet.
+PROFILE = profile_with_echoed_variations(REAL_PROFILE)
 TRUTH = "hidden-truth/hidden-truth.csv"
 STAGES = "hidden-truth/stage-history.csv"
 

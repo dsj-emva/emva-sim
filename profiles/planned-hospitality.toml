@@ -1301,11 +1301,12 @@ abbreviations = [
   ["and", "&"],
 ]
 
-# How each language writes the facts the slots carry: months, the joining "and", the budget's money
-# (amount with the thousands separator) and the form's country names.
+# How each language writes the facts the slots carry: months, the joining "and", a number of children
+# (one, many), the budget's money (amount with the thousands separator) and the form's country names.
 [text.languages.en]
 months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
 joiner = " and "
+child = ["child", "children"]
 money = "${amount}"
 thousands = ","
 countries = {}
@@ -1313,6 +1314,7 @@ countries = {}
 [text.languages.fr]
 months = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"]
 joiner = " et "
+child = ["enfant", "enfants"]
 money = "{amount} dollars"
 thousands = ""
 countries = { "South Africa" = "Afrique du Sud", Tanzania = "Tanzanie", Uganda = "Ouganda", Namibia = "Namibie", Zambia = "Zambie" }

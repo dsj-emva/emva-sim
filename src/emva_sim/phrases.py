@@ -11,6 +11,7 @@ import json
 import re
 import tomllib
 from dataclasses import dataclass
+from functools import cached_property
 from pathlib import Path
 
 VARY_COMMAND = "make vary-phrases"
@@ -42,7 +43,7 @@ class Phrase:
     text: str
     options: tuple[str, ...]
 
-    @property
+    @cached_property
     def slots(self) -> frozenset[str]:
         return frozenset(slots(self.text))
 
@@ -85,6 +86,35 @@ def write_cache(path: Path, cache: dict) -> None:
     """Write the cache with its keys sorted, so a run that adds nothing changes nothing."""
     text = json.dumps(cache, ensure_ascii=False, indent=2, sort_keys=True)
     Path(path).write_text(text + "\n", encoding="utf-8")
+
+
+@dataclass(frozen=True)
+class Text:
+    """A piece of generated text and, for the Hidden truth, how it was made: the phrases it used,
+    its language, and what was planted in it."""
+
+    text: str
+    phrase_ids: tuple[str, ...] = ()
+    language: str = ""
+    shape: str = ""
+    mentions: tuple[str, ...] = ()
+    fact_differs: str | None = None  # the fact stated unlike the form; "" if none
+    abbreviated: bool | None = None
+    typo: bool | None = None
+
+
+def words(text: str) -> int:
+    return len(text.split())
+
+
+def render(template: str, values: dict) -> str:
+    """The template with each slot filled; a callable value is called once per slot it fills."""
+
+    def fill(match):
+        value = values[match.group(1)]
+        return value() if callable(value) else value
+
+    return SLOT.sub(fill, template)
 
 
 class Phrases:

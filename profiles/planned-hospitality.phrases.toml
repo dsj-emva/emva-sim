@@ -6,7 +6,7 @@
 # planned-hospitality.variations.json; generation picks among a phrase and its cached variations and
 # never calls the model. A phrase is named by its group and its place in it, e.g. "message.en.who.couple#2".
 #
-# Words in braces are slots the generator fills from the Lead ({adults}, {children}, {party},
+# Words in braces are slots the generator fills from the Lead ({adults}, {children} ("2 children"), {party},
 # {nights}, {date}, {month}, {year}, {budget}, {countries}, {country}, {park}, {child_ages}) or
 # draws ({age}, {age2}, {companion}, {first_name}, {link}). A phrase is used only where every slot
 # it names has a value.
@@ -185,9 +185,9 @@ commitment = [
 solo = ["I'm travelling on my own.", "It would just be me.", "Solo trip for me this time."]
 couple = ["There are {adults} of us.", "It's the two of us.", "My partner and I would like to go.", "Two adults."]
 family = [
-  "We're {adults} adults and {children} children.",
-  "A family of {party}: {adults} adults and {children} kids.",
-  "{adults} adults plus {children} children.",
+  "We're {adults} adults and {children}.",
+  "A family of {party}: {adults} adults and {children}.",
+  "{adults} adults plus {children}.",
   "It's a family trip, {party} of us in all.",
 ]
 friends = [
@@ -205,7 +205,7 @@ not_sure = ["We haven't fixed any dates yet.", "Timing is open.", "No dates in m
 vague = ["Maybe next year.", "In a year or two perhaps.", "Some time in {year} probably."]
 
 [message.en.where]
-countries = ["We're thinking of {countries}.", "{countries} are top of the list.", "Interested in {countries}.", "We'd love to visit {countries}."]
+countries = ["We're thinking of {countries}.", "Top of the list: {countries}.", "Interested in {countries}.", "We'd love to visit {countries}."]
 park = ["A few nights near {park} would be great.", "We've read a lot about {park}.", "{park} is a must if possible."]
 vague = ["Somewhere in Africa.", "East or southern Africa, we're not sure which.", "Africa has always been on our list."]
 
@@ -350,7 +350,7 @@ commitment = [
 [message.fr.who]
 solo = ["Je voyage seul.", "Ce serait juste moi.", "Voyage en solo cette fois."]
 couple = ["Nous sommes {adults}.", "Nous serons deux.", "Mon conjoint et moi aimerions partir."]
-family = ["Nous sommes {adults} adultes et {children} enfants.", "Une famille de {party} : {adults} adultes et {children} enfants.", "{adults} adultes et {children} enfants."]
+family = ["Nous sommes {adults} adultes et {children}.", "Une famille de {party} : {adults} adultes et {children}.", "{adults} adultes et {children}."]
 friends = ["Un groupe de {adults} amis.", "Nous serons {adults}, tous adultes.", "Un groupe de {party} personnes."]
 
 [message.fr.when]
