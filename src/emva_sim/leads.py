@@ -22,6 +22,7 @@ class Lead:
     adults: int
     children: int
     price_per_person_per_night: float
+    budget_per_person_per_night: float
     cycle_days: float
     travel_at: datetime
     answers: dict[str, str] = field(default_factory=dict)
@@ -122,7 +123,7 @@ def _answer(rng: Random, p: dict, lead: Lead, person: people.Person, form_field:
             return form.label(p, "style", lead.style)
         case "budget_per_person":
             stated = rng.random() < answers["states_budget"]
-            per_person = lead.price_per_person_per_night * lead.nights
+            per_person = lead.budget_per_person_per_night * lead.nights
             return form.band(p, "budget_per_person", per_person) if stated else ""
         case "travelled_before":
             if lead.repeat_client:
@@ -188,11 +189,22 @@ def traffic_source(rng: Random, p: dict) -> str:
     return _pick(rng, others, source["reference"])
 
 
+def _market_shift(p: dict, group: str, multiplier: float) -> float:
+    """The factor on a market's median that puts group A at multiplier times group B.
+
+    The share-weighted geometric mean of the two factors is 1, so the profile's own median is the
+    median pooled over both markets.
+    """
+    share_a = p["markets"]["group_a_share"]
+    return multiplier ** ((1 - share_a) if group == "a" else -share_a)
+
+
 def draw_lead(
     rng: Random, p: dict, submitted_at: datetime, group: str, party: tuple[int, int] | None = None
 ) -> Lead:
     """One Lead submitted at this moment from this market; party fixes its adults and children."""
     deal, process = p["deal"], p["process"]
+    trap, answers = p["effects"]["proxy_trap_country"], p["form"]["answers"]
     country = rng.choice(p["markets"]["groups"][group]["countries"])
     source = traffic_source(rng, p)
     repeat_client = rng.random() < p["form"]["answers"]["travelled_before"]
@@ -200,11 +212,15 @@ def draw_lead(
     style = _style(rng, p)
     nights = max(1, round(draws.lognormal(rng, deal["nights"], deal["nights_sigma"])))
     cycle_days = draws.lognormal(rng, process["days_to_won_median"], process["days_to_won_sigma"])
+    lead_time_months = process["booking_lead_time_months"]
+    lead_time_months *= _market_shift(p, group, trap["lead_time_multiplier"])
     lead_time_days = DAYS_PER_MONTH * draws.lognormal(
-        rng, process["booking_lead_time_months"], process["booking_lead_time_sigma"]
+        rng, lead_time_months, process["booking_lead_time_sigma"]
     )
     travel_at = submitted_at + timedelta(days=cycle_days + lead_time_days)
     price = _seasonal_price(p, style, travel_at.month)
+    budget = deal["price_per_person_per_night"][style] * answers["budget_to_style_price"]
+    budget *= _market_shift(p, group, trap["budget_multiplier"])
     lead = Lead(
         submitted_at=submitted_at,
         market_group=group,
@@ -216,6 +232,7 @@ def draw_lead(
         adults=adults,
         children=children,
         price_per_person_per_night=price,
+        budget_per_person_per_night=draws.lognormal(rng, budget, answers["budget_sigma"]),
         cycle_days=cycle_days,
         travel_at=travel_at,
     )

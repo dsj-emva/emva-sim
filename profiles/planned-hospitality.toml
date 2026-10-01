@@ -148,6 +148,8 @@ held_at_middle = [
   "mess.missing_rather_than_wrong",
   "mess.wrong_number_one_more",
   "mess.duplicate_name_case_changed",
+  "form.answers.budget_to_style_price",
+  "form.answers.budget_sigma",
 ]
 
 # ---------------------------------------------------------------------------------------------------------
@@ -445,6 +447,25 @@ middle = 0.45
 high = 0.6
 confidence = "estimated"
 source = "the user, from a client they have worked with (2026-10-01): luxury operators often make budget mandatory, so upwards of 40%"
+
+# What a lead can spend per person per night, as a share of the price of the style it asks for:
+# lognormal with this median and the sigma below. The median is pooled over the markets;
+# effects.proxy_trap_country moves each market's median apart, keeping the pooled one here. A stated
+# budget is the band holding this times the nights. Added for the planted effects (issue #7), awaiting
+# the user's review.
+[form.answers.budget_to_style_price]
+low = 0.8
+middle = 1.0
+high = 1.2
+confidence = "guessed"
+source = "none; added for the planted effects (issue #7), awaiting the user's review"
+
+[form.answers.budget_sigma]
+low = 0.3
+middle = 0.5
+high = 0.7
+confidence = "guessed"
+source = "none; added for the planted effects (issue #7), awaiting the user's review"
 
 [form.answers.gives_phone_when_optional]
 low = 0.45

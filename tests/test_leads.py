@@ -1,4 +1,5 @@
 import re
+import statistics
 from datetime import date
 from pathlib import Path
 from random import Random
@@ -28,9 +29,10 @@ def test_the_profiles_price_is_the_season_average(drawn):
     assert low == pytest.approx([1147.06] * len(low), abs=0.01)
 
 
-def test_the_base_draws_read_no_planted_effect():
+def test_the_lead_draws_read_only_the_effects_that_shape_a_lead():
+    # The proxy trap shifts the draws themselves; every other effect acts on the propensity.
     p = profile.resolve(profile.load(PROFILE), "middle")
-    del p["effects"]
+    p["effects"] = {"proxy_trap_country": p["effects"]["proxy_trap_country"]}
     assert leads.draw_leads(Random(1), p, date(2024, 1, 1), date(2024, 1, 2))
 
 
@@ -108,3 +110,40 @@ def test_a_market_country_brings_its_own_phone_format():
     irish = [lead for lead in draw(p, days=2) if lead.country == "Ireland"]
     assert irish
     assert all(re.fullmatch(r"\+353 1 \d{3} 0000", lead.answers["Phone"]) for lead in irish)
+
+
+def booking_lead_time_months(lead):
+    days = (lead.travel_at - lead.submitted_at).total_seconds() / 86400 - lead.cycle_days
+    return days / leads.DAYS_PER_MONTH
+
+
+def budget_to_style_price(p, lead):
+    return lead.budget_per_person_per_night / p["deal"]["price_per_person_per_night"][lead.style]
+
+
+@pytest.fixture(scope="module")
+def year_of_leads():
+    p = middle()
+    return p, leads.draw_leads(Random(2), p, date(2024, 1, 1), date(2024, 12, 31))
+
+
+def test_market_a_states_budgets_1_6_times_and_books_1_5_times_as_far_ahead_as_market_b(
+    year_of_leads,
+):
+    # effects.proxy_trap_country at its middle: budget median x 1.6, lead time median x 1.5.
+    p, drawn = year_of_leads
+    by_group = {g: [lead for lead in drawn if lead.market_group == g] for g in "ab"}
+    budget = {g: statistics.median(budget_to_style_price(p, x) for x in by_group[g]) for g in "ab"}
+    ahead = {g: statistics.median(booking_lead_time_months(x) for x in by_group[g]) for g in "ab"}
+    assert budget["a"] / budget["b"] == pytest.approx(1.6, rel=0.06)
+    assert ahead["a"] / ahead["b"] == pytest.approx(1.5, rel=0.06)
+
+
+def test_pooled_over_both_markets_budgets_and_lead_times_keep_the_profiles_medians(year_of_leads):
+    # Half the leads in each market: the pooled medians are the profile's own middles,
+    # 1.0 x the style's price and 6 months from deposit to travel.
+    p, drawn = year_of_leads
+    pooled_budget = statistics.median(budget_to_style_price(p, x) for x in drawn)
+    pooled_ahead = statistics.median(booking_lead_time_months(x) for x in drawn)
+    assert pooled_budget == pytest.approx(1.0, rel=0.05)
+    assert pooled_ahead == pytest.approx(6, rel=0.05)
