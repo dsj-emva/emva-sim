@@ -13,6 +13,7 @@ import hashlib
 import json
 from concurrent.futures import ProcessPoolExecutor
 from functools import partial
+from importlib.metadata import version
 from pathlib import Path
 
 from emva_sim import dataset, profile
@@ -42,9 +43,10 @@ def write_all(profile_path: Path, out: Path, history: History = DEFAULT_HISTORY)
     profile_path = Path(profile_path)
     raw = profile.load(profile_path)
     named = {"file": profile_path.name, "sha256": _sha256(profile_path)}
+    named_generator = {"version": version("emva-sim"), "sha256": _generator_sha256()}
     listed = [{"folder": folder_name(s), "setting": s, "seed": seed(s)} for s in settings(raw)]
     with ProcessPoolExecutor() as pool:
-        list(pool.map(partial(_write_one, raw, named, Path(out), history), listed))
+        list(pool.map(partial(_write_one, raw, named, named_generator, Path(out), history), listed))
     _write_json(
         Path(out) / "index.json",
         {**DATA_SOURCE, "profile": named, "base_seed": BASE_SEED, "datasets": listed},
@@ -52,7 +54,9 @@ def write_all(profile_path: Path, out: Path, history: History = DEFAULT_HISTORY)
     return listed
 
 
-def _write_one(raw: dict, named: dict, out: Path, history: History, listed: dict) -> None:
+def _write_one(
+    raw: dict, named: dict, generator: dict, out: Path, history: History, listed: dict
+) -> None:
     """One dataset and its manifest, from its index entry; each depends only on its setting and
     seed, so they run in parallel."""
     folder = out / listed["folder"]
@@ -62,6 +66,7 @@ def _write_one(raw: dict, named: dict, out: Path, history: History, listed: dict
         {
             **DATA_SOURCE,
             "profile": named,
+            "generator": generator,
             "setting": listed["setting"],
             "seed": listed["seed"],
             "history": {"start": history.start.isoformat(), "end": history.end.isoformat()},
@@ -73,6 +78,16 @@ def _write_one(raw: dict, named: dict, out: Path, history: History, listed: dict
 
 def _write_json(path: Path, content: dict) -> None:
     path.write_text(json.dumps(content, indent=2) + "\n", encoding="utf-8")
+
+
+def _generator_sha256() -> str:
+    """The SHA-256 of the generator's code: each of this package's .py files in name order, as
+    its name, a NUL byte, its bytes and a NUL byte. Git-independent, so a dataset can be traced to
+    the code that wrote it from any copy."""
+    code = hashlib.sha256()
+    for path in sorted(Path(__file__).parent.glob("*.py")):
+        code.update(path.name.encode() + b"\0" + path.read_bytes() + b"\0")
+    return code.hexdigest()
 
 
 def _sha256(path: Path) -> str:

@@ -1,5 +1,6 @@
 import hashlib
 import json
+import tomllib
 from datetime import date
 from pathlib import Path
 
@@ -97,6 +98,18 @@ def test_a_manifest_names_its_profile_its_dates_and_that_its_numbers_are_on_simu
     }
     assert m["history"] == {"start": "2024-01-01", "end": "2024-01-02"}
     assert m["export_date"] == "2024-03-01"
+
+
+def test_a_manifest_names_the_generator_that_wrote_it_by_version_and_code_hash(written):
+    src = Path(__file__).parent.parent / "src" / "emva_sim"
+    code = hashlib.sha256()
+    for path in sorted(src.glob("*.py")):
+        code.update(path.name.encode() + b"\0" + path.read_bytes() + b"\0")
+    pyproject = tomllib.loads((src.parent.parent / "pyproject.toml").read_text())
+    assert manifest(written, "middle")["generator"] == {
+        "version": pyproject["project"]["version"],
+        "sha256": code.hexdigest(),
+    }
 
 
 def test_the_index_lists_every_dataset_its_setting_and_its_seed(written):
